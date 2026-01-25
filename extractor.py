@@ -49,24 +49,35 @@ Rules:
 3. Extract all Vehicles with VINs (17 chars).
 4. Extract Coverages. SPECIFICALLY look for:
     - Liability Limit (Combined Single Limit or Split).
-    - Cargo Limit (Motor Truck Cargo).
+    - Cargo Limit (Motor Truck Cargo) AND Deductible (e.g. "1000 ded").
     - Collision Coverage: Look for "Comprehensive", "Collision", "Comp/Coll", or "Physical Damage". If ANY vehicle has this coverage, has_full_collision is true.
+    - EXTRACT "naic_number" for the Carrier if visible (usually near Carrier Name or in Insurer section).
+    - Determine if "has_general_liability" is TRUE (look for GL section limits/premium).
+    - Determine if "has_auto_liability" is TRUE (look for Auto section limits/premium).
 5. JSON Structure:
 {
   "policy": {
-    "carrier_name": str, 
+    "carrier_name": str,
+    "naic_number": str, 
     "policy_number": str, 
     "effective_date": "YYYY-MM-DD", 
     "expiration_date": "YYYY-MM-DD", 
     "account_type": "Personal|Commercial", 
     "insured_name": str, 
+    "insured_address": str,
+    "insured_city": str,
+    "insured_state_code": str,
+    "insured_zip": str,
     "business_name": str,
     "premium": str,
     "state": str,
     "financial_responsibility_name": str,
     "liability_limit": str,
     "cargo_limit": str,
-    "has_full_collision": bool
+    "cargo_deductible": str,
+    "has_full_collision": bool,
+    "has_general_liability": bool,
+    "has_auto_liability": bool
   },
   "vehicles": [{"year": int, "make": str, "model": str, "vin": str, "gvw": int, "type": str}],
   "coverages": [{"type": str, "limit_person": int, "limit_accident": int, "deductible": int}],
@@ -82,18 +93,26 @@ Rules:
                     "type": "OBJECT",
                     "properties": {
                         "carrier_name": {"type": "STRING"},
+                        "naic_number": {"type": "STRING"},
                         "policy_number": {"type": "STRING"},
                         "effective_date": {"type": "STRING"},
                         "expiration_date": {"type": "STRING"},
                         "account_type": {"type": "STRING"},
                         "insured_name": {"type": "STRING"},
+                        "insured_address": {"type": "STRING"},
+                        "insured_city": {"type": "STRING"},
+                        "insured_state_code": {"type": "STRING"},
+                        "insured_zip": {"type": "STRING"},
                         "business_name": {"type": "STRING"},
                         "premium": {"type": "STRING"},
                         "state": {"type": "STRING"},
                         "financial_responsibility_name": {"type": "STRING"},
                         "liability_limit": {"type": "STRING"},
                         "cargo_limit": {"type": "STRING"},
-                        "has_full_collision": {"type": "BOOLEAN"}
+                        "cargo_deductible": {"type": "STRING"},
+                        "has_full_collision": {"type": "BOOLEAN"},
+                        "has_general_liability": {"type": "BOOLEAN"},
+                        "has_auto_liability": {"type": "BOOLEAN"}
                     }
                 },
                 "vehicles": {

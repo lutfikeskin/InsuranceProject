@@ -1,0 +1,34 @@
+{
+  "mappings": {
+    "Insurer A": "F[0].P1[0].GeneralLiability_InsurerLetterCode_A[0]",
+    "PolicyNumber_GL": "F[0].P1[0].Policy_GeneralLiability_PolicyNumberIdentifier_A[0]",
+    "EffectiveDate_GL": "F[0].P1[0].Policy_GeneralLiability_EffectiveDate_A[0]",
+    "ExpirationDate_GL": "F[0].P1[0].Policy_GeneralLiability_ExpirationDate_A[0]",
+    "Limit_GL_Occurrence": "F[0].P1[0].GeneralLiability_EachOccurrence_LimitAmount_A[0]",
+    "PolicyNumber_Auto": "F[0].P1[0].Policy_AutomobileLiability_PolicyNumberIdentifier_A[0]",
+    "EffectiveDate_Auto": "F[0].P1[0].Policy_AutomobileLiability_EffectiveDate_A[0]",
+    "ExpirationDate_Auto": "F[0].P1[0].Policy_AutomobileLiability_ExpirationDate_A[0]",
+    "Limit_Auto_Combined": "F[0].P1[0].Vehicle_CombinedSingleLimit_EachAccidentAmount_A[0]",
+    "Holder_Name": "F[0].P1[0].CertificateHolder_FullName_A[0]",
+    "Holder_Address": "F[0].P1[0].CertificateHolder_MailingAddress_LineOne_A[0]",
+    "Holder_City": "F[0].P1[0].CertificateHolder_MailingAddress_CityName_A[0]",
+    "Holder_State": "F[0].P1[0].CertificateHolder_MailingAddress_StateOrProvinceCode_A[0]",
+    "Holder_Zip": "F[0].P1[0].CertificateHolder_MailingAddress_PostalCode_A[0]",
+    "Holder_Description": "F[0].P1[0].CertificateOfLiabilityInsurance_ACORDForm_RemarkText_A[0]",
+    "Insured_Name": "NamedInsured_FullName_A[0]",
+    "Insured_Address": "NamedInsured_MailingAddress_LineOne_A[0]",
+    "Insured_City": "NamedInsured_MailingAddress_CityName_A[0]",
+    "Insured_State": "NamedInsured_MailingAddress_StateOrProvinceCode_A[0]",
+    "Insured_Zip": "NamedInsured_MailingAddress_PostalCode_A[0]",
+    
+    "Insurer_Name_A": "Insurer_FullName_A[0]",
+    "Insurer_NAIC_A": "Insurer_NAICCode_A[0]",
+    
+    "Document_Date": "Form_CompletionDate_A[0]",
+    "Cargo_Box": "OtherPolicy_OtherPolicyDescription_A[0]",
+    "Cargo_Limit": "OtherPolicy_CoverageLimitAmount_A[0]",
+    "Cargo_Effective": "OtherPolicy_PolicyEffectiveDate_A[0]",
+    "Cargo_Expires": "OtherPolicy_PolicyExpirationDate_A[0]",
+    "Cargo_PolicyNumber": "OtherPolicy_PolicyNumberIdentifier_A[0]"
+  }
+}

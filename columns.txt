@@ -1,0 +1,5 @@
+['COMP NAME', 'PARTNERS ', 'EMAIL ADDRESS']
+COMP NAME                                    Expedite Alliance Inc
+PARTNERS               6700 Baum Drive, STE 1\nKNOXVILLE, TN 37919
+EMAIL ADDRESS    jane@expediteall.com /  hr.department@expedite...
+Name: 0, dtype: object

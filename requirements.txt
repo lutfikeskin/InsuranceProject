@@ -3,3 +3,4 @@ google-generativeai
 sqlalchemy
 pandas
 openpyxl
+pypdf

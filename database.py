@@ -10,6 +10,7 @@ class Policy(Base):
     
     id = Column(Integer, primary_key=True)
     carrier_name = Column(String)
+    naic_number = Column(String)  # New
     policy_number = Column(String, unique=True, nullable=False)
     effective_date = Column(Date)
     expiration_date = Column(Date)
@@ -17,13 +18,24 @@ class Policy(Base):
     insured_name = Column(String)
     business_name = Column(String)
     
+    # Insured Address Fields
+    insured_address = Column(String)
+    insured_city = Column(String)
+    insured_state_code = Column(String)
+    insured_zip = Column(String)
+    
     # New Fields
     premium = Column(String) # Keeping as string to handle currency symbols if needed, or extract as float later
     state = Column(String)
     financial_responsibility_name = Column(String)
     liability_limit = Column(String)
     cargo_limit = Column(String)
+    cargo_deductible = Column(String) # New
     has_full_collision = Column(Boolean)
+    
+    # Conditional Coverages
+    has_general_liability = Column(Boolean, default=True) # New
+    has_auto_liability = Column(Boolean, default=True) # New
 
     # Relationships
     vehicles = relationship("Vehicle", back_populates="policy", cascade="all, delete-orphan")
@@ -76,6 +88,36 @@ def init_db(db_name="insurance_data.db"):
     """
     engine = create_engine(f'sqlite:///{db_name}')
     Base.metadata.create_all(engine)
+    
+    # --- Simple Migration Check ---
+    # Since we are using SQLite, we can inspect and alter if needed.
+    # This avoids crashes when user pulls updates but has old DB.
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    columns = [c['name'] for c in inspector.get_columns('policies')]
+    
+    with engine.connect() as conn:
+        if 'insured_address' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN insured_address VARCHAR"))
+        if 'insured_city' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN insured_city VARCHAR"))
+        if 'insured_state_code' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN insured_state_code VARCHAR"))
+        if 'insured_zip' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN insured_zip VARCHAR"))
+            
+        # Migration for Logic Improv (NAIC, Deductible, Flags)
+        if 'naic_number' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN naic_number VARCHAR"))
+        if 'cargo_deductible' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN cargo_deductible VARCHAR"))
+        if 'has_general_liability' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN has_general_liability BOOLEAN DEFAULT 1"))
+        if 'has_auto_liability' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN has_auto_liability BOOLEAN DEFAULT 1"))
+            
+        conn.commit()
+            
     return engine
 
 def get_session(engine):

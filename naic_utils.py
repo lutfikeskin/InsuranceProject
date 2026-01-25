@@ -1,0 +1,68 @@
+
+NAIC_MAPPINGS = {
+    # Progressive Companies
+    "PROGRESSIVE CASUALTY INS CO": "24260",
+    "PROGRESSIVE AMERICAN INS CO": "24252",
+    "PROGRESSIVE SPECIALTY INS CO": "32786",
+    "PROGRESSIVE SOUTHEASTERN INS CO": "38784",
+    "PROGRESSIVE NORTHERN INS CO": "38628",
+    "PROGRESSIVE PREFERRED INS CO": "37834",
+    "PROGRESSIVE MAX INS CO": "24279",
+    "PROGRESSIVE COUNTY MUTUAL INS CO": "29203",
+    "PROGRESSIVE HALCYON INS CO": "16322", 
+    "PROGRESSIVE GULF INS CO": "42412",
+    "PROGRESSIVE NORTHWESTERN INS CO": "42919",
+    "PROGRESSIVE CLASSIC INS CO": "42994",
+    "PROGRESSIVE BAYSIDE INS CO": "17350",
+    "UNITED FINANCIAL CASUALTY CO": "11770",
+    "NATIONAL CONTINENTAL INS CO": "10243",
+    "PROGRESSIVE MOUNTAIN INS CO": "35190",
+    "MOUNTAIN LAUREL ASSURANCE CO": "44180",
+    "PROGRESSIVE PREMIER INS CO OF ILLINOIS": "21735",
+    "PROGRESSIVE UNIVERSAL INS CO": "21727",
+    "PROGRESSIVE WEST INS CO": "27804",
+    "MARATHON INS CO": "37605",
+    "PROGRESSIVE PALOVERDE INS CO": "44695",
+    "PROGRESSIVE HAWAII INS CO": "10067",
+    "PROGRESSIVE NORTHEASTERN INS CO": "10042",
+    "PROGRESSIVE SECURITY INS CO": "10050",
+    "PROGRESSIVE INDEMNITY INS CO": "10051",
+    "PREFERRED CONSUMERS INS CO": "10194",
+    "PROG AUTO PRO INS CO": "10192",
+    "PROGRESSIVE EXPRESS INS CO": "10193",
+    "PROGRESSIVE VALUE INS CO": "10053",
+    "PROGRESSIVE MICHIGAN INS CO": "10187",
+    "PROGRESSIVE CHOICE INS CO": "44288",
+    "PROGRESSIVE HOME INS CO": "11851",
+    "DRIVE NEW JERSEY INSURANCE CO": "12299",
+    "PROGRESSIVE FREEDOM INS CO": "12302",
+    "PROGRESSIVE GARDEN STATE INS CO": "12301",
+    
+    # GEICO
+    "GEICO": "37923",
+    "GOVERNMENT EMPLOYEES INSURANCE COMPANY": "22063", # General GEICO NAIC just in case
+    "GEICO GENERAL INSURANCE COMPANY": "35882",
+    "GEICO INDEMNITY COMPANY": "22055",
+    "GEICO CASUALTY COMPANY": "41491"
+}
+
+def get_naic_for_carrier(carrier_name):
+    """
+    Attempts to find the NAIC code for a given carrier name.
+    Performs case-insensitive fuzzy-ish matching against the mapped list.
+    """
+    if not carrier_name:
+        return ""
+        
+    c_upper = carrier_name.upper().strip()
+    
+    # Direct match
+    if c_upper in NAIC_MAPPINGS:
+        return NAIC_MAPPINGS[c_upper]
+    
+    # Partial match
+    for k, v in NAIC_MAPPINGS.items():
+        if k in c_upper or c_upper in k:
+            return v
+            
+    return ""
