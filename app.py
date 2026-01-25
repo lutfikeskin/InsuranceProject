@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import base64
 from sqlalchemy.orm import Session
 from database import init_db, Policy, Vehicle, Coverage, Driver, get_session
 from extractor import process_pdf
@@ -69,6 +70,24 @@ st.markdown("""
         display: none;
     }
     
+    /* Center and Style Sidebar Logo */
+    [data-testid="stSidebarHeader"] img, [data-testid="stSidebar"] img {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    /* Hide Streamlit Image Toolbar (Fullscreen button) */
+    [data-testid="stImage"] button {
+        display: none !important;
+    }
+    
+    /* Improve Image Sharpness */
+    img {
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: crisp-edges;
+    }
+    
 </style>
 """, unsafe_allow_html=True)
 
@@ -105,7 +124,11 @@ def settings_modal():
 
 # --- Sidebar Navigation ---
 with st.sidebar:
-    st.markdown('<div class="brand-header"><h3>Truckers National</h3><p style="color: #666; font-size: 0.8rem;">Policy Intelligence Hub</p></div>', unsafe_allow_html=True)
+    if os.path.exists("assets/logo.png"):
+        # We use a column trick to center, or just relies on the CSS above
+        st.image("assets/logo.png", width=150)
+    else:
+        st.markdown('<div class="brand-header"><h3>Truckers National</h3><p style="color: #666; font-size: 0.8rem;">Policy Intelligence Hub</p></div>', unsafe_allow_html=True)
     
     selected = option_menu(
         menu_title=None,
@@ -196,99 +219,277 @@ def page_dashboard():
     finally:
         session.close()
 
+def display_pdf(file_bytes):
+    """Generates an iframe to display PDF byte content."""
+    base64_pdf = base64.b64encode(file_bytes).decode('utf-8')
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800px" type="application/pdf"></iframe>'
+    return pdf_display
+
 def page_process_policies():
     st.title("📤 Process Policies")
-    st.markdown("Upload one or multiple PDF insurance policies to extract and save their data.")
+    st.markdown("Upload policies, review the extraction, and save to your database.")
     
-    uploaded_files = st.file_uploader("Drop PDF files here", type=["pdf"], accept_multiple_files=True)
-
-    if st.button("Start Extraction", type="primary") and uploaded_files:
-        if not api_key:
-            st.error("Missing Gemini API Key. Please add it in Settings.")
-            return
-
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        processed_data = []
+    # Initialize Queues
+    if "review_queue" not in st.session_state:
+        st.session_state["review_queue"] = []
+    
+    # Initialize Temp Storage for Decision
+    if "temp_extracted" not in st.session_state:
+        st.session_state["temp_extracted"] = []
         
-        session = get_session(st.session_state.db_engine)
-        try:
+    # --- Upload Section ---
+    # Collapse if we have anything to process/review
+    expanded_upload = not (bool(st.session_state["review_queue"]) or bool(st.session_state["temp_extracted"]))
+    
+    with st.expander("Step 1: Upload & Extract", expanded=expanded_upload):
+        uploaded_files = st.file_uploader("Drop PDF files here", type=["pdf"], accept_multiple_files=True)
+
+        if st.button("Start Extraction", type="primary") and uploaded_files:
+            if not api_key:
+                st.error("Missing Gemini API Key. Please add it in Settings.")
+                return
+
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
             import concurrent.futures
             total_files = len(uploaded_files)
             
+            # Helper to map file content back to filename for queuing
+            # We read bytes once
+            files_map = {f.name: f.getvalue() for f in uploaded_files}
+            
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                futures = {executor.submit(process_pdf, f.getvalue(), api_key): f for f in uploaded_files}
+                # We rename the keys to match process_pdf expectation if needed, but here we pass bytes
+                futures = {executor.submit(process_pdf, content, api_key): fname for fname, content in files_map.items()}
                 
                 for i, future in enumerate(concurrent.futures.as_completed(futures)):
-                    f = futures[future]
-                    status_text.text(f"Processing ({i+1}/{total_files}): {f.name}...")
+                    fname = futures[future]
+                    status_text.text(f"Processing ({i+1}/{total_files}): {fname}...")
                     progress_bar.progress((i+1) / total_files)
                     
                     try:
                         data, usage = future.result()
                         if data:
-                            processed_data.append(data)
                             p_data = data.get('policy', {})
-                            
-                            existing = session.query(Policy).filter_by(policy_number=p_data.get('policy_number')).first()
-                            if existing:
-                                st.toast(f"Skipped duplicate: {p_data.get('policy_number')}", icon="⚠️")
-                            else:
-                                effective_dt = pd.to_datetime(p_data.get('effective_date'), errors='coerce')
-                                expiration_dt = pd.to_datetime(p_data.get('expiration_date'), errors='coerce')
-
-                                policy = Policy(
-                                    carrier_name=p_data.get('carrier_name'),
-                                    naic_number=p_data.get('naic_number'),
-                                    policy_number=p_data.get('policy_number'),
-                                    effective_date=effective_dt.date() if pd.notnull(effective_dt) else None,
-                                    expiration_date=expiration_dt.date() if pd.notnull(expiration_dt) else None,
-                                    account_type=p_data.get('account_type'),
-                                    insured_name=p_data.get('insured_name'),
-                                    business_name=p_data.get('business_name'),
-                                    
-                                    # Address
-                                    insured_address=p_data.get('insured_address'),
-                                    insured_city=p_data.get('insured_city'),
-                                    insured_state_code=p_data.get('insured_state_code'),
-                                    insured_zip=p_data.get('insured_zip'),
-                                    
-                                    premium=p_data.get('premium'),
-                                    state=p_data.get('state'),
-                                    financial_responsibility_name=p_data.get('financial_responsibility_name'),
-                                    liability_limit=p_data.get('liability_limit'),
-                                    cargo_limit=p_data.get('cargo_limit'),
-                                    cargo_deductible=p_data.get('cargo_deductible'),
-                                    has_full_collision=p_data.get('has_full_collision'),
-                                    
-                                    has_general_liability=p_data.get('has_general_liability', True),
-                                    has_auto_liability=p_data.get('has_auto_liability', True)
-                                )
-                                
-                                # Add Vehicles, Coverages, Drivers
-                                for v in data.get('vehicles', []):
-                                    policy.vehicles.append(Vehicle(year=v.get('year'), make=v.get('make'), model=v.get('model'), vin=v.get('vin'), gvw=v.get('gvw'), vehicle_type=v.get('type')))
-                                for c in data.get('coverages', []):
-                                    policy.coverages.append(Coverage(type=c.get('type'), limit_per_person=c.get('limit_person'), limit_per_accident=c.get('limit_accident'), deductible=c.get('deductible')))
-                                for d in data.get('drivers', []):
-                                    policy.drivers.append(Driver(full_name=d.get('full_name'), license_number=d.get('license_number'), is_excluded=d.get('is_excluded')))
-                                
-                                session.add(policy)
-                                session.commit()
+                            # Store in Temp State first
+                            st.session_state["temp_extracted"].append({
+                                "filename": fname,
+                                "pdf_bytes": files_map[fname],
+                                "data": data
+                            })
                         else:
-                            st.error(f"Extraction failed for {f.name}")
+                            st.error(f"Extraction failed for {fname}")
                     except Exception as e:
-                        st.error(f"Error processing {f.name}: {e}")
-
-            status_text.text("Extraction Complete!")
-            st.success(f"Successfully processed {len(processed_data)} policies.")
+                        st.error(f"Error processing {fname}: {e}")
             
-            if processed_data:
-                excel_data = create_excel_report(processed_data)
-                st.download_button("📥 Download Excel Report", data=excel_data, file_name="insurance_report.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            status_text.text("Extraction Complete! Choose an action below.")
+            st.rerun()
+
+    # --- Decision Section (New) ---
+    if st.session_state["temp_extracted"]:
+        st.divider()
+        st.subheader(f"✅ Extraction Complete ({len(st.session_state['temp_extracted'])} files)")
+        st.info("What would you like to do with these policies?")
+        
+        d_col1, d_col2 = st.columns(2)
+        
+        # Option A: Review
+        if d_col1.button("🔍 Review Individually (Side-by-Side)", use_container_width=True):
+            st.session_state["review_queue"].extend(st.session_state["temp_extracted"])
+            st.session_state["temp_extracted"] = [] # Clear temp
+            st.rerun()
+            
+        # Option B: Save All
+        if d_col2.button("💾 Save All to Database (Skip Review)", type="primary", use_container_width=True):
+            processed_count = 0
+            session = get_session(st.session_state.db_engine)
+            try:
+                for item in st.session_state["temp_extracted"]:
+                    p_data = item['data'].get('policy', {})
+                    data = item['data']
+                    
+                    # Same logic as "Review Save", but automatic
+                    effective_dt = pd.to_datetime(p_data.get('effective_date'), errors='coerce')
+                    expiration_dt = pd.to_datetime(p_data.get('expiration_date'), errors='coerce')
+
+                    policy = Policy(
+                        carrier_name=p_data.get('carrier_name'),
+                        naic_number=p_data.get('naic_number'),
+                        policy_number=p_data.get('policy_number'),
+                        effective_date=effective_dt.date() if pd.notnull(effective_dt) else None,
+                        expiration_date=expiration_dt.date() if pd.notnull(expiration_dt) else None,
+                        account_type=p_data.get('account_type'),
+                        insured_name=p_data.get('insured_name'),
+                        business_name=p_data.get('business_name'),
+                        # Address
+                        insured_address=p_data.get('insured_address'),
+                        insured_city=p_data.get('insured_city'),
+                        insured_state_code=p_data.get('insured_state_code'),
+                        insured_zip=p_data.get('insured_zip'),
+                        premium=p_data.get('premium'),
+                        state=p_data.get('state'),
+                        financial_responsibility_name=p_data.get('financial_responsibility_name'),
+                        liability_limit=p_data.get('liability_limit'),
+                        cargo_limit=p_data.get('cargo_limit'),
+                        cargo_deductible=p_data.get('cargo_deductible'),
+                        has_full_collision=p_data.get('has_full_collision'),
+                        has_general_liability=p_data.get('has_general_liability', True),
+                        has_auto_liability=p_data.get('has_auto_liability', True)
+                    )
+                    
+                    # Sub-objects
+                    for v in data.get('vehicles', []):
+                         policy.vehicles.append(Vehicle(year=v.get('year'), make=v.get('make'), model=v.get('model'), vin=v.get('vin'), gvw=v.get('gvw'), vehicle_type=v.get('type')))
+                    for c in data.get('coverages', []):
+                        policy.coverages.append(Coverage(type=c.get('type'), limit_per_person=c.get('limit_person'), limit_per_accident=c.get('limit_accident'), deductible=c.get('deductible')))
+                    for d in data.get('drivers', []):
+                        policy.drivers.append(Driver(full_name=d.get('full_name'), license_number=d.get('license_number'), is_excluded=d.get('is_excluded')))
+                    
+                    # Check duplicate
+                    existing = session.query(Policy).filter_by(policy_number=p_data.get('policy_number')).first()
+                    if existing:
+                        st.toast(f"Skipped duplicate: {p_data.get('policy_number')}", icon="⚠️")
+                    else:
+                        session.add(policy)
+                        processed_count += 1
                 
-        finally:
-            session.close()
+                session.commit()
+                st.success(f"Successfully saved {processed_count} policies!")
+                st.session_state["temp_extracted"] = [] # Clear temp
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Bulk Save Error: {e}")
+            finally:
+                session.close()
+
+    # --- Review Section ---
+    if st.session_state["review_queue"]:
+        st.divider()
+        st.subheader(f"Step 2: Review & Save ({len(st.session_state['review_queue'])} remaining)")
+        
+        # Get the first item
+        current_item = st.session_state["review_queue"][0]
+        p = current_item['data'].get('policy', {})
+        fname = current_item['filename']
+        
+        c_pdf, c_form = st.columns([1, 1])
+        
+        with c_pdf:
+            st.markdown(f"**Viewing:** `{fname}`")
+            st.markdown(display_pdf(current_item['pdf_bytes']), unsafe_allow_html=True)
+            
+        with c_form:
+            st.markdown("#### Verify Extracted Data")
+            with st.form(key=f"review_form_{fname}"):
+                # Carrier & Policy
+                c1, c2 = st.columns(2)
+                r_carrier = c1.text_input("Carrier", value=p.get('carrier_name', ''))
+                r_pol_num = c2.text_input("Policy Number", value=p.get('policy_number', ''))
+                
+                # NAIC & Dates
+                c3, c4 = st.columns(2)
+                r_naic = c3.text_input("NAIC Code", value=p.get('naic_number', ''))
+                r_eff = c4.text_input("Effective Date", value=p.get('effective_date', ''))
+                r_exp = c4.text_input("Expiration Date", value=p.get('expiration_date', ''))
+                
+                # Insured
+                st.divider()
+                r_ins_name = st.text_input("Insured Name", value=p.get('insured_name', ''))
+                r_ins_addr = st.text_input("Insured Address", value=p.get('insured_address', ''))
+                ic1, ic2, ic3 = st.columns(3)
+                r_ins_city = ic1.text_input("City", value=p.get('insured_city', ''))
+                r_ins_state = ic2.text_input("State", value=p.get('insured_state_code', ''))
+                r_ins_zip = ic3.text_input("Zip", value=p.get('insured_zip', ''))
+                
+                # Limits
+                st.divider()
+                r_liab = st.text_input("Liability Limit", value=p.get('liability_limit', ''))
+                r_cargo = st.text_input("Cargo Limit", value=p.get('cargo_limit', ''))
+                r_cargo_ded = st.text_input("Cargo Ded", value=p.get('cargo_deductible', ''))
+                
+                # Flags
+                r_gl = st.checkbox("Has GL", value=p.get('has_general_liability', True))
+                r_auto = st.checkbox("Has Auto", value=p.get('has_auto_liability', True))
+
+                # Actions
+                st.markdown("---")
+                b_col1, b_col2 = st.columns(2)
+                saved = b_col1.form_submit_button("✅ Save to Database", type="primary")
+                discarded = b_col2.form_submit_button("🗑️ Discard")
+                
+                if saved:
+                    # Commit to DB
+                    session = get_session(st.session_state.db_engine)
+                    try:
+                        # Parse Dates
+                        ef_dt = pd.to_datetime(r_eff, errors='coerce')
+                        ex_dt = pd.to_datetime(r_exp, errors='coerce')
+                        
+                        policy = Policy(
+                            carrier_name=r_carrier,
+                            naic_number=r_naic,
+                            policy_number=r_pol_num,
+                            effective_date=ef_dt.date() if pd.notnull(ef_dt) else None,
+                            expiration_date=ex_dt.date() if pd.notnull(ex_dt) else None,
+                            insured_name=r_ins_name,
+                            insured_address=r_ins_addr,
+                            insured_city=r_ins_city,
+                            insured_state_code=r_ins_state,
+                            insured_zip=r_ins_zip,
+                            liability_limit=r_liab,
+                            cargo_limit=r_cargo,
+                            cargo_deductible=r_cargo_ded,
+                            has_general_liability=r_gl,
+                            has_auto_liability=r_auto,
+                            
+                            # Keep other fields raw for now or hide them to simplify review
+                            account_type=p.get('account_type'),
+                            business_name=p.get('business_name'),
+                            premium=p.get('premium'),
+                            state=p.get('state'),
+                            financial_responsibility_name=p.get('financial_responsibility_name'),
+                            has_full_collision=p.get('has_full_collision')
+                        )
+                        
+                        # Add sub-objects (Vehicles/Drivers) - just copying raw list for now
+                        # Advanced: we could make these editable too, but that's a lot of UI.
+                        # We'll just append what AI found.
+                        for v in current_item['data'].get('vehicles', []):
+                            policy.vehicles.append(Vehicle(year=v.get('year'), make=v.get('make'), model=v.get('model'), vin=v.get('vin'), gvw=v.get('gvw'), vehicle_type=v.get('type')))
+                        for d in current_item['data'].get('drivers', []):
+                            policy.drivers.append(Driver(full_name=d.get('full_name'), license_number=d.get('license_number'), is_excluded=d.get('is_excluded')))
+                        for c in current_item['data'].get('coverages', []):
+                             policy.coverages.append(Coverage(type=c.get('type'), limit_per_person=c.get('limit_person'), limit_per_accident=c.get('limit_accident'), deductible=c.get('deductible')))
+
+                        # Check dupe logic again just in case
+                        existing = session.query(Policy).filter_by(policy_number=r_pol_num).first()
+                        if existing:
+                            st.warning(f"Policy {r_pol_num} already exists! Saving anyway will crash unique constraint or duplicate.")
+                            # For simplicity in this iteration: Delete existing or error. 
+                            # Let's simple delete existing to overwrite? Or warn?
+                            # Let's just try add, and catch integrity error.
+                        
+                        session.add(policy)
+                        session.commit()
+                        st.success(f"Saved {r_pol_num}!")
+                        
+                        # Remove from queue
+                        st.session_state["review_queue"].pop(0)
+                        st.rerun()
+                        
+                    except Exception as e:
+                        st.error(f"Save failed: {e}")
+                    finally:
+                        session.close()
+                
+                if discarded:
+                    st.session_state["review_queue"].pop(0)
+                    st.rerun()
+    else:
+        if "review_queue" in st.session_state and isinstance(st.session_state["review_queue"], list):
+             st.info("No policies pending review.")
 
 def page_history():
     st.title("🗄️ Database History")
