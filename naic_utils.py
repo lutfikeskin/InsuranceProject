@@ -56,13 +56,16 @@ def get_naic_for_carrier(carrier_name):
         
     c_upper = carrier_name.upper().strip()
     
-    # Direct match
-    if c_upper in NAIC_MAPPINGS:
-        return NAIC_MAPPINGS[c_upper]
+    # Normalize common abbreviations for better matching
+    def normalize(name):
+        return name.replace("INSURANCE", "INS").replace("COMPANY", "CO").replace("CORP", "CO").replace(".", "").replace(",", "").strip()
+
+    c_norm = normalize(c_upper)
     
-    # Partial match
+    # Check mappings after normalization
     for k, v in NAIC_MAPPINGS.items():
-        if k in c_upper or c_upper in k:
+        k_norm = normalize(k)
+        if k_norm in c_norm or c_norm in k_norm:
             return v
             
     return ""

@@ -195,6 +195,8 @@ class COIService:
         has_gl = p.has_general_liability if p.has_general_liability is not None else True
         has_auto = p.has_auto_liability if p.has_auto_liability is not None else True
         
+        current_naic = p.naic_number if p.naic_number else get_naic_for_carrier(p.carrier_name)
+        
         p_data = {
             "carrier_name": p.carrier_name, 
             "naic_number": current_naic,

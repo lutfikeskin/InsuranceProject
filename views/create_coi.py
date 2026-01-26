@@ -82,6 +82,10 @@ def page_create_coi():
             with ic2:
                 i_state = st.text_input("Insured State", value=p.insured_state_code if p.insured_state_code else "")
                 i_zip = st.text_input("Insured Zip", value=p.insured_zip if p.insured_zip else "")
+                
+                # NAIC Field
+                default_naic = p.naic_number if p.naic_number else get_naic_for_carrier(p.carrier_name)
+                i_naic = st.text_input("Insurer NAIC #", value=default_naic)
 
             if st.button("Generate & Download PDF", type="primary"):
                 if not h_name:
@@ -89,16 +93,9 @@ def page_create_coi():
                 else:
                     gen = COIGenerator()
                     
-                    # Compute logic values via Service reuse logic? 
-                    # We have logic in prepare_coi_data but that was just for display desc.
-                    # Let's just grab what we need or modify prepare_coi_data.
-                    # For now, explicit construction again, but cleaner.
-                    
-                    current_naic = p.naic_number if p.naic_number else get_naic_for_carrier(p.carrier_name)
-                    
                     p_data = {
                         "carrier_name": p.carrier_name, 
-                        "naic_number": current_naic,
+                        "naic_number": i_naic, # Use the value from the UI field
                         "policy_number": p.policy_number, 
                         "effective_date": p.effective_date, 
                         "expiration_date": p.expiration_date, 
