@@ -45,17 +45,23 @@ def page_database(api_key):
             if search_query.lower() in p.policy_number.lower() or search_query.lower() in p.insured_name.lower():
                 # Status Logic
                 status = "✅ Eligible"
-                liab_val = 0
-                if p.liability_limit:
+                def parse_limit(val_str):
+                    if not val_str: return 0.0
+                    s = str(val_str).lower().strip()
+                    multiplier = 1.0
+                    if 'k' in s: multiplier = 1000.0
+                    elif 'm' in s: multiplier = 1000000.0
+                    
                     import re
-                    clean_liab = re.sub(r'[^\d]', '', p.liability_limit)
-                    if clean_liab: liab_val = float(clean_liab)
-                
-                cargo_val = 0
-                if p.cargo_limit:
-                    import re
-                    clean_cargo = re.sub(r'[^\d]', '', p.cargo_limit)
-                    if clean_cargo: cargo_val = float(clean_cargo)
+                    # Keep digits and decimal points
+                    clean = re.sub(r'[^\d.]', '', s)
+                    try:
+                        return float(clean) * multiplier
+                    except:
+                        return 0.0
+
+                liab_val = parse_limit(p.liability_limit)
+                cargo_val = parse_limit(p.cargo_limit)
 
                 if liab_val < 1000000 or cargo_val < 100000:
                      status = "⚠️ Not Eligible for Expedite"

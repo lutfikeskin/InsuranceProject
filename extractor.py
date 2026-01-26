@@ -48,8 +48,8 @@ Rules:
 2. Extract the "Financial Responsible Name" from the "Financial Responsibility Information" section. Look for the CUSTOMER'S PERSONAL NAME (e.g. "John Doe") listed in this section, not the insurance company or state agency.
 3. Extract all Vehicles with VINs (17 chars).
 4. Extract Coverages. SPECIFICALLY look for:
-    - Liability Limit (Combined Single Limit or Split).
-    - Cargo Limit (Motor Truck Cargo) AND Deductible (e.g. "1000 ded").
+    - Liability Limit (Combined Single Limit or Split). EXTRACT ONLY THE AMOUNT (e.g. "$1,000,000"), do not include text like "Combined Single Limit" or "CSL".
+    - Cargo Limit (Motor Truck Cargo) AND Deductible (e.g. "1000 ded"). EXTRACT ONLY THE AMOUNT for the limit.
     - Collision Coverage: Look for "Comprehensive", "Collision", "Comp/Coll", or "Physical Damage". If ANY vehicle has this coverage, has_full_collision is true.
     - EXTRACT "naic_number" for the Carrier if visible (usually near Carrier Name or in Insurer section).
     - Determine if "has_general_liability" is TRUE (look for GL section limits/premium).
