@@ -12,6 +12,7 @@ from views.create_coi import page_create_coi
 # Page Config
 st.set_page_config(
     page_title="Insurance Doc Intelligence", 
+    page_icon="assets/browsericon.ico",
     layout="wide",
     initial_sidebar_state="expanded"
 )
