@@ -66,6 +66,11 @@ def page_database(api_key):
                 if liab_val < 1000000 or cargo_val < 100000:
                      status = "⚠️ Not Eligible for Expedite"
 
+                # Aggregate Vehicle Types
+                v_types = [v.vehicle_type for v in p.vehicles if v.vehicle_type]
+                v_types_unique = sorted(list(set(v_types)))
+                v_types_str = ", ".join(v_types_unique) if v_types_unique else "N/A"
+
                 data_list.append({
                     "ID": p.id, 
                     "Policy#": p.policy_number, 
@@ -75,6 +80,8 @@ def page_database(api_key):
                     "Premium": p.premium,
                     "Liability": p.liability_limit,
                     "Cargo": p.cargo_limit,
+                    "Vehicle Types": v_types_str,
+                    "Comp/Coll": "✅ Yes" if p.has_full_collision else "❌ No",
                     "Status": status
                 })
                 

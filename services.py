@@ -148,14 +148,23 @@ class PolicyService:
           - has_full_collision (bool)
           
         Table 'vehicles':
-          - policy_id (fk)
+          - policy_id (fk to policies.id)
           - year (int)
           - make (text)
+          - model (text)
           - vin (text)
+          - vehicle_type (text, e.g. 'Straight Truck', 'Tractor', 'Cargo Van')
+
+        Table 'drivers':
+          - policy_id (fk to policies.id)
+          - full_name (text)
+          - license_number (text)
+          - is_excluded (bool)
           
         Rules:
         1. Return ONLY the raw SQL query. No markdown, no explanations.
-        2. Use LIKE for text searching (case insensitive).
+        2. DO NOT include semicolons (;) at the end of the query.
+        3. Use LIKE for text searching (case insensitive).
         3. Handle currency strings in 'liability_limit' or 'premium' by stripping '$' and ',' if mathematical comparison is needed (e.g. CAST(REPLACE(REPLACE(premium, '$', ''), ',', '') AS FLOAT)).
         4. If asking for specific coverages like "Comp/Coll", check 'has_full_collision' or join with coverages table if needed (but currently simplified to boolean flags on policy).
         """
@@ -167,14 +176,16 @@ class PolicyService:
             response = model.generate_content(f"{schema_context}\n\nUser Question: {user_query}\nSQL:")
             generated_sql = response.text.strip()
             
-            # Clean up markdown if present
+            # Clean up markdown and trailing semicolon
             generated_sql = generated_sql.replace("```sql", "").replace("```", "").strip()
+            if generated_sql.endswith(";"):
+                generated_sql = generated_sql[:-1].strip()
             
             # Safety: Basic check to prevent destructive queries
             if not generated_sql.lower().startswith("select"):
-                return None, "Safety Error: Only SELECT queries are allowed."
+                return None, f"Safety Error: Only SELECT queries are allowed. Generated: {generated_sql}"
             if ";" in generated_sql:
-                return None, "Safety Error: Multiple statements (;) are not allowed."
+                return None, f"Safety Error: Multiple statements (;) are not allowed. Generated: {generated_sql}"
             
             # 3. Execute
             # Use session.execute to keep the connection alive for the rest of the request
