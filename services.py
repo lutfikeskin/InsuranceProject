@@ -118,10 +118,78 @@ class PolicyService:
         self.session.commit()
         return True
 
+    def ask_your_data(self, user_query, api_key):
+        """
+        Uses Gemini to translate natural language into SQL, then executes it.
+        """
+        import google.generativeai as genai
+        from sqlalchemy import text
+        
+        if not api_key:
+            return None, "API Key missing."
+            
+        genai.configure(api_key=api_key)
+        
+        # 1. Define Schema Context
+        # We simplify the schema description for the AI to minimize token usage
+        schema_context = """
+        You are a SQLite expert. Convert the user question into a valid SQL query.
+        
+        Database Schema:
+        Table 'policies':
+          - id (int)
+          - carrier_name (text)
+          - policy_number (text)
+          - effective_date (date YYYY-MM-DD)
+          - expiration_date (date YYYY-MM-DD)
+          - liability_limit (text, e.g. '$1,000,000')
+          - insured_name (text)
+          - premium (text)
+          - has_full_collision (bool)
+          
+        Table 'vehicles':
+          - policy_id (fk)
+          - year (int)
+          - make (text)
+          - vin (text)
+          
+        Rules:
+        1. Return ONLY the raw SQL query. No markdown, no explanations.
+        2. Use LIKE for text searching (case insensitive).
+        3. Handle currency strings in 'liability_limit' or 'premium' by stripping '$' and ',' if mathematical comparison is needed (e.g. CAST(REPLACE(REPLACE(premium, '$', ''), ',', '') AS FLOAT)).
+        4. If asking for specific coverages like "Comp/Coll", check 'has_full_collision' or join with coverages table if needed (but currently simplified to boolean flags on policy).
+        """
+        
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        
+        try:
+            # 2. Generate SQL
+            response = model.generate_content(f"{schema_context}\n\nUser Question: {user_query}\nSQL:")
+            generated_sql = response.text.strip()
+            
+            # Clean up markdown if present
+            generated_sql = generated_sql.replace("```sql", "").replace("```", "").strip()
+            
+            # Safety: Basic check to prevent destructive queries
+            if not generated_sql.lower().startswith("select"):
+                return None, "Safety Error: Only SELECT queries are allowed."
+            if ";" in generated_sql:
+                return None, "Safety Error: Multiple statements (;) are not allowed."
+            
+            # 3. Execute
+            # Use session.execute to keep the connection alive for the rest of the request
+            result = self.session.execute(text(generated_sql))
+            # Convert to list of dicts
+            columns = result.keys()
+            rows = [dict(zip(columns, row)) for row in result.fetchall()]
+            
+            return rows, generated_sql
+            
+        except Exception as e:
+            return None, f"Error: {e}"
 class COIService:
     @staticmethod
     def prepare_coi_data(p: Policy):
-        current_naic = p.naic_number if p.naic_number else get_naic_for_carrier(p.carrier_name)
         cargo_ded_val = p.cargo_deductible if p.cargo_deductible else "1000"
         
         has_gl = p.has_general_liability if p.has_general_liability is not None else True

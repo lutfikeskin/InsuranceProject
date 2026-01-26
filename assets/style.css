@@ -79,3 +79,16 @@ img {
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
 }
+
+/* Custom Blue Expander Header */
+div[data-testid="stExpander"] summary p {
+    color: #005aa9 !important;
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+div[data-testid="stExpander"] {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background-color: white;
+}
