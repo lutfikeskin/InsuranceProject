@@ -37,8 +37,8 @@ def process_pdf(file_bytes, api_key):
         # Prepare the model with fallback strategy
         # Based on available models: gemini-flash-latest, gemini-pro-latest
         model_candidates = [
-            "gemini-flash-latest",
-            "gemini-pro-latest",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
         ]
         
         system_instruction = """

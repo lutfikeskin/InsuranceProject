@@ -6,7 +6,7 @@ from streamlit_option_menu import option_menu
 # Import Views
 from views.dashboard import page_dashboard
 from views.process_policies import page_process_policies
-from views.history import page_history
+from views.database_page import page_database
 from views.create_coi import page_create_coi
 
 # Page Config
@@ -106,6 +106,6 @@ if selected == "Dashboard":
 elif selected == "Process Policies":
     page_process_policies(api_key)
 elif selected == "Database":
-    page_history()
+    page_database(api_key)
 elif selected == "Create COI":
     page_create_coi()

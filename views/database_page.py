@@ -6,7 +6,7 @@ from exporter import create_excel_report
 
 from views.edit_dialog import edit_policy_dialog
 
-def page_history():
+def page_database(api_key):
     st.title("🗃️ Policy Database")
     st.markdown("Search, view, and edit all previously extracted insurance data.")
     
@@ -22,17 +22,54 @@ def page_history():
         # Sidebar Search / Filter or Top Search
         search_query = st.text_input("Search by Policy # or Insured Name", "")
         
+        # --- Chat with Data Feature ---
+        with st.expander("💬 Chat with your Data (AI Search)", expanded=False):
+            st.info("Ask complex questions like: 'Show me all policies with premium over $5000' or 'List all Mack trucks'.")
+            user_question = st.text_input("Ask a question about your policies:", key="data_chat_input")
+            
+            if st.button("Ask AI", type="secondary"):
+                if user_question:
+                    # Get API Key passed from app loop
+                    with st.spinner("Thinking..."):
+                         results, debug_sql = service.ask_your_data(user_question, api_key)
+                    
+                    if results is not None:
+                        st.success(f"Found {len(results)} results")
+                        st.dataframe(pd.DataFrame(results), use_container_width=True)
+                    else:
+                        st.error(f"Could not answer: {debug_sql}")
+        
         data_list = []
         export_data = []
         for p in policies:
             if search_query.lower() in p.policy_number.lower() or search_query.lower() in p.insured_name.lower():
+                # Status Logic
+                status = "✅ Eligible"
+                liab_val = 0
+                if p.liability_limit:
+                    import re
+                    clean_liab = re.sub(r'[^\d]', '', p.liability_limit)
+                    if clean_liab: liab_val = float(clean_liab)
+                
+                cargo_val = 0
+                if p.cargo_limit:
+                    import re
+                    clean_cargo = re.sub(r'[^\d]', '', p.cargo_limit)
+                    if clean_cargo: cargo_val = float(clean_cargo)
+
+                if liab_val < 1000000 or cargo_val < 100000:
+                     status = "⚠️ Not Eligible for Expedite"
+
                 data_list.append({
                     "ID": p.id, 
                     "Policy#": p.policy_number, 
                     "Carrier": p.carrier_name, 
                     "Insured": p.insured_name, 
                     "Effective": p.effective_date,
-                    "Premium": p.premium
+                    "Premium": p.premium,
+                    "Liability": p.liability_limit,
+                    "Cargo": p.cargo_limit,
+                    "Status": status
                 })
                 
                 # Reconstruct for exporter
