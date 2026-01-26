@@ -1,0 +1,79 @@
+/* Main Background */
+.stApp {
+  background-color: #f8f9fa;
+}
+
+/* Hide Streamlit Branding */
+#MainMenu {
+  visibility: visible;
+}
+footer {
+  visibility: hidden;
+}
+header {
+  background: rgba(255, 255, 255, 0);
+}
+
+/* Modern Card Container */
+.css-1r6slb0,
+.stMetric {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* Navigation Sidebar Styling Override */
+[data-testid="stSidebar"] {
+  background-color: #ffffff;
+  border-right: 1px solid #e0e0e0;
+}
+
+/* Brand Header */
+.brand-header {
+  padding: 20px 0;
+  text-align: center;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 20px;
+}
+
+/* Titles */
+h1,
+h2,
+h3 {
+  color: #005aa9 !important;
+  font-family:
+    "Inter",
+    -apple-system,
+    sans-serif;
+  font-weight: 700;
+}
+
+/* Custom Sidebar Nav padding */
+.nav-container {
+  padding: 10px;
+}
+
+/* Hide Header Anchors */
+[data-testid="stHeaderActionElements"] {
+  display: none;
+}
+
+/* Center and Style Sidebar Logo */
+[data-testid="stSidebarHeader"] img,
+[data-testid="stSidebar"] img {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Hide Streamlit Image Toolbar (Fullscreen button) */
+[data-testid="stImage"] button {
+  display: none !important;
+}
+
+/* Improve Image Sharpness */
+img {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
