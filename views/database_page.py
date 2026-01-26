@@ -74,6 +74,8 @@ def page_database(api_key):
                 data_list.append({
                     "ID": p.id, 
                     "Policy#": p.policy_number, 
+                    "Type": p.policy_type,
+                    "Conf": p.classification_confidence,
                     "Carrier": p.carrier_name, 
                     "Insured": p.insured_name, 
                     "Effective": p.effective_date,

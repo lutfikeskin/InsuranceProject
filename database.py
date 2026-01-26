@@ -33,6 +33,11 @@ class Policy(Base):
     cargo_deductible = Column(String) # New
     has_full_collision = Column(Boolean)
     
+    # Classification Metadata
+    policy_type = Column(String)
+    classification_confidence = Column(String)
+    classification_signals = Column(String) # Stored as JSON string
+    
     # Conditional Coverages
     has_general_liability = Column(Boolean, default=True) # New
     has_auto_liability = Column(Boolean, default=True) # New
@@ -77,6 +82,7 @@ class Coverage(Base):
     type = Column(String)
     limit_per_person = Column(Integer, nullable=True)
     limit_per_accident = Column(Integer, nullable=True)
+    limit_property_damage = Column(Integer, nullable=True)
     deductible = Column(Integer, nullable=True)
 
     policy = relationship("Policy", back_populates="coverages")
@@ -115,6 +121,19 @@ def init_db(db_name="insurance_data.db"):
             conn.execute(text("ALTER TABLE policies ADD COLUMN has_general_liability BOOLEAN DEFAULT 1"))
         if 'has_auto_liability' not in columns:
             conn.execute(text("ALTER TABLE policies ADD COLUMN has_auto_liability BOOLEAN DEFAULT 1"))
+            
+        # Classification Metadata Migrations
+        if 'policy_type' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN policy_type VARCHAR"))
+        if 'classification_confidence' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN classification_confidence VARCHAR"))
+        if 'classification_signals' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN classification_signals VARCHAR"))
+            
+        # Coverage Migrations
+        cov_columns = [c['name'] for c in inspector.get_columns('coverages')]
+        if 'limit_property_damage' not in cov_columns:
+            conn.execute(text("ALTER TABLE coverages ADD COLUMN limit_property_damage INTEGER"))
             
         conn.commit()
             

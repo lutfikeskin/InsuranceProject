@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import json
 from services import PolicyService
 from database import get_session, Policy, Vehicle, Driver, Coverage
 from extractor import process_pdf
@@ -22,89 +23,171 @@ def page_process_policies(api_key):
     if "temp_extracted" not in st.session_state:
         st.session_state["temp_extracted"] = []
         
-    expanded_upload = not (bool(st.session_state["review_queue"]) or bool(st.session_state["temp_extracted"]))
+    tab_upload, tab_manual = st.tabs(["📄 Upload & Extract", "✍️ Manual Entry"])
     
-    with st.expander("Step 1: Upload & Extract", expanded=expanded_upload):
-        uploaded_files = st.file_uploader("Drop PDF files here", type=["pdf"], accept_multiple_files=True)
-
-        if st.button("Start Extraction", type="primary") and uploaded_files:
-            if not api_key:
-                st.error("Missing Gemini API Key. Please add it in Settings.")
-                return
-
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            total_files = len(uploaded_files)
-            files_map = {f.name: f.getvalue() for f in uploaded_files}
-            
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                futures = {executor.submit(process_pdf, content, api_key): fname for fname, content in files_map.items()}
-                
-                for i, future in enumerate(concurrent.futures.as_completed(futures)):
-                    fname = futures[future]
-                    status_text.text(f"Processing ({i+1}/{total_files}): {fname}...")
-                    progress_bar.progress((i+1) / total_files)
-                    
-                    try:
-                        data, usage = future.result()
-                        if data:
-                            st.session_state["temp_extracted"].append({
-                                "filename": fname,
-                                "pdf_bytes": files_map[fname],
-                                "data": data
-                            })
-                        else:
-                            st.error(f"Extraction failed for {fname}")
-                    except Exception as e:
-                        st.error(f"Error processing {fname}: {e}")
-            
-            status_text.text("Extraction Complete! Choose an action below.")
-            st.rerun()
-
-    # Decision Section
-    if st.session_state["temp_extracted"]:
-        st.divider()
-        st.subheader(f"✅ Extraction Complete ({len(st.session_state['temp_extracted'])} files)")
-        st.info("What would you like to do with these policies?")
+    with tab_upload:
+        expanded_upload = not (bool(st.session_state["review_queue"]) or bool(st.session_state["temp_extracted"]))
         
-        d_col1, d_col2 = st.columns(2)
-        
-        if d_col1.button("🔍 Review Individually (Side-by-Side)", use_container_width=True):
-            st.session_state["review_queue"].extend(st.session_state["temp_extracted"])
-            st.session_state["temp_extracted"] = []
-            st.rerun()
-            
-        if d_col2.button("💾 Save All to Database (Skip Review)", type="primary", use_container_width=True):
-            processed_count = 0
-            session = get_session(st.session_state.db_engine)
-            service = PolicyService(session)
-            
-            try:
-                for item in st.session_state["temp_extracted"]:
-                    p_data = item['data'].get('policy', {})
-                    data = item['data']
-                    
-                    success, msg = service.save_policy_from_extraction(
-                        p_data, 
-                        data.get('vehicles', []), 
-                        data.get('coverages', []), 
-                        data.get('drivers', [])
-                    )
-                    
-                    if success:
-                        processed_count += 1
-                    else:
-                        st.toast(msg, icon="⚠️")
+        with st.expander("Step 1: Upload & Extract", expanded=expanded_upload):
+            uploaded_files = st.file_uploader("Drop PDF files here", type=["pdf"], accept_multiple_files=True)
+
+            if st.button("Start Extraction", type="primary") and uploaded_files:
+                if not api_key:
+                    st.error("Missing Gemini API Key. Please add it in Settings.")
+                    return
+
+                progress_bar = st.progress(0)
+                status_text = st.empty()
                 
-                st.success(f"Successfully saved {processed_count} policies!")
+                total_files = len(uploaded_files)
+                files_map = {f.name: f.getvalue() for f in uploaded_files}
+                
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                    futures = {executor.submit(process_pdf, content, api_key): fname for fname, content in files_map.items()}
+                    
+                    for i, future in enumerate(concurrent.futures.as_completed(futures)):
+                        fname = futures[future]
+                        status_text.text(f"Processing ({i+1}/{total_files}): {fname}...")
+                        progress_bar.progress((i+1) / total_files)
+                        
+                        try:
+                            data, usage = future.result()
+                            if data:
+                                st.session_state["temp_extracted"].append({
+                                    "filename": fname,
+                                    "pdf_bytes": files_map[fname],
+                                    "data": data
+                                })
+                            else:
+                                st.error(f"Extraction failed for {fname}")
+                        except Exception as e:
+                            st.error(f"Error processing {fname}: {e}")
+                
+                status_text.text("Extraction Complete! Choose an action below.")
+
+        # Decision Section (Inside Tab 1)
+        if st.session_state["temp_extracted"]:
+            st.divider()
+            st.subheader(f"✅ Extraction Complete ({len(st.session_state['temp_extracted'])} files)")
+            st.info("What would you like to do with these policies?")
+            
+            d_col1, d_col2 = st.columns(2)
+            
+            if d_col1.button("🔍 Review Individually (Side-by-Side)", use_container_width=True):
+                st.session_state["review_queue"].extend(st.session_state["temp_extracted"])
                 st.session_state["temp_extracted"] = []
                 st.rerun()
                 
-            except Exception as e:
-                st.error(f"Bulk Save Error: {e}")
-            finally:
-                session.close()
+            if d_col2.button("💾 Save All to Database (Skip Review)", type="primary", use_container_width=True):
+                processed_count = 0
+                session = get_session(st.session_state.db_engine)
+                service = PolicyService(session)
+                
+                try:
+                    for item in st.session_state["temp_extracted"]:
+                        success, msg = service.save_policy_from_extraction(item['data'])
+                        
+                        if success:
+                            processed_count += 1
+                        else:
+                            st.toast(msg, icon="⚠️")
+                    
+                    st.success(f"Successfully saved {processed_count} policies!")
+                    st.session_state["temp_extracted"] = []
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"Bulk Save Error: {e}")
+                finally:
+                    session.close()
+
+    with tab_manual:
+        st.subheader("Manual Policy Entry")
+        st.markdown("Manually enter policy details if you cannot upload a PDF.")
+        
+        with st.form("manual_entry_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                m_carrier = st.text_input("Carrier Name")
+                m_pol_num = st.text_input("Policy Number *")
+                m_naic = st.text_input("NAIC Code")
+                m_premium = st.text_input("Premium", value="$0.00")
+            
+            with col2:
+                m_eff = st.date_input("Effective Date")
+                m_exp = st.date_input("Expiration Date")
+                m_type = st.selectbox("Policy Type", options=["personal_auto", "commercial_auto", "general_liability", "bop", "commercial_package", "umbrella", "motor_truck_cargo", "unknown"], index=1)
+                m_conf = st.selectbox("Confidence", options=["high", "medium", "low"], index=0)
+
+            st.divider()
+            m_ins_name = st.text_input("Insured Name *")
+            m_ins_addr = st.text_input("Insured Address")
+            ic1, ic2, ic3 = st.columns(3)
+            m_city = ic1.text_input("City")
+            m_state = ic2.text_input("State")
+            m_zip = ic3.text_input("Zip")
+
+            st.divider()
+            l1, l2, l3 = st.columns(3)
+            m_liab = l1.text_input("Liability Limit")
+            m_cargo = l2.text_input("Cargo Limit")
+            m_cargo_ded = l3.text_input("Cargo Deductible")
+            
+            f1, f2, f3 = st.columns(3)
+            m_gl = f1.checkbox("Has General Liabilities", value=True)
+            m_auto = f2.checkbox("Has Auto Liabilities", value=True)
+            m_coll = f3.checkbox("Has Full Collision", value=False)
+            
+            st.markdown("*Required Fields")
+            submitted_manual = st.form_submit_button("💾 Save Manual Policy", type="primary", use_container_width=True)
+            
+            if submitted_manual:
+                if not m_pol_num or not m_ins_name:
+                    st.error("Policy Number and Insured Name are required.")
+                else:
+                    session = get_session(st.session_state.db_engine)
+                    service = PolicyService(session)
+                    try:
+                        # Determine Account Type logic matches service
+                        from services import ACCOUNT_TYPE_BY_POLICY
+                        acc_type = ACCOUNT_TYPE_BY_POLICY.get(m_type, "Commercial")
+                        
+                        policy = Policy(
+                            carrier_name=m_carrier,
+                            naic_number=m_naic,
+                            policy_number=m_pol_num,
+                            effective_date=m_eff,
+                            expiration_date=m_exp,
+                            insured_name=m_ins_name,
+                            insured_address=m_ins_addr,
+                            insured_city=m_city,
+                            insured_state_code=m_state,
+                            insured_zip=m_zip,
+                            premium=m_premium,
+                            liability_limit=m_liab,
+                            cargo_limit=m_cargo,
+                            cargo_deductible=m_cargo_ded,
+                            has_general_liability=m_gl,
+                            has_auto_liability=m_auto,
+                            has_full_collision=m_coll,
+                            policy_type=m_type,
+                            account_type=acc_type,
+                            classification_confidence=m_conf,
+                            classification_signals=json.dumps(["Manual Entry"])
+                        )
+                        
+                        success, msg = service.save_policy_object(policy)
+                        if success:
+                            st.toast(f"Policy {m_pol_num} saved successfully!", icon="✅")
+                            # We can't easily clear the form without rerun, but rerun clears the toast.
+                            # Just show success.
+                        else:
+                            st.error(f"Error: {msg}")
+                            
+                    except Exception as e:
+                        st.error(f"Save failed: {e}")
+                    finally:
+                        session.close()
 
     # Review Section
     if st.session_state["review_queue"]:
@@ -127,6 +210,12 @@ def page_process_policies(api_key):
                 c1, c2 = st.columns(2)
                 r_carrier = c1.text_input("Carrier", value=p.get('carrier_name', ''))
                 r_pol_num = c2.text_input("Policy Number", value=p.get('policy_number', ''))
+                
+                # Show Classification Info
+                classification = current_item['data'].get('classification', {})
+                cc1, cc2 = st.columns(2)
+                r_type = cc1.text_input("Policy Type", value=classification.get('policy_type', ''), disabled=True)
+                r_conf = cc2.text_input("Confidence", value=classification.get('confidence', ''), disabled=True)
                 
                 c3, c4 = st.columns(2)
                 r_naic = c3.text_input("NAIC Code", value=p.get('naic_number', ''))
@@ -178,6 +267,9 @@ def page_process_policies(api_key):
                             has_general_liability=r_gl,
                             has_auto_liability=r_auto,
                             account_type=p.get('account_type'),
+                            policy_type=classification.get('policy_type'),
+                            classification_confidence=classification.get('confidence'),
+                            classification_signals=json.dumps(classification.get('signals', [])),
                             business_name=p.get('business_name'),
                             premium=p.get('premium'),
                             state=p.get('state'),
@@ -193,14 +285,15 @@ def page_process_policies(api_key):
                         for c in current_item['data'].get('coverages', []):
                              policy.coverages.append(Coverage(type=c.get('type'), limit_per_person=c.get('limit_person'), limit_per_accident=c.get('limit_accident'), deductible=c.get('deductible')))
 
-                        # App logic handled duplicate warnings inside the service if we used save_policy_from_extraction
-                        # But here we are building manually. 
                         # We should use service.save_policy_object
-                        service.save_policy_object(policy)
-                        st.success(f"Saved {r_pol_num}!")
+                        success, msg = service.save_policy_object(policy)
                         
-                        st.session_state["review_queue"].pop(0)
-                        st.rerun()
+                        if success:
+                            st.success(f"Saved {r_pol_num}!")
+                            st.session_state["review_queue"].pop(0)
+                            st.rerun()
+                        else:
+                            st.warning(f"Could not save: {msg}")
                         
                     except Exception as e:
                         st.error(f"Save failed: {e}")

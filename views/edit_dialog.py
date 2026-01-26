@@ -14,6 +14,11 @@ def edit_policy_dialog(policy, service: PolicyService):
             new_carrier = st.text_input("Carrier Name", value=policy.carrier_name)
             new_naic = st.text_input("NAIC #", value=policy.naic_number if policy.naic_number else "")
             new_premium = st.text_input("Premium", value=policy.premium)
+            
+            st.divider()
+            st.write("📋 Classification")
+            new_type = st.selectbox("Policy Type", options=["personal_auto", "commercial_auto", "general_liability", "bop", "commercial_package", "umbrella", "motor_truck_cargo", "unknown"], index=["personal_auto", "commercial_auto", "general_liability", "bop", "commercial_package", "umbrella", "motor_truck_cargo", "unknown"].index(policy.policy_type) if policy.policy_type in ["personal_auto", "commercial_auto", "general_liability", "bop", "commercial_package", "umbrella", "motor_truck_cargo", "unknown"] else 7)
+            new_conf = st.selectbox("Confidence", options=["high", "medium", "low"], index=["high", "medium", "low"].index(policy.classification_confidence) if policy.classification_confidence in ["high", "medium", "low"] else 2)
         
         with col2:
             new_eff = st.date_input("Effective Date", value=policy.effective_date)
@@ -60,7 +65,9 @@ def edit_policy_dialog(policy, service: PolicyService):
                 "insured_zip": new_zip,
                 "has_full_collision": new_coll,
                 "has_general_liability": new_gl,
-                "has_auto_liability": new_auto
+                "has_auto_liability": new_auto,
+                "policy_type": new_type,
+                "classification_confidence": new_conf
             }
             
             if service.update_policy(policy, updated_data):

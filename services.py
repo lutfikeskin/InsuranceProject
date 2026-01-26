@@ -2,6 +2,18 @@ from sqlalchemy.orm import Session
 from database import Policy, Vehicle, Coverage, Driver
 from naic_utils import get_naic_for_carrier
 import pandas as pd
+import json
+
+ACCOUNT_TYPE_BY_POLICY = {
+    "personal_auto": "Personal",
+    "commercial_auto": "Commercial",
+    "general_liability": "Commercial",
+    "bop": "Commercial",
+    "commercial_package": "Commercial",
+    "umbrella": "Commercial",
+    "motor_truck_cargo": "Commercial",
+    "unknown": "Commercial" # Default to Commercial for unknown if we somehow get here
+}
 
 class PolicyService:
     def __init__(self, session: Session):
@@ -44,8 +56,37 @@ class PolicyService:
         self.session.delete(policy)
         self.session.commit()
 
-    def save_policy_from_extraction(self, p_data, vehicles_data, coverages_data, drivers_data):
-        # Date parsing logic could reside here or in a utils helper, sticking to what was in app.py logic
+    def normalize_policy_data(self, extraction_result):
+        """
+        Normalizes raw extraction data into a standard structure for persistence.
+        """
+        policy_data = extraction_result.get('policy', {})
+        classification = extraction_result.get('classification', {})
+        policy_type = classification.get('policy_type', 'unknown')
+        
+        # Determine account type based on classification
+        account_type = ACCOUNT_TYPE_BY_POLICY.get(policy_type, "Commercial")
+        policy_data['account_type'] = account_type
+        
+        # Add classification metadata
+        policy_data['policy_type'] = policy_type
+        policy_data['classification_confidence'] = classification.get('confidence')
+        policy_data['classification_signals'] = json.dumps(classification.get('signals', []))
+        
+        return {
+            "policy": policy_data,
+            "vehicles": extraction_result.get('vehicles', []),
+            "coverages": extraction_result.get('coverages', []),
+            "drivers": extraction_result.get('drivers', [])
+        }
+
+    def save_policy_from_extraction(self, extraction_result):
+        # Normalize the data first
+        normalized = self.normalize_policy_data(extraction_result)
+        p_data = normalized['policy']
+        vehicles_data = normalized['vehicles']
+        coverages_data = normalized['coverages']
+        drivers_data = normalized['drivers']
         
         effective_dt = pd.to_datetime(p_data.get('effective_date'), errors='coerce')
         expiration_dt = pd.to_datetime(p_data.get('expiration_date'), errors='coerce')
@@ -57,6 +98,9 @@ class PolicyService:
             effective_date=effective_dt.date() if pd.notnull(effective_dt) else None,
             expiration_date=expiration_dt.date() if pd.notnull(expiration_dt) else None,
             account_type=p_data.get('account_type'),
+            policy_type=p_data.get('policy_type'),
+            classification_confidence=p_data.get('classification_confidence'),
+            classification_signals=p_data.get('classification_signals'),
             insured_name=p_data.get('insured_name'),
             business_name=p_data.get('business_name'),
             insured_address=p_data.get('insured_address'),
@@ -78,7 +122,13 @@ class PolicyService:
             policy.vehicles.append(Vehicle(year=v.get('year'), make=v.get('make'), model=v.get('model'), vin=v.get('vin'), gvw=v.get('gvw'), vehicle_type=v.get('type')))
         
         for c in coverages_data:
-            policy.coverages.append(Coverage(type=c.get('type'), limit_per_person=c.get('limit_person'), limit_per_accident=c.get('limit_accident'), deductible=c.get('deductible')))
+            policy.coverages.append(Coverage(
+                type=c.get('type'), 
+                limit_per_person=c.get('limit_person'), 
+                limit_per_accident=c.get('limit_accident'), 
+                limit_property_damage=c.get('limit_property_damage'), 
+                deductible=c.get('deductible')
+            ))
         
         for d in drivers_data:
             policy.drivers.append(Driver(full_name=d.get('full_name'), license_number=d.get('license_number'), is_excluded=d.get('is_excluded')))
@@ -98,14 +148,11 @@ class PolicyService:
         # Check duplicate
         existing = self.get_policy_by_number(policy.policy_number)
         if existing:
-             # Logic in app.py was to warn. 
-             # We will just raise or return false if we want strictness, 
-             # but valid use case might be updating? 
-             # For now, let's just add (sqlalchemy might error on constraint if not careful)
-             pass 
+            return False, "Skipped duplicate policy number."
         
         self.session.add(policy)
         self.session.commit()
+        return True, "Saved policy manually."
 
     def update_policy(self, policy: Policy, updated_data: dict):
         """
