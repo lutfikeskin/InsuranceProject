@@ -107,6 +107,17 @@ class PolicyService:
         self.session.add(policy)
         self.session.commit()
 
+    def update_policy(self, policy: Policy, updated_data: dict):
+        """
+        Updates an existing policy with a dictionary of new data.
+        """
+        for key, value in updated_data.items():
+            if hasattr(policy, key):
+                setattr(policy, key, value)
+        
+        self.session.commit()
+        return True
+
 class COIService:
     @staticmethod
     def prepare_coi_data(p: Policy):

@@ -63,7 +63,7 @@ with st.sidebar:
     
     selected = option_menu(
         menu_title=None,
-        options=["Dashboard", "Process Policies", "History", "Create COI"],
+        options=["Dashboard", "Process Policies", "Database", "Create COI"],
         icons=["house-fill", "cloud-arrow-up-fill", "database-fill", "file-earmark-pdf-fill"],
         menu_icon="cast",
         default_index=0,
@@ -105,7 +105,7 @@ if selected == "Dashboard":
     page_dashboard()
 elif selected == "Process Policies":
     page_process_policies(api_key)
-elif selected == "History":
+elif selected == "Database":
     page_history()
 elif selected == "Create COI":
     page_create_coi()
