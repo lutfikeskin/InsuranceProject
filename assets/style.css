@@ -68,7 +68,9 @@ h3 {
 }
 
 /* Hide Streamlit Image Toolbar (Fullscreen button) */
-[data-testid="stImage"] button {
+[data-testid="stImage"] button,
+[data-testid="stBaseButton-elementToolbar"],
+[data-testid="stElementToolbar"] {
   display: none !important;
 }
 
