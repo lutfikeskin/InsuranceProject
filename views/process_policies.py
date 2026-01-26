@@ -4,6 +4,7 @@ import json
 from services import PolicyService
 from database import get_session, Policy, Vehicle, Driver, Coverage
 from extractor import process_pdf
+from vehicle_utils import refine_vehicle_type
 import concurrent.futures
 import base64
 
@@ -51,7 +52,7 @@ def page_process_policies(api_key):
                         progress_bar.progress((i+1) / total_files)
                         
                         try:
-                            data, usage = future.result()
+                            data, usage, error_msg = future.result()
                             if data:
                                 st.session_state["temp_extracted"].append({
                                     "filename": fname,
@@ -59,7 +60,7 @@ def page_process_policies(api_key):
                                     "data": data
                                 })
                             else:
-                                st.error(f"Extraction failed for {fname}")
+                                st.error(f"Extraction failed for {fname}: {error_msg}")
                         except Exception as e:
                             st.error(f"Error processing {fname}: {e}")
                 
@@ -279,11 +280,35 @@ def page_process_policies(api_key):
                         
                         # Add sub-objects
                         for v in current_item['data'].get('vehicles', []):
-                            policy.vehicles.append(Vehicle(year=v.get('year'), make=v.get('make'), model=v.get('model'), vin=v.get('vin'), gvw=v.get('gvw'), vehicle_type=v.get('type')))
+                            refined = refine_vehicle_type(v.get('year'), v.get('make'), v.get('model'), v.get('vin'), v.get('type'))
+                            policy.vehicles.append(Vehicle(
+                                year=v.get('year'), 
+                                make=v.get('make'), 
+                                model=v.get('model'), 
+                                vin=v.get('vin'), 
+                                gvw=v.get('gvw'), 
+                                vehicle_type=refined
+                            ))
                         for d in current_item['data'].get('drivers', []):
                             policy.drivers.append(Driver(full_name=d.get('full_name'), license_number=d.get('license_number'), is_excluded=d.get('is_excluded')))
                         for c in current_item['data'].get('coverages', []):
-                             policy.coverages.append(Coverage(type=c.get('type'), limit_per_person=c.get('limit_person'), limit_per_accident=c.get('limit_accident'), deductible=c.get('deductible')))
+                             policy.coverages.append(Coverage(
+                                 type=c.get('display_name') or c.get('type'), 
+                                 coverage_code=c.get('coverage_code'),
+                                 family=c.get('family'),
+                                 
+                                 # New Structured Limits
+                                 per_person=c.get('limits', {}).get('per_person'),
+                                 per_accident=c.get('limits', {}).get('per_accident'),
+                                 per_occurrence=c.get('limits', {}).get('per_occurrence'),
+                                 combined_single_limit=c.get('limits', {}).get('combined_single_limit'),
+                                 aggregate=c.get('limits', {}).get('aggregate'),
+                                 
+                                 # Fallback
+                                 limit_per_person=c.get('limit_person'), 
+                                 limit_per_accident=c.get('limit_accident'), 
+                                 deductible=c.get('deductible')
+                             ))
 
                         # We should use service.save_policy_object
                         success, msg = service.save_policy_object(policy)

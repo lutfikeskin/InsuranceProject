@@ -79,10 +79,22 @@ class Coverage(Base):
     id = Column(Integer, primary_key=True)
     policy_id = Column(Integer, ForeignKey('policies.id'))
     vehicle_id = Column(Integer, ForeignKey('vehicles.id'), nullable=True)
-    type = Column(String)
+    type = Column(String) # Legacy "display name"
+    coverage_code = Column(String) # New Ontology Code
+    family = Column(String) # New Ontology Family
+    
+    # Ontology Limits
+    per_person = Column(Integer, nullable=True)     # Replaces limit_per_person
+    per_accident = Column(Integer, nullable=True)   # Replaces limit_per_accident
+    per_occurrence = Column(Integer, nullable=True) # New
+    combined_single_limit = Column(Integer, nullable=True) # New (CSL)
+    aggregate = Column(Integer, nullable=True)      # New
+    
+    # Legacy aliases (mapped to new columns in code if needed, or kept for backward compat)
     limit_per_person = Column(Integer, nullable=True)
     limit_per_accident = Column(Integer, nullable=True)
-    limit_property_damage = Column(Integer, nullable=True)
+    limit_property_damage = Column(Integer, nullable=True) # Maps to per_occurrence for PD
+    
     deductible = Column(Integer, nullable=True)
 
     policy = relationship("Policy", back_populates="coverages")
@@ -134,6 +146,22 @@ def init_db(db_name="insurance_data.db"):
         cov_columns = [c['name'] for c in inspector.get_columns('coverages')]
         if 'limit_property_damage' not in cov_columns:
             conn.execute(text("ALTER TABLE coverages ADD COLUMN limit_property_damage INTEGER"))
+
+        # Ontology Migrations
+        if 'coverage_code' not in cov_columns:
+            conn.execute(text("ALTER TABLE coverages ADD COLUMN coverage_code VARCHAR"))
+        if 'family' not in cov_columns:
+            conn.execute(text("ALTER TABLE coverages ADD COLUMN family VARCHAR"))
+        if 'per_person' not in cov_columns:
+            conn.execute(text("ALTER TABLE coverages ADD COLUMN per_person INTEGER"))
+        if 'per_accident' not in cov_columns:
+            conn.execute(text("ALTER TABLE coverages ADD COLUMN per_accident INTEGER"))
+        if 'per_occurrence' not in cov_columns:
+            conn.execute(text("ALTER TABLE coverages ADD COLUMN per_occurrence INTEGER"))
+        if 'combined_single_limit' not in cov_columns:
+            conn.execute(text("ALTER TABLE coverages ADD COLUMN combined_single_limit INTEGER"))
+        if 'aggregate' not in cov_columns:
+            conn.execute(text("ALTER TABLE coverages ADD COLUMN aggregate INTEGER"))
             
         conn.commit()
             

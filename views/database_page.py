@@ -89,9 +89,46 @@ def page_database(api_key):
                 
                 # Reconstruct for exporter
                 dict_data = {
-                    "policy": {"carrier_name": p.carrier_name, "policy_number": p.policy_number, "effective_date": str(p.effective_date), "expiration_date": str(p.expiration_date), "account_type": p.account_type, "insured_name": p.insured_name, "business_name": p.business_name, "premium": p.premium, "state": p.state, "financial_responsibility_name": p.financial_responsibility_name, "liability_limit": p.liability_limit, "cargo_limit": p.cargo_limit, "has_full_collision": p.has_full_collision},
+                    "policy": {
+                        "carrier_name": p.carrier_name, 
+                        "policy_number": p.policy_number, 
+                        "effective_date": str(p.effective_date), 
+                        "expiration_date": str(p.expiration_date), 
+                        "account_type": p.account_type, 
+                        "policy_type": p.policy_type,
+                        "classification_confidence": p.classification_confidence,
+                        "insured_name": p.insured_name, 
+                        "business_name": p.business_name, 
+                        "insured_address": p.insured_address,
+                        "insured_city": p.insured_city,
+                        "insured_state_code": p.insured_state_code,
+                        "insured_zip": p.insured_zip,
+                        "premium": p.premium, 
+                        "state": p.state, 
+                        "financial_responsibility_name": p.financial_responsibility_name, 
+                        "liability_limit": p.liability_limit, 
+                        "cargo_limit": p.cargo_limit, 
+                        "cargo_deductible": p.cargo_deductible,
+                        "has_full_collision": p.has_full_collision,
+                        "has_general_liability": p.has_general_liability,
+                        "has_auto_liability": p.has_auto_liability
+                    },
                     "vehicles": [{"year": v.year, "make": v.make, "model": v.model, "vin": v.vin, "gvw": v.gvw, "type": v.vehicle_type} for v in p.vehicles],
-                    "coverages": [{"type": c.type, "limit_person": c.limit_per_person, "limit_accident": c.limit_per_accident, "deductible": c.deductible} for c in p.coverages],
+                    "coverages": [
+                        {
+                            "type": c.type, 
+                            "coverage_code": c.coverage_code,
+                            "family": c.family,
+                            "per_person": c.per_person,
+                            "per_accident": c.per_accident,
+                            "per_occurrence": c.per_occurrence,
+                            "combined_single_limit": c.combined_single_limit,
+                            "aggregate": c.aggregate,
+                            "limit_person": c.limit_per_person, 
+                            "limit_accident": c.limit_per_accident, 
+                            "deductible": c.deductible
+                        } for c in p.coverages
+                    ],
                     "drivers": [{"full_name": d.full_name, "license_number": d.license_number, "is_excluded": d.is_excluded} for d in p.drivers]
                 }
                 export_data.append(dict_data)

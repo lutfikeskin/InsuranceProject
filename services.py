@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
-from database import Policy, Vehicle, Coverage, Driver
+from database import get_session, Policy, Vehicle, Driver, Coverage
 from naic_utils import get_naic_for_carrier
+from coverage_ontology import summarize_auto_liability, format_liability_limit
+from vehicle_utils import refine_vehicle_type
 import pandas as pd
 import json
 
@@ -114,19 +116,49 @@ class PolicyService:
             cargo_limit=p_data.get('cargo_limit'),
             cargo_deductible=p_data.get('cargo_deductible'),
             has_full_collision=p_data.get('has_full_collision'),
-            has_general_liability=p_data.get('has_general_liability', True),
-            has_auto_liability=p_data.get('has_auto_liability', True)
+            has_general_liability=p_data.get('has_general_liability', False),
+            has_auto_liability=p_data.get('has_auto_liability', False)
         )
 
         for v in vehicles_data:
-            policy.vehicles.append(Vehicle(year=v.get('year'), make=v.get('make'), model=v.get('model'), vin=v.get('vin'), gvw=v.get('gvw'), vehicle_type=v.get('type')))
+            # Refine Type
+            refined_type = refine_vehicle_type(
+                v.get('year'), 
+                v.get('make'), 
+                v.get('model'), 
+                v.get('vin'), 
+                v.get('type')
+            )
+            
+            new_vehicle = Vehicle(
+                year=v.get('year'),
+                make=v.get('make'),
+                model=v.get('model'),
+                vin=v.get('vin'),
+                gvw=v.get('gvw'),
+                vehicle_type=refined_type # Use Refined
+            )
+            policy.vehicles.append(new_vehicle)
         
         for c in coverages_data:
+            limits = c.get('limits', {})
             policy.coverages.append(Coverage(
-                type=c.get('type'), 
+                type=c.get('display_name') or c.get('type'), 
+                coverage_code=c.get('coverage_code'),
+                family=c.get('family'),
+                
+                # New Ontology Limits (Structured)
+                per_person=limits.get('per_person'),
+                per_accident=limits.get('per_accident'),
+                per_occurrence=limits.get('per_occurrence'),
+                combined_single_limit=limits.get('combined_single_limit'),
+                aggregate=limits.get('aggregate'),
+                
+                # Fallback for old schema if mixed
                 limit_per_person=c.get('limit_person'), 
                 limit_per_accident=c.get('limit_accident'), 
                 limit_property_damage=c.get('limit_property_damage'), 
+                
                 deductible=c.get('deductible')
             ))
         
@@ -193,6 +225,10 @@ class PolicyService:
           - insured_name (text)
           - premium (text)
           - has_full_collision (bool)
+          - policy_type (text, e.g. 'personal_auto', 'commercial_auto', 'general_liability')
+          - account_type (text, e.g. 'Personal', 'Commercial')
+          - has_auto_liability (bool)
+          - has_general_liability (bool)
           
         Table 'vehicles':
           - policy_id (fk to policies.id)

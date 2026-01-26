@@ -3,6 +3,13 @@ import os
 import json
 import tempfile
 import time
+from coverage_ontology import (
+    COVERAGE_REGISTRY, 
+    summarize_auto_liability, 
+    validate_coverage, 
+    is_coverage_allowed_for_policy_type,
+    format_liability_limit
+)
 
 CLASSIFICATION_SCHEMA = {
     "type": "OBJECT",
@@ -32,76 +39,10 @@ CLASSIFICATION_SCHEMA = {
     "required": ["policy_type", "confidence"]
 }
 
-BASE_EXTRACTION_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "policy": {
-            "type": "OBJECT",
-            "properties": {
-                "carrier_name": {"type": "STRING"},
-                "naic_number": {"type": "STRING"},
-                "policy_number": {"type": "STRING"},
-                "effective_date": {"type": "STRING"},
-                "expiration_date": {"type": "STRING"},
-                "account_type": {"type": "STRING"},
-                "insured_name": {"type": "STRING"},
-                "insured_address": {"type": "STRING"},
-                "insured_city": {"type": "STRING"},
-                "insured_state_code": {"type": "STRING"},
-                "insured_zip": {"type": "STRING"},
-                "business_name": {"type": "STRING"},
-                "premium": {"type": "STRING"},
-                "state": {"type": "STRING"},
-                "financial_responsibility_name": {"type": "STRING"},
-                "liability_limit": {"type": "STRING"},
-                "cargo_limit": {"type": "STRING"},
-                "cargo_deductible": {"type": "STRING"},
-                "has_full_collision": {"type": "BOOLEAN"},
-                "has_general_liability": {"type": "BOOLEAN"},
-                "has_auto_liability": {"type": "BOOLEAN"}
-            }
-        },
-        "vehicles": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "year": {"type": "INTEGER"},
-                    "make": {"type": "STRING"},
-                    "model": {"type": "STRING"},
-                    "vin": {"type": "STRING"},
-                    "gvw": {"type": "INTEGER"},
-                    "type": {"type": "STRING"}
-                }
-            }
-        },
-        "coverages": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "type": {"type": "STRING"},
-                    "limit_person": {"type": "INTEGER"},
-                    "limit_accident": {"type": "INTEGER"},
-                    "deductible": {"type": "INTEGER"}
-                }
-            }
-        },
-        "drivers": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "full_name": {"type": "STRING"},
-                    "license_number": {"type": "STRING"},
-                    "is_excluded": {"type": "BOOLEAN"}
-                }
-            }
-        }
-    }
-}
+# --- ONTOLOGY-AWARE SCHEMA ---
+# This schema replaces the legacy schemas and correctly models the strict ontology.
 
-PERSONAL_AUTO_SCHEMA = {
+ONTOLOGY_AWARE_SCHEMA = {
     "type": "OBJECT",
     "properties": {
         "policy": {
@@ -149,21 +90,39 @@ PERSONAL_AUTO_SCHEMA = {
             "items": {
                 "type": "OBJECT",
                 "properties": {
-                    "type": {"type": "STRING"},
+                    "coverage_code": {
+                        "type": "STRING", 
+                        "description": "Must be one of the explicitly allowed registry codes."
+                    },
+                    "display_name": {"type": "STRING"},
                     "family": {
                         "type": "STRING",
                         "enum": [
                             "auto_liability",
                             "uninsured_motorist",
                             "underinsured_motorist",
+                            "physical_damage",
+                            "general_liability",
+                            "cargo",
                             "medical_payments",
                             "pip",
                             "other"
                         ]
                     },
-                    "limit_person": {"type": "INTEGER"},
-                    "limit_accident": {"type": "INTEGER"},
-                    "limit_property_damage": {"type": "INTEGER"},
+                    "limit_structure": {
+                        "type": "STRING",
+                        "enum": ["csl", "split", "per_occurrence", "aggregate", "deductible_only", "scheduled"]
+                    },
+                    "limits": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "per_person": {"type": "INTEGER"},
+                            "per_accident": {"type": "INTEGER"},
+                            "per_occurrence": {"type": "INTEGER"},
+                            "combined_single_limit": {"type": "INTEGER"},
+                            "aggregate": {"type": "INTEGER"}
+                        }
+                    },
                     "deductible": {"type": "INTEGER"}
                 }
             }
@@ -180,64 +139,41 @@ PERSONAL_AUTO_SCHEMA = {
             }
         }
     }
-
 }
 
-def build_personal_auto_liability_limit(coverages):
+def perform_extraction_sanity_checks(result, policy_type):
     """
-    Deterministically builds liability limit string using strict Coverage Family logic.
-    Priority: CSL > Split Limits
+    Final defense: logical rules that must not be violated.
+    Returns (True, None) or (False, FailureReason).
     """
-    # Filter for ONLY Auto Liability family to exclude UM/UIM
-    auto_liability = [
-        c for c in coverages
-        if c.get("family") == "auto_liability"
-    ]
-
-    # Check for CSL (Combined Single Limit)
-    # Detection: Explicit 'CSL' in type OR 'limit_accident' present without 'limit_person'
-    csl = next(
-        (c for c in auto_liability if "CSL" in c.get("type", "") or (c.get("limit_accident") and not c.get("limit_person"))),
-        None
-    )
-
-    if csl and csl.get("limit_accident"):
-        val = csl["limit_accident"]
-        # Format as thousands if applicable, e.g. "100 CSL"
-        fmt_val = str(val // 1000 if val >= 1000 else val)
-        return f"{fmt_val} CSL"
-
-    # Fallback to Split Limits (BI + PD)
-    bi = next((c for c in auto_liability if "bodily injury" in c.get("type", "").lower()), None)
-    pd = next((c for c in auto_liability if "property damage" in c.get("type", "").lower()), None)
-
-    parts = []
-    if bi:
-        if bi.get('limit_person'):
-            val = bi['limit_person']
-            parts.append(str(val // 1000 if val >= 1000 else val))
-        if bi.get('limit_accident'):
-            val = bi['limit_accident']
-            parts.append(str(val // 1000 if val >= 1000 else val))
-    
-    if pd and pd.get('limit_property_damage'):
-        val = pd['limit_property_damage']
-        parts.append(str(val // 1000 if val >= 1000 else val))
-        
-    return "/".join(parts) if parts else None
-
-def validate_liability_limit(result):
-    """
-    Safety Guard: Ensures no CSL policy is incorrectly summarized as split limits.
-    """
-    summary = result.get("policy", {}).get("liability_limit")
     coverages = result.get("coverages", [])
     
-    if summary and "/" in summary:
-        auto_liability = [c for c in coverages if c.get("family") == "auto_liability"]
-        if any("CSL" in c.get("type", "") for c in auto_liability):
-            # This is a critical logic failure if it happens
-            print("WARNING: CSL detected but split limit summary generated. Check extraction.")
+    # 1. At least one Auto Liability for Auto Policies
+    if policy_type in ["personal_auto", "commercial_auto"]:
+        has_liab = any(c.get("family") == "auto_liability" for c in coverages)
+        if not has_liab:
+            msg = "SANITY CHECK FAILED: No auto liability found for auto policy."
+            print(msg)
+            return False, msg
+            
+    # 2. CSL and Split BI must never coexist in Auto Liab
+    auto_liabs = [c for c in coverages if c.get("family") == "auto_liability"]
+    has_csl = any(c.get("limit_structure") == "csl" for c in auto_liabs)
+    has_split = any(c.get("limit_structure") == "split" for c in auto_liabs)
+    if has_csl and has_split:
+        msg = "SANITY CHECK WARNING: Mixed CSL and Split limits in Auto Liability. Keeping data for manual review."
+        print(msg)
+        # return False, msg  <-- DOWNGRADED TO WARNING
+        
+    # 3. UM/UIM must never be in auto_liability family
+    for c in coverages:
+        if "uninsured" in c.get("display_name", "").lower() or "um" == c.get("coverage_code", "").lower()[:2]:
+            if c.get("family") == "auto_liability":
+                msg = f"SANITY CHECK FAILED: UM/UIM found in auto_liability family: {c['display_name']}"
+                print(msg)
+                return False, msg
+                
+    return True, None
 
 def classify_policy(sample_file, model_name="gemini-2.0-flash"):
     """
@@ -311,162 +247,75 @@ def process_pdf(file_bytes, api_key):
             raise ValueError("File upload failed.")
 
         # Prepare the model with fallback strategy
-        # Based on available models: gemini-flash-latest, gemini-pro-latest
         model_candidates = [
             "gemini-2.5-flash",
             "gemini-2.0-flash",
         ]
         
-        system_instructions = {
-            "commercial_auto": """
-You are a senior U.S. insurance underwriter specializing in commercial auto policies.
-
-Task:
-Extract policy data from the provided PDF into STRICT JSON that conforms exactly to the provided schema.
-
-GLOBAL RULES:
-- Output JSON only.
-- Do not guess or infer values.
-- If a value is not explicitly present, return null.
-- Do not include explanatory text in values.
-- Do not add extra fields.
-
-SECTION PRIORITY:
-1. Declarations Page
-2. Coverage Schedule
-3. Vehicle Schedule
-4. Driver Schedule
-5. Endorsements
-6. Invoices (premium only if not found elsewhere)
-
-CARRIER:
-- carrier_name must be the underwriting insurance company, not the agent, broker, MGA, or program administrator.
-
-FINANCIAL RESPONSIBILITY NAME:
-- Extract ONLY the customer’s personal legal name from the “Financial Responsibility Information” section.
-- Exclude insurers, state agencies, filing offices, and companies.
-
-VEHICLES:
-- Extract all vehicles with valid VINs (17 characters, alphanumeric, excluding I, O, Q).
-- Extract Year, Make, and Model.
-- **VEHICLE TYPE EXCEPTION**: Unlike other fields, you **SHOULD INFER** the valid vehicle type based on the Make and Model if it is not explicitly stated.
-  - **MANDATORY**: You must use one of these specific types: "Tractor", "Straight Truck", "Box Truck", "Cargo Van", "Pickup", "Trailer", "Dump Truck", "Tow Truck".
-  - **FORBIDDEN**: Do NOT use generic terms like "Truck" or "Auto".
-- Each VIN must be unique.
-
-COVERAGES:
-- Extract limit amounts only (e.g. "$1,000,000").
-- If coverage is CSL, do not fabricate split limits.
-- has_full_collision = true if any vehicle has Collision or Comprehensive coverage.
-
-FLAGS:
-- has_general_liability = true only if a General Liability section with limits exists.
-- has_auto_liability = true only if an Auto Liability section with limits exists.
-
-DRIVERS:
-- Extract all listed drivers.
-- is_excluded = true only if explicitly stated.
-
-FORMATTING:
-- Dates must be YYYY-MM-DD.
-- Currency values must preserve symbols.
-- Integers must not contain commas.
-""",
-            "personal_auto": """
-You are a senior U.S. insurance underwriter specializing in personal auto policies.
-
-Task:
-Extract policy data from the provided PDF into STRICT JSON that conforms exactly to the provided schema.
-
-GLOBAL RULES:
-- Output JSON only.
-- Do not guess or infer values.
-- If a value is not explicitly present, return null.
-
-SPECIFIC TO PERSONAL AUTO:
-- DRIVERS: Extract all listed drivers, including household members and excluded drivers.
-- VEHICLES: Extract all personal vehicles.
-
-COVERAGE FAMILY RULES (CRITICAL):
-Each coverage MUST be assigned to exactly one family:
-- "auto_liability"
-- "uninsured_motorist"
-- "underinsured_motorist"
-- "medical_payments"
-- "pip"
-- "other"
-
-Auto Liability includes:
-- "Liability Insurance"
-- "Bodily Injury Liability"
-- "Property Damage Liability"
-- "Combined Single Limit"
-
-Uninsured / Underinsured Motorist includes:
-- "Uninsured Motorist"
-- "UM"
-- "Underinsured Motorist"
-- "UIM"
-
-UM/UIM coverages MUST NOT be treated as Auto Liability.
-
-COMBINED SINGLE LIMIT (CSL) RULES:
-If a coverage explicitly states "Combined Single Limit", "CSL", or "Each Accident" with a single dollar amount:
-- Extract ONE coverage with:
-  type = "Auto Liability - CSL"
-  family = "auto_liability"
-  limit_accident = <amount>
-- Do NOT create limit_person
-
-PERSONAL AUTO LIABILITY RULES (Split Limits):
-  - Bodily Injury Liability is usually listed as:
-    - "$X each person"
-    - "$Y each accident"
-  - Property Damage Liability is usually listed separately as:
-    - "$Z each accident"
-
-  You MUST extract:
-  - A coverage with type exactly "Bodily Injury Liability":
-    - family = "auto_liability"
-    - set limit_person = X
-    - set limit_accident = Y
-  - A coverage with type exactly "Property Damage Liability":
-    - family = "auto_liability"
-    - set limit_property_damage = Z
-
-- EXCLUSIONS: If a driver is listed as 'Excluded', set 'is_excluded' to true.
-
-FORMATTING:
-- Dates: YYYY-MM-DD.
-- Currency: Preserve symbols (e.g., "$50,000").
-- INTEGERS: For limits in coverages, provide RAW INTEGERS (e.g. 30000 instead of "$30,000").
-"""
-        }
-        
-
         # 1. Classify Policy
-        print("Classifying policy type...")
         try:
+            print("Classifying policy type...")
             classification = classify_policy(sample_file)
             print(f"Classification result: {classification}")
             
             if classification['policy_type'] == "unknown" or classification['confidence'] == "low":
                 if classification['policy_type'] == "unknown":
                     print("Could not determine policy type. Extraction aborted.")
-                    return None, None
+                    return None, None, "Unknown Policy Type"
                 else:
                     print("Low confidence in policy classification. Proceeding with caution.")
         except Exception as e:
             print(f"Classification failed: {e}")
-            return None, None
+            return None, None, f"Classification Failed: {e}"
 
         policy_type = classification['policy_type']
         
-        # 2. Select Instruction and Schema
-        instruction = system_instructions.get(policy_type, system_instructions["commercial_auto"])
-        schema = PERSONAL_AUTO_SCHEMA if policy_type == "personal_auto" else BASE_EXTRACTION_SCHEMA
+        # 2. Prepare Ontology and Instruction
+        registry_text = json.dumps(COVERAGE_REGISTRY, indent=2)
         
-        # 3. Attempt extraction with fallbacks
+        ontology_instruction = f"""
+You are an expert insurance extractor using a strict COVERAGE ONTOLOGY.
+
+YOUR GOAL:
+Map every coverage on the policy to the closest matching 'coverage_code' from the registry below.
+
+STRICT RULES:
+1. You must output JSON conforming to the schema.
+2. For each coverage, you MUST choose a valid 'coverage_code' from the registry.
+3. You must use the 'family' and 'limit_structure' defined in the registry for that code.
+4. Populate the 'limits' object based on the structure:
+   - If 'split': use 'per_person' and 'per_accident'
+   - If 'csl': use 'combined_single_limit' ONLY
+   - If 'per_occurrence': use 'per_occurrence'
+   
+REGISTRY (The Source of Truth):
+{registry_text}
+
+SPECIFIC RULES FOR {policy_type.upper()}:
+- Extract all drivers and vehicles.
+- For CSL policies ("Combined Single Limit" or "Each Accident" only):
+    - Use coverage_code="AUTO_LIAB_CSL"
+    - Set limits.combined_single_limit = <amount>
+    - DO NOT set per_person limits.
+- For Split Limit policies:
+    - Use coverage_code="AUTO_LIAB_BI" (Bodily Injury)
+    - Use coverage_code="AUTO_LIAB_PD" (Property Damage)
+- Uninsured/Underinsured Motorist:
+    - Use family="uninsured_motorist" or "underinsured_motorist"
+    - NEVER use family="auto_liability" for these.
+
+IMPORTANT GUARDRAIL:
+- If a coverage includes BOTH per-person language AND CSL language (e.g. "$1,000,000 CSL with $25k BI"), 
+  you MUST treat it as SPLIT unless the section title explicitly says "Combined Single Limit".
+- If you find ANY per-person wording within the liability section, default to coverage_code="AUTO_LIAB_BI".
+- **FORBIDDEN**: Do not extract "Not Purchased" coverages as 0 or null. Omit them entirely.
+
+FORMATTING:
+- Dates: YYYY-MM-DD
+- Integers: Raw numbers (no commas)
+"""
+        
+        # 3. Attempt extraction
         response = None
         last_error = None
         for model_name in model_candidates:
@@ -474,14 +323,14 @@ FORMATTING:
             try:
                 model = genai.GenerativeModel(model_name)
                 response = model.generate_content(
-                    [sample_file, instruction],
+                    [sample_file, ontology_instruction],
                     generation_config=genai.GenerationConfig(
                         response_mime_type="application/json",
-                        response_schema=schema
+                        response_schema=ONTOLOGY_AWARE_SCHEMA
                     )
                 )
                 print(f"Success with {model_name}")
-                break # Stop if successful
+                break 
             except Exception as e:
                 print(f"Failed with {model_name}: {e}")
                 last_error = e
@@ -491,20 +340,54 @@ FORMATTING:
             if last_error:
                 raise last_error
         
-        # Parse JSON
+        # 4. Parse & Normalize
         try:
             result = json.loads(response.text)
             
-            # Post-Process Personal Auto Liability Limit
-            if policy_type == "personal_auto":
-                validate_liability_limit(result)
-                assembled_limit = build_personal_auto_liability_limit(result.get("coverages", []))
-                if assembled_limit:
-                    result["policy"]["liability_limit"] = assembled_limit
+            # Universal Normalization via Ontology
+            
+            # Filter and Validate Coverages
+            valid_coverages = []
+            for c in result.get("coverages", []):
+                # 1. Registry Parity (Family, Structure, Allowed Fields)
+                is_valid, msg = validate_coverage(c)
+                if not is_valid:
+                    print(f"Skipping invalid coverage (Ontology): {msg}")
+                    continue
+                
+                # 2. Policy-Type Context (Cross-check with classification)
+                if not is_coverage_allowed_for_policy_type(c["coverage_code"], policy_type):
+                    print(f"Skipping invalid coverage (Policy Type Context): {c['coverage_code']} not allowed for {policy_type}")
+                    continue
+                    
+                valid_coverages.append(c)
+            
+            # Strict Update: Only keep valid coverages
+            result["coverages"] = valid_coverages
+            
+            # Sanity Checks
+            is_sane, sanity_msg = perform_extraction_sanity_checks(result, policy_type)
+            if not is_sane:
+                print("Extraction failed sanity checks. Discarding result.")
+                return None, None, sanity_msg
+            
+            # Universal Normalization via Ontology
+            raw_summary = summarize_auto_liability(valid_coverages)
+            if raw_summary:
+                # presentation formatting
+                result["policy"]["liability_limit"] = format_liability_limit(raw_summary)
 
-            # Inject classification metadata into the result
+            # DERIVED FLAGS: Calculate purely from valid coverages (Ignore Model Hallucinations)
+            has_auto_liab = any(c.get("family") == "auto_liability" for c in valid_coverages)
+            has_gl = any(c.get("family") == "general_liability" for c in valid_coverages)
+            has_comp_coll = any(c.get("family") == "physical_damage" for c in valid_coverages)
+            
+            result["policy"]["has_auto_liability"] = has_auto_liab
+            result["policy"]["has_general_liability"] = has_gl
+            result["policy"]["has_full_collision"] = has_comp_coll
+
             result['classification'] = classification
-            return result, response.usage_metadata
+            return result, response.usage_metadata, None
         except json.JSONDecodeError: 
             # Fallback for removing markdown code blocks if they slip through (rare with schema)
             clean_text = response.text.strip()
@@ -513,10 +396,10 @@ FORMATTING:
             if clean_text.endswith("```"):
                 clean_text = clean_text[:-3]
             try:
-                return json.loads(clean_text), response.usage_metadata
+                return json.loads(clean_text), response.usage_metadata, None
             except:
                 print(f"Failed to decode JSON: {response.text}")
-                return None, None
+                return None, None, "JSON Decode Error"
             
     finally:
         # Cleanup

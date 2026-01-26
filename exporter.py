@@ -55,11 +55,18 @@ def create_excel_report(policies_data):
     # Define standard column sets
     POLICY_COLUMNS = [
         "carrier_name", "policy_number", "effective_date", "expiration_date",
-        "account_type", "insured_name", "business_name", "premium", "state",
-        "financial_responsibility_name", "liability_limit", "cargo_limit", "has_full_collision"
+        "account_type", "policy_type", "classification_confidence", 
+        "insured_name", "business_name", "insured_address", "insured_city", "insured_state_code", "insured_zip",
+        "premium", "state", "financial_responsibility_name", 
+        "liability_limit", "cargo_limit", "cargo_deductible", 
+        "has_full_collision", "has_general_liability", "has_auto_liability"
     ]
     VEHICLE_COLUMNS = ["year", "make", "model", "vin", "gvw", "type", "policy_number"]
-    COVERAGE_COLUMNS = ["type", "limit_person", "limit_accident", "deductible", "policy_number"]
+    COVERAGE_COLUMNS = [
+        "policy_number", "type", "coverage_code", "family", 
+        "per_person", "per_accident", "per_occurrence", 
+        "combined_single_limit", "aggregate", "deductible"
+    ]
     DRIVER_COLUMNS = ["full_name", "license_number", "is_excluded", "policy_number"]
 
     # Create DataFrames and ensure column consistency

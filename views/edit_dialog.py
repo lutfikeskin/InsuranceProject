@@ -14,6 +14,7 @@ def edit_policy_dialog(policy, service: PolicyService):
             new_carrier = st.text_input("Carrier Name", value=policy.carrier_name)
             new_naic = st.text_input("NAIC #", value=policy.naic_number if policy.naic_number else "")
             new_premium = st.text_input("Premium", value=policy.premium)
+            new_fin_resp = st.text_input("Fin. Resp. Name", value=policy.financial_responsibility_name if policy.financial_responsibility_name else "")
             
             st.divider()
             st.write("📋 Classification")
@@ -56,6 +57,7 @@ def edit_policy_dialog(policy, service: PolicyService):
                 "premium": new_premium,
                 "effective_date": new_eff,
                 "expiration_date": new_exp,
+                "financial_responsibility_name": new_fin_resp,
                 "liability_limit": new_limit,
                 "cargo_limit": new_cargo,
                 "cargo_deductible": new_cargo_ded,

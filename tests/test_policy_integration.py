@@ -112,31 +112,58 @@ class TestPolicyIntegration(unittest.TestCase):
 
     def test_personal_auto_split_limit_assembly(self):
         """Verify that split limits are correctly assembled into the liability_limit string."""
-        from extractor import build_personal_auto_liability_limit
+        from coverage_ontology import summarize_auto_liability, format_liability_limit
         
         mock_coverages = [
-            {"type": "Bodily Injury Liability", "family": "auto_liability", "limit_person": 30000, "limit_accident": 60000, "limit_property_damage": None},
-            {"type": "Property Damage Liability", "family": "auto_liability", "limit_person": None, "limit_accident": None, "limit_property_damage": 50000}
+            # ... identical ...
+            {
+                "coverage_code": "AUTO_LIAB_BI", 
+                "family": "auto_liability",
+                "limit_structure": "split",
+                "limits": {"per_person": 30000, "per_accident": 60000}
+            },
+            {
+                "coverage_code": "AUTO_LIAB_PD", 
+                "family": "auto_liability",
+                "limit_structure": "per_occurrence",
+                "limits": {"per_occurrence": 50000}
+            }
         ]
         
-        assembled = build_personal_auto_liability_limit(mock_coverages)
+        raw = summarize_auto_liability(mock_coverages)
+        self.assertEqual(raw["type"], "split")
+        self.assertEqual(raw["bi_person"], 30000)
+        
+        assembled = format_liability_limit(raw)
         self.assertEqual(assembled, "30/60/50")
 
     def test_csl_priority_over_um(self):
         """Verify CSL priority and exclusion of Uninsured Motorist limits."""
-        from extractor import build_personal_auto_liability_limit
+        from coverage_ontology import summarize_auto_liability, format_liability_limit
         
         mock_coverages = [
             # Primary CSL
-            {"type": "Liability Insurance", "family": "auto_liability", "limit_accident": 100000, "limit_person": None},
+            {
+                "coverage_code": "AUTO_LIAB_CSL", 
+                "family": "auto_liability", 
+                "limit_structure": "csl",
+                "limits": {"combined_single_limit": 100000}
+            },
             # UM Split Limits (Should be ignored)
-            {"type": "Uninsured Motorist", "family": "uninsured_motorist", "limit_accident": 100000, "limit_person": 50000},
-            # UIM Split Limits (Should be ignored)
-            {"type": "Underinsured Motorist", "family": "underinsured_motorist", "limit_accident": 100000, "limit_person": 50000}
+            {
+                "coverage_code": "UM_BI", 
+                "family": "uninsured_motorist", 
+                "limit_structure": "split",
+                "limits": {"per_person": 50000, "per_accident": 100000}
+            }
         ]
         
-        assembled = build_personal_auto_liability_limit(mock_coverages)
-        self.assertEqual(assembled, "100 CSL")
+        raw = summarize_auto_liability(mock_coverages)
+        self.assertEqual(raw["type"], "csl")
+        self.assertEqual(raw["value"], 100000)
+        
+        assembled = format_liability_limit(raw)
+        self.assertEqual(assembled, "100,000 CSL")
 
     def test_manual_entry_validation_test(self):
         """Verify duplicate validation on manual entry logic."""
