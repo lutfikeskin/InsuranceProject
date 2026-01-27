@@ -7,6 +7,7 @@ import time
 import hashlib
 import io
 import pypdf
+import concurrent.futures
 from coverage_ontology import (
     COVERAGE_REGISTRY, 
     summarize_auto_liability, 
@@ -254,7 +255,17 @@ def extract_declarations(client, raw_pdf_part):
     """Step 3a: Extract Declarations"""
     prompt = """
     Extract core policy declarations information.
-    - Carrier name, Policy Number, NAIC
+    
+    CRITICAL - CARRIER NAME VS AGENCY:
+    - You must distinguish between the "Carrier/Underwriter" (who pays claims) and the "Agency/Producer" (who sold the policy).
+    - Carrier Name should be the company providing coverage (e.g., Progressive, Travelers, Liberty Mutual, etc.).
+    - Look for text like "Underwritten by", "Coverage provided by", or "Insurance Company".
+    - IGNORE logos or names labeled "Producer", "Agent", or "Broker" (e.g., Truckers National, Marsh, etc.) unless they are explicitly the underwriter.
+    - If you see "Truckers National", that is likely an AGENCY. Look for the actual carrier (e.g., Progressive, Lloyds).
+
+    Field List:
+    - Carrier name (Use the advice above)
+    - Policy Number, NAIC
     - Effective and Expiration Dates (YYYY-MM-DD)
     - Insured Name, Address, City, State, Zip
     - Premium Amount
@@ -385,22 +396,45 @@ def process_pdf(file_bytes, api_key):
             
         print(f"Policy Type: {policy_type}")
 
-        # 3. Parallel/Sequential Extraction
+        # 3. Parallel Extraction
+        print("Starting Parallel Extraction...")
         
-        print("Extracting Declarations...")
-        decs_data = extract_declarations(client, raw_pdf_part)
-        
-        print("Extracting Coverages...")
-        cov_data = extract_coverages(client, raw_pdf_part, policy_type)
-        
-        vehicles_data = {"vehicles": []}
-        drivers_data = {"drivers": []}
-        
-        if policy_type in ["personal_auto", "commercial_auto", "motor_truck_cargo", "umbrella"]:
-            print("Extracting Vehicles...")
-            vehicles_data = extract_vehicles(client, raw_pdf_part)
-            print("Extracting Drivers...")
-            drivers_data = extract_drivers(client, raw_pdf_part)
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            # Submit tasks
+            # Note: We pass the client and raw_pdf_part to each thread. 
+            # The Client object is generally thread-safe for API calls.
+            
+            future_decs = executor.submit(extract_declarations, client, raw_pdf_part)
+            future_cov = executor.submit(extract_coverages, client, raw_pdf_part, policy_type)
+            
+            future_vehicles = None
+            future_drivers = None
+            
+            if policy_type in ["personal_auto", "commercial_auto", "motor_truck_cargo", "umbrella"]:
+                future_vehicles = executor.submit(extract_vehicles, client, raw_pdf_part)
+                future_drivers = executor.submit(extract_drivers, client, raw_pdf_part)
+
+            # Gather Results (this blocks until completion)
+            try:
+                print("Waiting for Declarations...")
+                decs_data = future_decs.result()
+                
+                print("Waiting for Coverages...")
+                cov_data = future_cov.result()
+                
+                vehicles_data = {"vehicles": []}
+                if future_vehicles:
+                    print("Waiting for Vehicles...")
+                    vehicles_data = future_vehicles.result()
+                    
+                drivers_data = {"drivers": []}
+                if future_drivers:
+                    print("Waiting for Drivers...")
+                    drivers_data = future_drivers.result()
+                    
+            except Exception as exc:
+                print(f"Parallel Extraction failed: {exc}")
+                raise exc
 
         # 4. Assembly & Normalization
         final_result = {
