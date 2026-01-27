@@ -251,6 +251,18 @@ class PolicyService:
           - full_name (text)
           - license_number (text)
           - is_excluded (bool)
+
+        Table 'coverages':
+          - policy_id (fk to policies.id)
+          - coverage_code (text, e.g. 'AUTO_LIAB_BI', 'GL_OCCURRENCE')
+          - family (text, e.g. 'auto_liability', 'general_liability')
+          - per_person (int)
+          - per_accident (int)
+          - per_occurrence (int)
+          - combined_single_limit (int)
+          - aggregate (int)
+          - deductible (int)
+          - type (text, display name)
           
         Rules:
         1. Return ONLY the raw SQL query. No markdown, no explanations.

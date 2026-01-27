@@ -1,7 +1,7 @@
 import streamlit as st
 from core.services import PolicyService
 
-@st.dialog("✏️ Edit Policy Details")
+@st.dialog("✏️ Edit Policy Details", width="large")
 def edit_policy_dialog(policy, service: PolicyService):
     st.write(f"Editing Policy: **{policy.policy_number}**")
     
@@ -43,6 +43,26 @@ def edit_policy_dialog(policy, service: PolicyService):
         new_coll = cf1.checkbox("Full Collision", value=policy.has_full_collision)
         new_gl = cf2.checkbox("General Liability", value=policy.has_general_liability)
         new_auto = cf3.checkbox("Auto Liability", value=policy.has_auto_liability)
+
+        st.divider()
+        st.write("📑 Detailed Coverages (Read-Only)")
+        if policy.coverages:
+            cov_data = []
+            for c in policy.coverages:
+                cov_data.append({
+                    "Family": c.family,
+                    "Code": c.coverage_code,
+                    "Display": c.type,
+                    "Per Person": c.per_person,
+                    "Per Accident": c.per_accident,
+                    "Occ": c.per_occurrence,
+                    "CSL": c.combined_single_limit,
+                    "Agg": c.aggregate,
+                    "Ded": c.deductible
+                })
+            st.dataframe(cov_data, use_container_width=True, hide_index=True)
+        else:
+            st.info("No detailed coverages linked to this policy.")
 
         st.markdown("<br>", unsafe_allow_html=True)
         st.warning("⚠️ **Warning**: Saving these changes will permanently overwrite the current record in the database.")

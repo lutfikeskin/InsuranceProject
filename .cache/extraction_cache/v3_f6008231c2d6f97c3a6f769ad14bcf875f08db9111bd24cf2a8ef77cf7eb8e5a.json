@@ -1,0 +1,263 @@
+{
+  "policy": {
+    "carrier_name": "Progressive Northern Insurance Co",
+    "policy_number": "865919581",
+    "effective_date": "2025-12-13",
+    "expiration_date": "2026-06-13",
+    "insured_name": "HAYATULLAH PARWANI",
+    "insured_address": "300 PALMETTO PARK BLVD",
+    "insured_city": "LEXINGTON",
+    "insured_state_code": "SC",
+    "insured_zip": "29072",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          109,
+          638,
+          126,
+          851
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          92,
+          638,
+          109,
+          766
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          153,
+          638,
+          168,
+          723
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          153,
+          732,
+          168,
+          828
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          132,
+          171,
+          148,
+          295
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          150,
+          171,
+          165,
+          281
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          170,
+          171,
+          186,
+          311
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          188,
+          171,
+          202,
+          244
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          188,
+          247,
+          202,
+          260
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          188,
+          263,
+          202,
+          302
+        ]
+      }
+    ],
+    "liability_limit": "25/50/25",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": false
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_BI",
+      "family": "auto_liability",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 25000,
+        "per_accident": 50000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          254,
+          257,
+          272,
+          606
+        ]
+      }
+    },
+    {
+      "coverage_code": "AUTO_LIAB_PD",
+      "family": "auto_liability",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 25000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          273,
+          257,
+          290,
+          431
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_BI",
+      "family": "uninsured_motorist",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 25000,
+        "per_accident": 50000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          311,
+          257,
+          329,
+          606
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_PD",
+      "family": "uninsured_motorist",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 25000
+      },
+      "deductible": 200,
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          329,
+          257,
+          347,
+          427
+        ]
+      }
+    },
+    {
+      "coverage_code": "UIM_BI",
+      "family": "underinsured_motorist",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 25000,
+        "per_accident": 50000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          367,
+          257,
+          385,
+          606
+        ]
+      }
+    },
+    {
+      "coverage_code": "MED_PAY",
+      "family": "medical_payments",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 1000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          404,
+          257,
+          420,
+          426
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2014,
+      "make": "TOYOTA",
+      "model": "HIGHLANDER",
+      "vin": "5TDJKRFH1ES050653",
+      "type": "passenger_auto"
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "Hayatullah Parwani"
+    },
+    {
+      "full_name": "Maryam Parwani"
+    }
+  ],
+  "classification": {
+    "policy_type": "personal_auto",
+    "confidence": "high",
+    "signals": [
+      "Auto Insurance Coverage Summary",
+      "Progressive AUTO",
+      "Named insured"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}

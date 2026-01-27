@@ -44,6 +44,8 @@ DECLARATIONS_SCHEMA = {
         "insured_zip": {"type": "STRING"},
         "business_name": {"type": "STRING"},
         "premium": {"type": "STRING"},
+        "financial_responsibility_name": {"type": "STRING"},
+
         "state": {"type": "STRING"},
         "field_locations": {
             "type": "ARRAY",
@@ -147,4 +149,22 @@ DRIVER_SCHEMA = {
             }
         }
     }
+}
+
+PREMIUM_LOCATOR_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "premium_signals": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "label": {"type": "STRING"},
+                    "page_number": {"type": "INTEGER"},
+                    "confidence": {"type": "STRING", "enum": ["high", "medium", "low"]}
+                }
+            }
+        }
+    },
+    "required": ["premium_signals"]
 }

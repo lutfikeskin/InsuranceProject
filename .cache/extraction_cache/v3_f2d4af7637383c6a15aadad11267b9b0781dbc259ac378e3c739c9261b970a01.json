@@ -1,0 +1,290 @@
+{
+  "policy": {
+    "carrier_name": "Progressive Specialty Insurance Co",
+    "policy_number": "973972857",
+    "effective_date": "2023-10-02",
+    "expiration_date": "2024-04-02",
+    "insured_name": "JOHN WILSON",
+    "insured_address": "109 ROBINETTE STREET",
+    "insured_city": "PICKERINGTON",
+    "insured_state_code": "OH",
+    "insured_zip": "43147",
+    "premium": "$77",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          120,
+          639,
+          139,
+          809
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          94,
+          632,
+          113,
+          757
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          150,
+          632,
+          169,
+          719
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          150,
+          723,
+          169,
+          815
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          151,
+          171,
+          164,
+          243
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          167,
+          171,
+          180,
+          304
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          183,
+          171,
+          196,
+          247
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          183,
+          250,
+          196,
+          264
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          183,
+          267,
+          196,
+          304
+        ]
+      },
+      {
+        "field": "premium",
+        "page_number": 1,
+        "bbox": [
+          749,
+          813,
+          762,
+          825
+        ]
+      }
+    ],
+    "liability_limit": "100,000 CSL",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "UM_BI",
+      "family": "uninsured_motorist",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 50000,
+        "per_accident": 100000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          726,
+          252,
+          740,
+          566
+        ]
+      }
+    },
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 100000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          684,
+          254,
+          701,
+          557
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_PD",
+      "family": "uninsured_motorist",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 50000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          715,
+          254,
+          732,
+          449
+        ]
+      }
+    },
+    {
+      "coverage_code": "MED_PAY",
+      "family": "medical_payments",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 1000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          747,
+          254,
+          763,
+          434
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 500,
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          778,
+          254,
+          793,
+          349
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          811,
+          254,
+          827,
+          335
+        ]
+      }
+    },
+    {
+      "coverage_code": "RENTAL",
+      "family": "physical_damage",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 50
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          828,
+          254,
+          844,
+          527
+        ]
+      }
+    },
+    {
+      "coverage_code": "TOWING",
+      "display_name": "Roadside Assistance",
+      "family": "physical_damage",
+      "limit_structure": "per_occurrence",
+      "limits": {},
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          845,
+          254,
+          860,
+          401
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2020,
+      "make": "FORD",
+      "model": "T-250 TRANSIT VAN CARGO VAN",
+      "vin": "1FTBR1C86LKA54028",
+      "type": "cargo_van"
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "John Wilson"
+    },
+    {
+      "full_name": "Diane Oppong",
+      "is_excluded": true
+    }
+  ],
+  "classification": {
+    "policy_type": "personal_auto",
+    "confidence": "high",
+    "signals": [
+      "Auto Insurance Coverage Summary",
+      "PROGRESSIVE AUTO"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}

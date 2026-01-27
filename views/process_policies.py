@@ -30,6 +30,8 @@ def page_process_policies(api_key):
             uploaded_files = st.file_uploader("Drop PDF files here", type=["pdf"], accept_multiple_files=True)
 
             if st.button("Start Extraction", type="primary") and uploaded_files:
+                force_refresh = st.checkbox("Force Refresh (Bypass Cache)", value=False, help="Enable this to re-process files even if they were processed before.")
+                
                 if not api_key:
                     st.error("Missing Gemini API Key. Please add it in Settings.")
                     return
@@ -38,8 +40,6 @@ def page_process_policies(api_key):
                 status_text = st.empty()
                 
                 total_files = len(uploaded_files)
-                files_map = {f.name: f.getvalue() for f in uploaded_files}
-                
                 files_map = {f.name: f.getvalue() for f in uploaded_files}
                 
                 # Sequential processing to allow live logging (Better UX)
@@ -51,8 +51,15 @@ def page_process_policies(api_key):
                             status.write(msg)
                             
                         try:
+                            # 0. Check Session Cache (UI Level)
+                            existing = next((item for item in st.session_state["temp_extracted"] if item["filename"] == fname), None)
+                            if existing and not force_refresh:
+                                status.write("Loaded from session memory.")
+                                status.update(label=f"`{fname}` Already Loaded", state="complete", expanded=False)
+                                continue
+
                             # Pass callback to extractor
-                            data, usage, error_msg = process_pdf(content, api_key, status_callback=update_status)
+                            data, usage, error_msg = process_pdf(content, api_key, status_callback=update_status, force_refresh=force_refresh)
                             
                             if data:
                                 st.session_state["temp_extracted"].append({
@@ -236,6 +243,7 @@ def page_process_policies(api_key):
                     current_naic = get_naic_for_carrier(p.get('carrier_name', ''))
                     
                 r_naic = c3.text_input("NAIC Code", value=current_naic)
+                r_premium = c3.text_input("Premium", value=p.get('premium', ''))
                 r_eff = c4.text_input("Effective Date", value=p.get('effective_date', ''))
                 r_exp = c4.text_input("Expiration Date", value=p.get('expiration_date', ''))
                 
@@ -290,7 +298,7 @@ def page_process_policies(api_key):
                             classification_confidence=classification.get('confidence'),
                             classification_signals=json.dumps(classification.get('signals', [])),
                             business_name=p.get('business_name'),
-                            premium=p.get('premium'),
+                            premium=r_premium,
                             state=p.get('state'),
                             financial_responsibility_name=p.get('financial_responsibility_name'),
                             has_full_collision=p.get('has_full_collision')

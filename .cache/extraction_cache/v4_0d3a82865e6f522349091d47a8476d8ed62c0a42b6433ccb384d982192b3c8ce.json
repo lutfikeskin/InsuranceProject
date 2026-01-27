@@ -1,0 +1,253 @@
+{
+  "policy": {
+    "carrier_name": "Liberty\nMutual.",
+    "policy_number": "AOV24320052280",
+    "effective_date": "07/01/2025",
+    "expiration_date": "07/01/2026",
+    "insured_name": "Kurt E Green",
+    "insured_address": "4082 Carmanwood Dr",
+    "insured_city": "Flint",
+    "insured_state_code": "MI",
+    "insured_zip": "48507-5502",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          41,
+          675,
+          67,
+          744
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          407,
+          202,
+          423,
+          350
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          407,
+          448,
+          423,
+          538
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          407,
+          626,
+          423,
+          724
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          317,
+          202,
+          332,
+          289
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          348,
+          202,
+          364,
+          328
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          365,
+          202,
+          381,
+          232
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          365,
+          233,
+          381,
+          245
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          365,
+          245,
+          381,
+          317
+        ]
+      }
+    ],
+    "liability_limit": "250/500/100",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_BI",
+      "family": "auto_liability",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 250000,
+        "per_accident": 500000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          473,
+          199,
+          494,
+          248
+        ]
+      }
+    },
+    {
+      "coverage_code": "AUTO_LIAB_PD",
+      "family": "auto_liability",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 100000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          494,
+          199,
+          514,
+          246
+        ]
+      }
+    },
+    {
+      "coverage_code": "MED_PAY",
+      "family": "medical_payments",
+      "limit_structure": "split",
+      "limits": {},
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          473,
+          289,
+          494,
+          349
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          519,
+          452,
+          540,
+          491
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          519,
+          707,
+          540,
+          746
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2022,
+      "make": "MRBZ",
+      "model": "None",
+      "vin": "W1Y4DCHY3NT089405",
+      "type": "passenger_auto"
+    },
+    {
+      "year": 2015,
+      "make": "NSSN",
+      "model": "None",
+      "vin": "JN8AF5MV7FT558834",
+      "type": "passenger_auto"
+    },
+    {
+      "year": 2014,
+      "make": "CHEV",
+      "model": "None",
+      "vin": "1GCVKREC6EZ381184",
+      "type": "passenger_auto"
+    }
+  ],
+  "drivers": [],
+  "classification": {
+    "policy_type": "personal_auto",
+    "confidence": "high",
+    "signals": [
+      "CERTIFICATE OF AUTOMOBILE INSURANCE",
+      "COVERAGES: BODILY INJURY MEDICAL PROPERTY DAMAGE"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}

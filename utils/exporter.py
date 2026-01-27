@@ -51,8 +51,8 @@ def create_excel_report(policies_data):
             
     # Define standard column sets
     POLICY_COLUMNS = [
-        "carrier_name", "policy_number", "effective_date", "expiration_date",
-        "account_type", "policy_type", "classification_confidence", 
+        "carrier_name", "naic_number", "policy_number", "effective_date", "expiration_date",
+        "account_type", "policy_type", "classification_confidence", "classification_signals", 
         "insured_name", "business_name", "insured_address", "insured_city", "insured_state_code", "insured_zip",
         "premium", "state", "financial_responsibility_name", 
         "liability_limit", "general_liability_limit", "cargo_limit", "cargo_deductible", 

@@ -1,0 +1,304 @@
+{
+  "policy": {
+    "carrier_name": "State Farm Mutual Automobile Insurance Company",
+    "policy_number": "483 3497-E30-53F",
+    "effective_date": "2024-08-23",
+    "expiration_date": "2024-11-30",
+    "insured_name": "ORABILE, CHIEDOZIE",
+    "insured_address": "2326 RAIDER DR",
+    "insured_city": "CONROE",
+    "insured_state_code": "TX",
+    "insured_zip": "77301-2690",
+    "premium": "$645.08",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          20,
+          326,
+          40,
+          672
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          64,
+          609,
+          83,
+          734
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          83,
+          609,
+          101,
+          684
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          83,
+          694,
+          101,
+          769
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          64,
+          301,
+          82,
+          434
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          82,
+          301,
+          100,
+          419
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          100,
+          301,
+          117,
+          349
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          100,
+          351,
+          117,
+          364
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          100,
+          366,
+          117,
+          413
+        ]
+      },
+      {
+        "field": "premium",
+        "page_number": 1,
+        "bbox": [
+          649,
+          532,
+          667,
+          579
+        ]
+      }
+    ],
+    "liability_limit": "50/100/50",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_BI",
+      "family": "auto_liability",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 50000,
+        "per_accident": 100000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          429,
+          179,
+          475,
+          745
+        ]
+      }
+    },
+    {
+      "coverage_code": "AUTO_LIAB_PD",
+      "family": "auto_liability",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 50000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          475,
+          179,
+          511,
+          745
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 500,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          607,
+          179,
+          628,
+          745
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 500,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          630,
+          179,
+          652,
+          745
+        ]
+      }
+    },
+    {
+      "coverage_code": "TOWING",
+      "family": "physical_damage",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 126
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          654,
+          179,
+          675,
+          745
+        ]
+      }
+    },
+    {
+      "coverage_code": "RENTAL",
+      "family": "physical_damage",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 1500
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          677,
+          179,
+          713,
+          745
+        ]
+      }
+    },
+    {
+      "coverage_code": "UIM_BI",
+      "family": "underinsured_motorist",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 30000,
+        "per_accident": 60000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          735,
+          179,
+          771,
+          745
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_PD",
+      "family": "uninsured_motorist",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 25000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          777,
+          179,
+          814,
+          745
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2020,
+      "make": "TOYOTA",
+      "model": "CAMRY",
+      "vin": "4T1M11AK3LU507875",
+      "type": "passenger_auto"
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "ORABILE, CHIEDOZIE"
+    }
+  ],
+  "classification": {
+    "policy_type": "personal_auto",
+    "confidence": "high",
+    "signals": [
+      "declarations page",
+      "state farm mutual automobile insurance company"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 648.0,
+      "height": 1008.0
+    },
+    {
+      "width": 648.0,
+      "height": 1008.0
+    },
+    {
+      "width": 648.0,
+      "height": 1008.0
+    },
+    {
+      "width": 648.0,
+      "height": 1008.0
+    },
+    {
+      "width": 1008.0,
+      "height": 648.0
+    },
+    {
+      "width": 1008.0,
+      "height": 648.0
+    }
+  ]
+}

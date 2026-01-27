@@ -92,12 +92,14 @@ def page_database(api_key):
                 dict_data = {
                     "policy": {
                         "carrier_name": p.carrier_name, 
+                        "naic_number": p.naic_number,
                         "policy_number": p.policy_number, 
                         "effective_date": str(p.effective_date), 
                         "expiration_date": str(p.expiration_date), 
                         "account_type": p.account_type, 
                         "policy_type": p.policy_type,
                         "classification_confidence": p.classification_confidence,
+                        "classification_signals": p.classification_signals,
                         "insured_name": p.insured_name, 
                         "business_name": p.business_name, 
                         "insured_address": p.insured_address,
