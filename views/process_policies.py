@@ -8,61 +8,7 @@ from vehicle_utils import refine_vehicle_type
 import concurrent.futures
 from streamlit_pdf_viewer import pdf_viewer
 
-def create_annotations(data):
-    """
-    Converts Gemini bounding boxes (0-1000) to PDF coordinates for highlighting.
-    """
-    annotations = []
-    page_dims = data.get('page_dimensions', [])
-    
-    if not page_dims:
-        return []
-
-    # Helper to safe convert
-    def add_annot(loc, color, label):
-        try:
-            page_num = loc.get('page_number')
-            bbox = loc.get('bbox')
-            
-            if page_num and bbox and len(bbox) == 4:
-                # Gemini output is 1-based page numbers
-                idx = page_num - 1
-                if idx < len(page_dims):
-                    dims = page_dims[idx]
-                    w_page = dims['width']
-                    h_page = dims['height']
-                    
-                    ymin, xmin, ymax, xmax = bbox
-                    
-                    # Convert 0-1000 to PDF Points
-                    x = (xmin / 1000) * w_page
-                    y = (ymin / 1000) * h_page
-                    w = ((xmax - xmin) / 1000) * w_page
-                    h = ((ymax - ymin) / 1000) * h_page
-                    
-                    annotations.append({
-                        "page": page_num,
-                        "x": x,
-                        "y": y,
-                        "width": w,
-                        "height": h,
-                        "color": color,
-                        "id": label
-                    })
-        except Exception as e:
-            print(f"Annotation Error: {e}")
-
-    # 1. Declarations (Blue)
-    field_locs = data.get('policy', {}).get('field_locations', [])
-    for fl in field_locs:
-        add_annot(fl, "rgba(0, 102, 204, 0.3)", fl.get('field', 'Field'))
-
-    # 2. Coverages (Green)
-    for cov in data.get('coverages', []):
-        if 'location' in cov:
-            add_annot(cov['location'], "rgba(0, 204, 102, 0.3)", cov.get('coverage_code', 'Coverage'))
-
-    return annotations
+# Highlights disabled for performance
 
 def page_process_policies(api_key):
     st.title("📤 Process Policies")
@@ -255,8 +201,8 @@ def page_process_policies(api_key):
         
         with c_pdf:
             st.markdown(f"**Viewing:** `{fname}`")
-            annots = create_annotations(current_item['data'])
-            pdf_viewer(input=current_item['pdf_bytes'], width=600, height=800, annotations=annots)
+            # Highlights disabled for performance
+            pdf_viewer(input=current_item['pdf_bytes'], width=600, height=800)
             
         with c_form:
             st.markdown("#### Verify Extracted Data")
