@@ -3,7 +3,7 @@ import pypdf
 from datetime import datetime, date
 
 class COIGenerator:
-    def __init__(self, template_path="COI Example.pdf"):
+    def __init__(self, template_path="data/COI Example.pdf"):
         self.template_path = template_path
 
     def generate_coi(self, policy_data, holder_data):
@@ -15,11 +15,15 @@ class COIGenerator:
         try:
             # Load Mappings
             try:
-                with open("coi_mapping.json", "r") as f:
+                import os
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                mapping_path = os.path.join(base_dir, "mapping.json")
+                
+                with open(mapping_path, "r") as f:
                     mapping_config = json.load(f)
                     field_map = mapping_config.get("mappings", {})
             except FileNotFoundError:
-                print("Warning: coi_mapping.json not found, using empty map.")
+                print("Warning: mapping.json not found in module, using empty map.")
                 field_map = {}
 
             reader = pypdf.PdfReader(self.template_path)

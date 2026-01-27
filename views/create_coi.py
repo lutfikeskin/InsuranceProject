@@ -1,10 +1,9 @@
 import streamlit as st
 import pandas as pd
-from services import PolicyService, COIService
-from database import get_session
-from coi_generator import COIGenerator
-from coi_utils import load_companies
-from naic_utils import get_naic_for_carrier
+from core.services import PolicyService, COIService
+from core.database import get_session
+from modules.coi import COIGenerator, load_companies
+from utils.naic_utils import get_naic_for_carrier
 
 def page_create_coi():
     st.title("📝 Create COI")
@@ -28,7 +27,7 @@ def page_create_coi():
             st.subheader("Certificate Holder Details")
             
             if "coi_companies" not in st.session_state:
-                st.session_state.coi_companies = load_companies("Additionalinsuredcomps.xlsx")
+                st.session_state.coi_companies = load_companies("data/Additionalinsuredcomps.xlsx")
 
             company_options = ["None"] + sorted(list(st.session_state.coi_companies.keys()))
             

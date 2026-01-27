@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
-from database import get_session, Policy, Vehicle, Driver, Coverage
-from naic_utils import get_naic_for_carrier
-from coverage_ontology import summarize_auto_liability, format_liability_limit
-from vehicle_utils import refine_vehicle_type
+from .database import get_session, Policy, Vehicle, Driver, Coverage
+from utils.naic_utils import get_naic_for_carrier
+from .coverage_ontology import summarize_auto_liability, format_liability_limit
+from utils.vehicle_utils import refine_vehicle_type
 import pandas as pd
 import json
 
@@ -204,13 +204,14 @@ class PolicyService:
         """
         Uses Gemini to translate natural language into SQL, then executes it.
         """
-        import google.generativeai as genai
+        from google import genai
+        from google.genai import types
         from sqlalchemy import text
         
         if not api_key:
             return None, "API Key missing."
             
-        genai.configure(api_key=api_key)
+        client = genai.Client(api_key=api_key)
         
         # 1. Define Schema Context
         # We simplify the schema description for the AI to minimize token usage
@@ -259,11 +260,12 @@ class PolicyService:
         4. If asking for specific coverages like "Comp/Coll", check 'has_full_collision' or join with coverages table if needed (but currently simplified to boolean flags on policy).
         """
         
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        
         try:
             # 2. Generate SQL
-            response = model.generate_content(f"{schema_context}\n\nUser Question: {user_query}\nSQL:")
+            response = client.models.generate_content(
+                model='gemini-2.0-flash', 
+                contents=f"{schema_context}\n\nUser Question: {user_query}\nSQL:"
+            )
             generated_sql = response.text.strip()
             
             # Clean up markdown and trailing semicolon

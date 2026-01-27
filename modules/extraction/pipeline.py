@@ -8,7 +8,7 @@ import hashlib
 import io
 import pypdf
 import concurrent.futures
-from coverage_ontology import (
+from core.coverage_ontology import (
     COVERAGE_REGISTRY, 
     summarize_auto_liability, 
     summarize_general_liability,
@@ -18,159 +18,28 @@ from coverage_ontology import (
     format_liability_limit
 )
 
+# Import schemas and prompts
+from .schemas import (
+    CLASSIFICATION_SCHEMA,
+    SECTION_LOCATOR_SCHEMA,
+    DECLARATIONS_SCHEMA,
+    COVERAGE_SCHEMA,
+    VEHICLE_SCHEMA,
+    DRIVER_SCHEMA
+)
+
+from .prompts import (
+    CLASSIFY_POLICY_PROMPT,
+    LOCATE_SECTIONS_PROMPT,
+    EXTRACT_DECLARATIONS_PROMPT,
+    EXTRACT_VEHICLES_PROMPT,
+    EXTRACT_DRIVERS_PROMPT,
+    get_coverages_prompt
+)
+
 # --- CONFIGURATION ---
 ROUTING_MODEL = "gemini-2.0-flash"
 EXTRACTION_MODEL = "gemini-2.5-flash"
-
-# --- SCHEMAS ---
-
-CLASSIFICATION_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "policy_type": {
-            "type": "STRING",
-            "enum": [
-                "personal_auto", "commercial_auto", "general_liability", "bop",
-                "commercial_package", "umbrella", "motor_truck_cargo", "unknown"
-            ]
-        },
-        "confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
-        "signals": {"type": "ARRAY", "items": {"type": "STRING"}}
-    },
-    "required": ["policy_type", "confidence"]
-}
-
-SECTION_LOCATOR_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "declarations": {"type": "ARRAY", "items": {"type": "INTEGER"}}, # Page numbers
-        "coverages": {"type": "ARRAY", "items": {"type": "INTEGER"}},
-        "vehicles": {"type": "ARRAY", "items": {"type": "INTEGER"}},
-        "drivers": {"type": "ARRAY", "items": {"type": "INTEGER"}}
-    },
-    "required": ["declarations", "coverages"]
-}
-
-DECLARATIONS_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "carrier_name": {"type": "STRING"},
-        "naic_number": {"type": "STRING"},
-        "policy_number": {"type": "STRING"},
-        "effective_date": {"type": "STRING"},
-        "expiration_date": {"type": "STRING"},
-        "account_type": {"type": "STRING"},
-        "insured_name": {"type": "STRING"},
-        "insured_address": {"type": "STRING"},
-        "insured_city": {"type": "STRING"},
-        "insured_state_code": {"type": "STRING"},
-        "insured_zip": {"type": "STRING"},
-        "business_name": {"type": "STRING"},
-        "premium": {"type": "STRING"},
-        "state": {"type": "STRING"},
-        "field_locations": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "field": {"type": "STRING"},
-                    "page_number": {"type": "INTEGER"},
-                    "bbox": {
-                        "type": "ARRAY", 
-                        "items": {"type": "INTEGER"},
-                        "description": "[ymin, xmin, ymax, xmax] in 0-1000 scale"
-                    }
-                }
-            }
-        }
-    }
-}
-
-COVERAGE_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "coverages": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "coverage_code": {
-                        "type": "STRING", 
-                        "description": "Must be one of the explicitly allowed registry codes."
-                    },
-                    "display_name": {"type": "STRING"},
-                    "family": {
-                        "type": "STRING",
-                        "enum": [
-                            "auto_liability", "uninsured_motorist", "underinsured_motorist",
-                            "physical_damage", "general_liability", "cargo",
-                            "medical_payments", "pip", "other"
-                        ]
-                    },
-                    "limit_structure": {
-                        "type": "STRING",
-                        "enum": ["csl", "split", "per_occurrence", "aggregate", "deductible_only", "scheduled"]
-                    },
-                    "limits": {
-                        "type": "OBJECT",
-                        "properties": {
-                            "per_person": {"type": "INTEGER"},
-                            "per_accident": {"type": "INTEGER"},
-                            "per_occurrence": {"type": "INTEGER"},
-                            "combined_single_limit": {"type": "INTEGER"},
-                            "aggregate": {"type": "INTEGER"}
-                        }
-                    },
-                    "deductible": {"type": "INTEGER"},
-                    "location": {
-                        "type": "OBJECT",
-                        "properties": {
-                            "page_number": {"type": "INTEGER"},
-                            "bbox": {"type": "ARRAY", "items": {"type": "INTEGER"}}
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-VEHICLE_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "vehicles": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "year": {"type": "INTEGER"},
-                    "make": {"type": "STRING"},
-                    "model": {"type": "STRING"},
-                    "vin": {"type": "STRING"},
-                    "gvw": {"type": "INTEGER"},
-                    "type": {"type": "STRING"}
-                }
-            }
-        }
-    }
-}
-
-DRIVER_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "drivers": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "full_name": {"type": "STRING"},
-                    "license_number": {"type": "STRING"},
-                    "is_excluded": {"type": "BOOLEAN"}
-                }
-            }
-        }
-    }
-}
 
 # --- CACHING UTILS ---
 
@@ -198,29 +67,9 @@ def get_client(api_key):
 
 def classify_policy(client, raw_pdf_part):
     """Step 1: Fast Classification"""
-    prompt = """
-    You are an insurance policy classification system.
-    Determine the primary policy type of the provided PDF.
-    
-    Choose ONE value:
-    - personal_auto
-    - commercial_auto
-    - general_liability
-    - bop
-    - commercial_package
-    - umbrella
-    - motor_truck_cargo
-    - unknown
-
-    Rules:
-    - Base decision on explicit wording and structure.
-    - Prefer declarations and coverage titles.
-    - If unsure, return "unknown".
-    """
-    
     response = client.models.generate_content(
         model=ROUTING_MODEL,
-        contents=[raw_pdf_part, prompt],
+        contents=[raw_pdf_part, CLASSIFY_POLICY_PROMPT],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=CLASSIFICATION_SCHEMA
@@ -230,20 +79,9 @@ def classify_policy(client, raw_pdf_part):
 
 def locate_sections(client, raw_pdf_part):
     """Step 2: Locate Sections (Page Numbers)"""
-    prompt = """
-    Analyze the PDF and identify the page numbers for the following sections:
-    1. Declarations (Policy info, dates, insured)
-    2. Coverages (Limits, deductibles)
-    3. Vehicles (Schedule of vehicles)
-    4. Drivers (List of drivers)
-
-    Return a JSON object with lists of 1-based page numbers for each section. 
-    If a section is missing, return an empty list.
-    """
-    
     response = client.models.generate_content(
         model=ROUTING_MODEL,
-        contents=[raw_pdf_part, prompt],
+        contents=[raw_pdf_part, LOCATE_SECTIONS_PROMPT],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=SECTION_LOCATOR_SCHEMA
@@ -253,30 +91,9 @@ def locate_sections(client, raw_pdf_part):
 
 def extract_declarations(client, raw_pdf_part):
     """Step 3a: Extract Declarations"""
-    prompt = """
-    Extract core policy declarations information.
-    
-    CRITICAL - CARRIER NAME VS AGENCY:
-    - You must distinguish between the "Carrier/Underwriter" (who pays claims) and the "Agency/Producer" (who sold the policy).
-    - Carrier Name should be the company providing coverage (e.g., Progressive, Travelers, Liberty Mutual, etc.).
-    - Look for text like "Underwritten by", "Coverage provided by", or "Insurance Company".
-    - IGNORE logos or names labeled "Producer", "Agent", or "Broker" (e.g., Truckers National, Marsh, etc.) unless they are explicitly the underwriter.
-    - If you see "Truckers National", that is likely an AGENCY. Look for the actual carrier (e.g., Progressive, Lloyds).
-
-    Field List:
-    - Carrier name (Use the advice above)
-    - Policy Number, NAIC
-    - Effective and Expiration Dates (YYYY-MM-DD)
-    - Insured Name, Address, City, State, Zip
-    - Premium Amount
-    
-    For each extracted field, identify its location in the document.
-    Return 'field_locations' array containing {field, page_number, bbox}.
-    bbox format: [ymin, xmin, ymax, xmax] (0-1000 scale).
-    """
     response = client.models.generate_content(
         model=EXTRACTION_MODEL,
-        contents=[raw_pdf_part, prompt],
+        contents=[raw_pdf_part, EXTRACT_DECLARATIONS_PROMPT],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=DECLARATIONS_SCHEMA
@@ -287,24 +104,8 @@ def extract_declarations(client, raw_pdf_part):
 def extract_coverages(client, raw_pdf_part, policy_type):
     """Step 3b: Extract Coverages with Ontology"""
     registry_text = json.dumps(COVERAGE_REGISTRY, indent=2)
-    prompt = f"""
-    Extract insurance coverages using the strict COVERAGE ONTOLOGY.
+    prompt = get_coverages_prompt(registry_text, policy_type)
     
-    REGISTRY:
-    {registry_text}
-
-    RULES:
-    1. Map every coverage to a valid 'coverage_code' from the registry.
-    2. Use the exact 'family' and 'limit_structure' from the registry.
-    3. CSL Supremacy: If Auto Liability CSL exists, ignore BI/PD split limits. Use 'AUTO_LIAB_CSL'.
-    4. Auto Split (Triple): If you see 3 numbers (e.g., 30/60/50), extract 30/60 as 'AUTO_LIAB_BI' (per_person/per_accident) and 50 as 'AUTO_LIAB_PD' (per_occurrence).
-    5. UM/UIM: NEVER use 'auto_liability' family. Use 'uninsured_motorist' or 'underinsured_motorist'.
-    6. Do not extract "Not Purchased" or "Excluded" as 0 or null. Omit them.
-    7. For each coverage, provide the 'location' {{page_number, bbox}} where the limit/coverage is stated.
-    bbox format: [ymin, xmin, ymax, xmax] (0-1000 scale).
-
-    Context: Policy Type is {policy_type.upper()}.
-    """
     response = client.models.generate_content(
         model=EXTRACTION_MODEL,
         contents=[raw_pdf_part, prompt],
@@ -317,10 +118,9 @@ def extract_coverages(client, raw_pdf_part, policy_type):
 
 def extract_vehicles(client, raw_pdf_part):
     """Step 3c: Extract Vehicles"""
-    prompt = "Extract the schedule of covered vehicles. Include Year, Make, Model, VIN, GVW."
     response = client.models.generate_content(
         model=EXTRACTION_MODEL,
-        contents=[raw_pdf_part, prompt],
+        contents=[raw_pdf_part, EXTRACT_VEHICLES_PROMPT],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=VEHICLE_SCHEMA
@@ -330,10 +130,9 @@ def extract_vehicles(client, raw_pdf_part):
 
 def extract_drivers(client, raw_pdf_part):
     """Step 3d: Extract Drivers"""
-    prompt = "Extract the list of drivers. Mark 'is_excluded' as true if explicitly stated."
     response = client.models.generate_content(
         model=EXTRACTION_MODEL,
-        contents=[raw_pdf_part, prompt],
+        contents=[raw_pdf_part, EXTRACT_DRIVERS_PROMPT],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=DRIVER_SCHEMA
@@ -365,7 +164,7 @@ def perform_extraction_sanity_checks(coverages, policy_type):
         
     return True, None
 
-def process_pdf(file_bytes, api_key):
+def process_pdf(file_bytes, api_key, status_callback=None):
     """
     Orchestrates the modular extraction pipeline.
     """
@@ -376,21 +175,25 @@ def process_pdf(file_bytes, api_key):
     file_hash = get_pdf_hash(file_bytes)
     cached_classification = _CACHE.get(f"{file_hash}_class")
     
-    # Prepare types.Part for direct binary transmission (faster, no upload needed for small files)
-    # Note: For very large files > 20MB, we should use the File API, but for policies, this is perfect.
+    # Prepare types.Part for direct binary transmission
     raw_pdf_part = types.Part.from_bytes(data=file_bytes, mime_type='application/pdf')
 
     try:
         # 2. Classification
         if cached_classification:
             print("Using cached classification.")
+            if status_callback: status_callback(" Using cached classification")
             classification = cached_classification
         else:
             print("Classifying policy...")
+            if status_callback: status_callback(" Classifying policy...")
             classification = classify_policy(client, raw_pdf_part)
             _CACHE[f"{file_hash}_class"] = classification
             
         policy_type = classification['policy_type']
+        confidence = classification.get('confidence', 'unknown')
+        if status_callback: status_callback(f" Policy Type: {policy_type.replace('_', ' ').title()} ({confidence})")
+
         if policy_type == "unknown":
             return None, None, "Unknown Policy Type"
             
@@ -398,12 +201,10 @@ def process_pdf(file_bytes, api_key):
 
         # 3. Parallel Extraction
         print("Starting Parallel Extraction...")
+        if status_callback: status_callback(" Starting Parallel Extraction...")
         
         with concurrent.futures.ThreadPoolExecutor() as executor:
             # Submit tasks
-            # Note: We pass the client and raw_pdf_part to each thread. 
-            # The Client object is generally thread-safe for API calls.
-            
             future_decs = executor.submit(extract_declarations, client, raw_pdf_part)
             future_cov = executor.submit(extract_coverages, client, raw_pdf_part, policy_type)
             
@@ -414,23 +215,27 @@ def process_pdf(file_bytes, api_key):
                 future_vehicles = executor.submit(extract_vehicles, client, raw_pdf_part)
                 future_drivers = executor.submit(extract_drivers, client, raw_pdf_part)
 
-            # Gather Results (this blocks until completion)
+            # Gather Results
             try:
                 print("Waiting for Declarations...")
                 decs_data = future_decs.result()
+                if status_callback: status_callback(" Declarations extracted")
                 
                 print("Waiting for Coverages...")
                 cov_data = future_cov.result()
+                if status_callback: status_callback(" Coverages extracted")
                 
                 vehicles_data = {"vehicles": []}
                 if future_vehicles:
                     print("Waiting for Vehicles...")
                     vehicles_data = future_vehicles.result()
+                    if status_callback: status_callback(f" Extracted {len(vehicles_data.get('vehicles', []))} Vehicles")
                     
                 drivers_data = {"drivers": []}
                 if future_drivers:
                     print("Waiting for Drivers...")
                     drivers_data = future_drivers.result()
+                    if status_callback: status_callback(f" Extracted {len(drivers_data.get('drivers', []))} Drivers")
                     
             except Exception as exc:
                 print(f"Parallel Extraction failed: {exc}")

@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
-from services import PolicyService
-from database import get_session
-from exporter import create_excel_report
+from core.services import PolicyService
+from core.database import get_session
+from utils.exporter import create_excel_report
 
 from views.edit_dialog import edit_policy_dialog
 

@@ -1,5 +1,5 @@
 import streamlit as st
-from services import PolicyService
+from core.services import PolicyService
 
 @st.dialog("✏️ Edit Policy Details")
 def edit_policy_dialog(policy, service: PolicyService):

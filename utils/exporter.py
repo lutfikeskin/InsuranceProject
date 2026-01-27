@@ -7,11 +7,8 @@ def create_excel_report(policies_data):
     into a multi-tab Excel file.
     
     Args:
-        policies_data: List of dictionaries, each containing 'policy', 'vehicles', 'coverages', 'drivers'.
-            Note: This input structure should match the Extractor's output format, assuming we combine them
-            or query the DB to get this structure. 
-            However, for the exporter, it's easier to process flat lists.
-            Strategy: We will flatten the data into 4 lists: policies, vehicles, all_coverages, all_drivers.
+    Args:
+        policies_data: List of policy dictionaries containing 'policy', 'vehicles', 'coverages', and 'drivers'.
     """
     
     policies_list = []

@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from database import init_db
+from core.database import init_db
 from streamlit_option_menu import option_menu
 
 # Import Views

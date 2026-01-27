@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 import json
-from services import PolicyService
-from database import get_session, Policy, Vehicle, Driver, Coverage
-from extractor import process_pdf
-from vehicle_utils import refine_vehicle_type
+from core.services import PolicyService
+from core.database import get_session, Policy, Vehicle, Driver, Coverage
+from modules.extraction import process_pdf
+from utils.vehicle_utils import refine_vehicle_type
+from utils.naic_utils import get_naic_for_carrier
 import concurrent.futures
 from streamlit_pdf_viewer import pdf_viewer
 
@@ -39,33 +40,43 @@ def page_process_policies(api_key):
                 total_files = len(uploaded_files)
                 files_map = {f.name: f.getvalue() for f in uploaded_files}
                 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                    futures = {executor.submit(process_pdf, content, api_key): fname for fname, content in files_map.items()}
+                files_map = {f.name: f.getvalue() for f in uploaded_files}
+                
+                # Sequential processing to allow live logging (Better UX)
+                for i, (fname, content) in enumerate(files_map.items()):
+                    # progress_bar.progress((i) / total_files) # Optional
                     
-                    for i, future in enumerate(concurrent.futures.as_completed(futures)):
-                        fname = futures[future]
-                        status_text.text(f"Processing ({i+1}/{total_files}): {fname}...")
-                        progress_bar.progress((i+1) / total_files)
-                        
+                    with st.status(f"Processing `{fname}`...", expanded=True) as status:
+                        def update_status(msg):
+                            status.write(msg)
+                            
                         try:
-                            data, usage, error_msg = future.result()
+                            # Pass callback to extractor
+                            data, usage, error_msg = process_pdf(content, api_key, status_callback=update_status)
+                            
                             if data:
                                 st.session_state["temp_extracted"].append({
                                     "filename": fname,
-                                    "pdf_bytes": files_map[fname],
+                                    "pdf_bytes": content,
                                     "data": data
                                 })
+                                status.update(label=f"`{fname}` Processed Successfully!", state="complete", expanded=False)
                             else:
-                                st.error(f"Extraction failed for {fname}: {error_msg}")
+                                status.update(label=f"Extraction Failed for `{fname}`", state="error", expanded=True)
+                                st.error(f"Error: {error_msg}")
+                                
                         except Exception as e:
-                            st.error(f"Error processing {fname}: {e}")
+                            status.update(label=f"Error processing `{fname}`", state="error", expanded=True)
+                            st.error(f"Exception: {e}")
+                    
+                    progress_bar.progress((i+1) / total_files)
                 
                 status_text.text("Extraction Complete! Choose an action below.")
 
         # Decision Section (Inside Tab 1)
         if st.session_state["temp_extracted"]:
             st.divider()
-            st.subheader(f"✅ Extraction Complete ({len(st.session_state['temp_extracted'])} files)")
+            st.subheader(f"Extraction Complete ({len(st.session_state['temp_extracted'])} files)")
             st.info("What would you like to do with these policies?")
             
             d_col1, d_col2 = st.columns(2)
@@ -147,7 +158,7 @@ def page_process_policies(api_key):
                     service = PolicyService(session)
                     try:
                         # Determine Account Type logic matches service
-                        from services import ACCOUNT_TYPE_BY_POLICY
+                        from core.services import ACCOUNT_TYPE_BY_POLICY
                         acc_type = ACCOUNT_TYPE_BY_POLICY.get(m_type, "Commercial")
                         
                         policy = Policy(
@@ -218,7 +229,13 @@ def page_process_policies(api_key):
                 r_conf = cc2.text_input("Confidence", value=classification.get('confidence', ''), disabled=True)
                 
                 c3, c4 = st.columns(2)
-                r_naic = c3.text_input("NAIC Code", value=p.get('naic_number', ''))
+                
+                # Auto-fill NAIC if missing
+                current_naic = p.get('naic_number', '')
+                if not current_naic:
+                    current_naic = get_naic_for_carrier(p.get('carrier_name', ''))
+                    
+                r_naic = c3.text_input("NAIC Code", value=current_naic)
                 r_eff = c4.text_input("Effective Date", value=p.get('effective_date', ''))
                 r_exp = c4.text_input("Expiration Date", value=p.get('expiration_date', ''))
                 

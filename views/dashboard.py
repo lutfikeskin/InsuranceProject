@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
-from services import PolicyService
-from database import get_session
+from core.services import PolicyService
+from core.database import get_session
 
 from views.edit_dialog import edit_policy_dialog
 
