@@ -58,10 +58,10 @@ def create_excel_report(policies_data):
         "account_type", "policy_type", "classification_confidence", 
         "insured_name", "business_name", "insured_address", "insured_city", "insured_state_code", "insured_zip",
         "premium", "state", "financial_responsibility_name", 
-        "liability_limit", "cargo_limit", "cargo_deductible", 
+        "liability_limit", "general_liability_limit", "cargo_limit", "cargo_deductible", 
         "has_full_collision", "has_general_liability", "has_auto_liability"
     ]
-    VEHICLE_COLUMNS = ["year", "make", "model", "vin", "gvw", "type", "policy_number"]
+    VEHICLE_COLUMNS = ["year", "make", "model", "vin", "gvw", "type", "chassis", "body", "policy_number"]
     COVERAGE_COLUMNS = [
         "policy_number", "type", "coverage_code", "family", 
         "per_person", "per_accident", "per_occurrence", 

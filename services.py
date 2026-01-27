@@ -115,14 +115,15 @@ class PolicyService:
             liability_limit=p_data.get('liability_limit'),
             cargo_limit=p_data.get('cargo_limit'),
             cargo_deductible=p_data.get('cargo_deductible'),
+            general_liability_limit=p_data.get('general_liability_limit'),
             has_full_collision=p_data.get('has_full_collision'),
             has_general_liability=p_data.get('has_general_liability', False),
             has_auto_liability=p_data.get('has_auto_liability', False)
         )
 
         for v in vehicles_data:
-            # Refine Type
-            refined_type = refine_vehicle_type(
+            # Refine Type (Now returns a dict)
+            refinement = refine_vehicle_type(
                 v.get('year'), 
                 v.get('make'), 
                 v.get('model'), 
@@ -132,11 +133,13 @@ class PolicyService:
             
             new_vehicle = Vehicle(
                 year=v.get('year'),
-                make=v.get('make'),
-                model=v.get('model'),
+                make=refinement.get('make') or v.get('make'), # Use enriched if available
+                model=refinement.get('model') or v.get('model'), # Use enriched if available
                 vin=v.get('vin'),
                 gvw=v.get('gvw'),
-                vehicle_type=refined_type # Use Refined
+                vehicle_type=refinement.get('final_type'),
+                chassis=refinement.get('chassis'),
+                body=refinement.get('body')
             )
             policy.vehicles.append(new_vehicle)
         
@@ -222,6 +225,7 @@ class PolicyService:
           - effective_date (date YYYY-MM-DD)
           - expiration_date (date YYYY-MM-DD)
           - liability_limit (text, e.g. '$1,000,000')
+          - general_liability_limit (text, e.g. '$1,000,000 Occ')
           - insured_name (text)
           - premium (text)
           - has_full_collision (bool)
@@ -236,7 +240,10 @@ class PolicyService:
           - make (text)
           - model (text)
           - vin (text)
+          - gvw (int)
           - vehicle_type (text, e.g. 'Straight Truck', 'Tractor', 'Cargo Van')
+          - chassis (text, e.g. 'Cab Chassis', 'Pickup')
+          - body (text, e.g. 'Box', 'Dump')
 
         Table 'drivers':
           - policy_id (fk to policies.id)

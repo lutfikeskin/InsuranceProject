@@ -6,13 +6,63 @@ from database import get_session, Policy, Vehicle, Driver, Coverage
 from extractor import process_pdf
 from vehicle_utils import refine_vehicle_type
 import concurrent.futures
-import base64
+from streamlit_pdf_viewer import pdf_viewer
 
-def display_pdf(file_bytes):
-    """Generates an iframe to display PDF byte content."""
-    base64_pdf = base64.b64encode(file_bytes).decode('utf-8')
-    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800px" type="application/pdf"></iframe>'
-    return pdf_display
+def create_annotations(data):
+    """
+    Converts Gemini bounding boxes (0-1000) to PDF coordinates for highlighting.
+    """
+    annotations = []
+    page_dims = data.get('page_dimensions', [])
+    
+    if not page_dims:
+        return []
+
+    # Helper to safe convert
+    def add_annot(loc, color, label):
+        try:
+            page_num = loc.get('page_number')
+            bbox = loc.get('bbox')
+            
+            if page_num and bbox and len(bbox) == 4:
+                # Gemini output is 1-based page numbers
+                idx = page_num - 1
+                if idx < len(page_dims):
+                    dims = page_dims[idx]
+                    w_page = dims['width']
+                    h_page = dims['height']
+                    
+                    ymin, xmin, ymax, xmax = bbox
+                    
+                    # Convert 0-1000 to PDF Points
+                    x = (xmin / 1000) * w_page
+                    y = (ymin / 1000) * h_page
+                    w = ((xmax - xmin) / 1000) * w_page
+                    h = ((ymax - ymin) / 1000) * h_page
+                    
+                    annotations.append({
+                        "page": page_num,
+                        "x": x,
+                        "y": y,
+                        "width": w,
+                        "height": h,
+                        "color": color,
+                        "id": label
+                    })
+        except Exception as e:
+            print(f"Annotation Error: {e}")
+
+    # 1. Declarations (Blue)
+    field_locs = data.get('policy', {}).get('field_locations', [])
+    for fl in field_locs:
+        add_annot(fl, "rgba(0, 102, 204, 0.3)", fl.get('field', 'Field'))
+
+    # 2. Coverages (Green)
+    for cov in data.get('coverages', []):
+        if 'location' in cov:
+            add_annot(cov['location'], "rgba(0, 204, 102, 0.3)", cov.get('coverage_code', 'Coverage'))
+
+    return annotations
 
 def page_process_policies(api_key):
     st.title("📤 Process Policies")
@@ -129,10 +179,11 @@ def page_process_policies(api_key):
             m_zip = ic3.text_input("Zip")
 
             st.divider()
-            l1, l2, l3 = st.columns(3)
+            l1, l2, l3, l4 = st.columns(4)
             m_liab = l1.text_input("Liability Limit")
-            m_cargo = l2.text_input("Cargo Limit")
-            m_cargo_ded = l3.text_input("Cargo Deductible")
+            m_gl_limit = l2.text_input("GL Limit")
+            m_cargo = l3.text_input("Cargo Limit")
+            m_cargo_ded = l4.text_input("Cargo Deductible")
             
             f1, f2, f3 = st.columns(3)
             m_gl = f1.checkbox("Has General Liabilities", value=True)
@@ -166,6 +217,7 @@ def page_process_policies(api_key):
                             insured_zip=m_zip,
                             premium=m_premium,
                             liability_limit=m_liab,
+                            general_liability_limit=m_gl_limit,
                             cargo_limit=m_cargo,
                             cargo_deductible=m_cargo_ded,
                             has_general_liability=m_gl,
@@ -203,7 +255,8 @@ def page_process_policies(api_key):
         
         with c_pdf:
             st.markdown(f"**Viewing:** `{fname}`")
-            st.markdown(display_pdf(current_item['pdf_bytes']), unsafe_allow_html=True)
+            annots = create_annotations(current_item['data'])
+            pdf_viewer(input=current_item['pdf_bytes'], width=600, height=800, annotations=annots)
             
         with c_form:
             st.markdown("#### Verify Extracted Data")
@@ -232,7 +285,8 @@ def page_process_policies(api_key):
                 r_ins_zip = ic3.text_input("Zip", value=p.get('insured_zip', ''))
                 
                 st.divider()
-                r_liab = st.text_input("Liability Limit", value=p.get('liability_limit', ''))
+                r_liab = st.text_input("Auto Liability Limit", value=p.get('liability_limit', ''))
+                r_gl_limit = st.text_input("GL Limit", value=p.get('general_liability_limit', ''))
                 r_cargo = st.text_input("Cargo Limit", value=p.get('cargo_limit', ''))
                 r_cargo_ded = st.text_input("Cargo Ded", value=p.get('cargo_deductible', ''))
                 
@@ -263,6 +317,7 @@ def page_process_policies(api_key):
                             insured_state_code=r_ins_state,
                             insured_zip=r_ins_zip,
                             liability_limit=r_liab,
+                            general_liability_limit=r_gl_limit,
                             cargo_limit=r_cargo,
                             cargo_deductible=r_cargo_ded,
                             has_general_liability=r_gl,
@@ -287,7 +342,9 @@ def page_process_policies(api_key):
                                 model=v.get('model'), 
                                 vin=v.get('vin'), 
                                 gvw=v.get('gvw'), 
-                                vehicle_type=refined
+                                vehicle_type=refined.get('final_type'),
+                                chassis=refined.get('chassis'),
+                                body=refined.get('body')
                             ))
                         for d in current_item['data'].get('drivers', []):
                             policy.drivers.append(Driver(full_name=d.get('full_name'), license_number=d.get('license_number'), is_excluded=d.get('is_excluded')))

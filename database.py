@@ -31,6 +31,7 @@ class Policy(Base):
     liability_limit = Column(String)
     cargo_limit = Column(String)
     cargo_deductible = Column(String) # New
+    general_liability_limit = Column(String) # New
     has_full_collision = Column(Boolean)
     
     # Classification Metadata
@@ -58,6 +59,8 @@ class Vehicle(Base):
     vin = Column(String)
     gvw = Column(Integer) # Gross Vehicle Weight
     vehicle_type = Column(String)
+    chassis = Column(String)
+    body = Column(String)
 
     policy = relationship("Policy", back_populates="vehicles")
     coverages = relationship("Coverage", back_populates="vehicle")
@@ -129,6 +132,8 @@ def init_db(db_name="insurance_data.db"):
             conn.execute(text("ALTER TABLE policies ADD COLUMN naic_number VARCHAR"))
         if 'cargo_deductible' not in columns:
             conn.execute(text("ALTER TABLE policies ADD COLUMN cargo_deductible VARCHAR"))
+        if 'general_liability_limit' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN general_liability_limit VARCHAR"))
         if 'has_general_liability' not in columns:
             conn.execute(text("ALTER TABLE policies ADD COLUMN has_general_liability BOOLEAN DEFAULT 1"))
         if 'has_auto_liability' not in columns:
@@ -162,6 +167,13 @@ def init_db(db_name="insurance_data.db"):
             conn.execute(text("ALTER TABLE coverages ADD COLUMN combined_single_limit INTEGER"))
         if 'aggregate' not in cov_columns:
             conn.execute(text("ALTER TABLE coverages ADD COLUMN aggregate INTEGER"))
+            
+        # Vehicle Migrations
+        veh_columns = [c['name'] for c in inspector.get_columns('vehicles')]
+        if 'chassis' not in veh_columns:
+            conn.execute(text("ALTER TABLE vehicles ADD COLUMN chassis VARCHAR"))
+        if 'body' not in veh_columns:
+            conn.execute(text("ALTER TABLE vehicles ADD COLUMN body VARCHAR"))
             
         conn.commit()
             

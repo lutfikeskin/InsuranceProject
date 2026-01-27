@@ -4,4 +4,6 @@ sqlalchemy
 pandas
 openpyxl
 pypdf
+requests
 streamlit-option-menu
+streamlit-pdf-viewer

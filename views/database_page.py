@@ -44,7 +44,7 @@ def page_database(api_key):
         for p in policies:
             if search_query.lower() in p.policy_number.lower() or search_query.lower() in p.insured_name.lower():
                 # Status Logic
-                status = "✅ Eligible"
+                status = "✅ Eligible for Expedite"
                 def parse_limit(val_str):
                     if not val_str: return 0.0
                     s = str(val_str).lower().strip()
@@ -81,6 +81,7 @@ def page_database(api_key):
                     "Effective": p.effective_date,
                     "Premium": p.premium,
                     "Liability": p.liability_limit,
+                    "GL Limit": p.general_liability_limit,
                     "Cargo": p.cargo_limit,
                     "Vehicle Types": v_types_str,
                     "Comp/Coll": "✅ Yes" if p.has_full_collision else "❌ No",
@@ -107,13 +108,14 @@ def page_database(api_key):
                         "state": p.state, 
                         "financial_responsibility_name": p.financial_responsibility_name, 
                         "liability_limit": p.liability_limit, 
+                        "general_liability_limit": p.general_liability_limit,
                         "cargo_limit": p.cargo_limit, 
                         "cargo_deductible": p.cargo_deductible,
                         "has_full_collision": p.has_full_collision,
                         "has_general_liability": p.has_general_liability,
                         "has_auto_liability": p.has_auto_liability
                     },
-                    "vehicles": [{"year": v.year, "make": v.make, "model": v.model, "vin": v.vin, "gvw": v.gvw, "type": v.vehicle_type} for v in p.vehicles],
+                    "vehicles": [{"year": v.year, "make": v.make, "model": v.model, "vin": v.vin, "gvw": v.gvw, "type": v.vehicle_type, "chassis": v.chassis, "body": v.body} for v in p.vehicles],
                     "coverages": [
                         {
                             "type": c.type, 

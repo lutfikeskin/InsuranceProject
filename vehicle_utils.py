@@ -1,4 +1,5 @@
 import re
+import requests
 
 # Comprehensive WMI Map (World Manufacturer Identifier)
 WMI_MAP = {
@@ -21,93 +22,148 @@ WMI_MAP = {
     "JAL": "Isuzu", "JAA": "Isuzu", "4KL": "Isuzu", # NPR often 4KL
 }
 
+def decode_vin_nhtsa(vin):
+    """
+    Decodes VIN using the public NHTSA vPIC API.
+    Returns a dict with raw NHTSA data or None if failed.
+    """
+    if not vin or len(vin) < 17:
+        return None
+        
+    try:
+        url = f"https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/{vin}?format=json"
+        resp = requests.get(url, timeout=3) # Fast timeout to avoid blocking
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            results = data.get('Results', [])
+            
+            # Convert list of ValueIds/Variables to a flat dict
+            info = {}
+            for item in results:
+                var_name = item.get('Variable')
+                value = item.get('Value')
+                if var_name and value:
+                    info[var_name] = value
+            return info
+            
+    except Exception as e:
+        print(f"NHTSA API Error: {e}")
+        return None
+        
+    return None
+
 def refine_vehicle_type(year, make, model, vin, extracted_type=None):
     """
-    Refines the vehicle type based on Make, Model, and VIN patterns.
-    Strictly separates 'Box Truck' from 'Straight Truck'.
+    Refines the vehicle type based on a two-layer Chassis + Body model.
+    Prioritizes NHTSA values if available, falls back to Regex.
     """
     year_str = str(year) if year else ""
     make = str(make).upper() if make else ""
     model = str(model).upper() if model else ""
     vin = str(vin).upper() if vin else ""
+    extracted_type = str(extracted_type) if extracted_type else ""
     
-    # 0. VIN WMI Lookup (Enhance Make if missing)
-    if not make and len(vin) >= 3:
+    # --- 0a. Try NHTSA Decoding (The Gold Standard) ---
+    nhtsa_data = decode_vin_nhtsa(vin)
+    
+    if nhtsa_data:
+        # Override basic info if valid
+        n_make = nhtsa_data.get('Make', '').upper()
+        n_model = nhtsa_data.get('Model', '').upper()
+        n_body_class = nhtsa_data.get('Body Class', '').upper()
+        
+        if n_make: make = n_make
+        if n_model: model = n_model
+        
+        # Inject NHTSA Body Class into our text search for downstream logic
+        extracted_type += f" {n_body_class}"
+
+    # --- 0b. WMI Fixup (Fallback) ---
+    elif not make and len(vin) >= 3:
         wmi = vin[:3]
-        if wmi in WMI_MAP:
-            make = WMI_MAP[wmi].upper()
+        wmi_val = WMI_MAP.get(wmi)
+        if wmi_val:
+            make = wmi_val.upper()
             
-    text = f"{make} {model}"
+    text = f"{make} {model} {extracted_type}".upper()
 
-    # 1. TRAILERS
-    if any(x in text for x in ["TRAILER", "UTIL", "VANS", "STRICK", "WABASH", "GREAT DANE", "UTILITY"]):
-        return "Trailer"
+    # --- 1. BODY DETECTION (Upfits/Brands) ---
+    body = None
+    if any(x in text for x in ["BOX", "CUBE", "DRY VAN", "VAN BODY", "MORGAN", "SUPREME", "KIDRON", "UTILIMASTER"]):
+        body = "Box"
+    elif any(x in text for x in ["FLATBED", "STAKE", "PLATFORM", "KNAPHEIDE"]):
+        body = "Flatbed"
+    elif "DUMP" in text:
+        body = "Dump"
+    elif any(x in text for x in ["WRECKER", "TOW"]):
+        body = "Tow"
+    elif "REFER" in text or "REEFER" in text or "REFRIG" in text:
+        body = "Refrigerated"
+
+    # --- 2. CHASSIS DETECTION ---
+    chassis = None
+    
+    # A. Trailers
+    if any(x in text for x in ["TRAILER", "UTIL", "STRICK", "WABASH", "GREAT DANE"]):
+        chassis = "Trailer"
         
-    # 2. TRACTORS (Heavy Duty)
-    if any(x in text for x in ["FREIGHTLINER", "KENWORTH", "PETERBILT", "VOLVO", "MACK", "INTERNATIONAL"]):
-        # Specific Tractor Models
-        if "CASCADIA" in text or "T680" in text or "VNL" in text or "PROSTAR" in text or "LT625" in text:
-            return "Tractor"
-            
-        # If Extractor saw "Tractor", trust it.
-        if extracted_type == "Tractor":
-            return "Tractor"
-            
-        # Check against "Straight Truck" models before defaulting
-        # If Extractor said "Dump" or "Straight", keep it.
-        if extracted_type in ["Straight Truck", "Dump Truck", "Box Truck", "Tow Truck"]:
-            pass # Fall through to verification
+    # B. Tractors
+    elif any(x in text for x in ["CASCADIA", "T680", "VNL", "PROSTAR", "LT625", "VNL860", "389", "579", "TRUCK-TRACTOR"]):
+        chassis = "Tractor"
+    
+    # C. Van Platforms
+    elif any(x in text for x in ["TRANSIT", "SPRINTER", "PROMASTER", "PROMSTR", "PM2500", "PM3500", "EXPRESS", "SAVANA", "ECONOLINE", "E-350", "E-450", "CARGO VAN"]):
+        # Critical Cutaway detection
+        # Note: NHTSA often says "Truck - Cab Chassis" explicitly
+        if any(x in text for x in ["CUTAWAY", "CHASSIS", "CAB CHASSIS", "DRW", "INCOMPLETE CHASSIS"]):
+            chassis = "Cab Chassis"
         else:
-            # Heavy Duty Default -> Tractor (most common in commercial excluding specific vocational)
-            # UNLESS it's a known vocational model (M2, MV, Durastar)
-            if any(x in text for x in ["M2", "MV", "DURASTAR", "4300", "4400", "GRANITE"]):
-                # These are usually Straight Trucks
-                pass 
-            else:
-                return "Tractor"
-        
-    # 3. PICKUPS
-    if any(x in text for x in ["F-150", "F150", "SILVERADO", "SIERRA", "RAM 1500", "RAM 2500", "RAM 3500", "F-250", "F-350"]):
-        return "Pickup"
-        
-    # 4. CARGO VANS
-    if any(x in text for x in ["SPRINTER", "TRANSIT", "PROMASTER", "EXPRESS", "SAVANA", "ECONOLINE", "E-350", "E350"]):
-        # But wait, Transit Connect vs Transit 350?
-        if "CUTAWAY" in text or "CHASSIS" in text:
-             return "Box Truck" # Usually a box on a cutaway
-        return "Cargo Van"
-        
-    # 5. STRAIGHT TRUCK vs BOX TRUCK
-    # Chassis Models often used for Box Trucks
-    if any(x in text for x in ["F-450", "F-550", "F550", "NPR", "NQR", "HINO", "M2", "MV", "4300"]):
-        
-        # A. If Text explicitly says "BOX" -> Box Truck
-        if "BOX" in text:
-            return "Box Truck"
-            
-        # B. If Extractor explicitly found "Box Truck" -> Trust it
-        if extracted_type == "Box Truck":
-            return "Box Truck"
-            
-        # C. If Extractor explicitly found "Straight Truck" -> Trust it
-        if extracted_type == "Straight Truck":
-            return "Straight Truck"
+            chassis = "Cargo Van"
 
-        # D. Default for Cab Chassis -> Straight Truck (Generic Safe)
-        # The user specifically requested segregation. "Box Truck" implies a specific body.
-        # "Straight Truck" is the accurate description of the chassis configuration.
-        return "Straight Truck"
+    # D. Medium/Heavy Duty Cab Chassis
+    elif any(x in text for x in ["F-450", "F-550", "F-650", "F-750", "NPR", "NQR", "NRR", "MT45", "MT55", "M2", "MV", "4300", "DURASTAR", "HINO", "INCOMPLETE"]):
+        chassis = "Cab Chassis"
         
-    # 6. PASSENGER / SUV
-    if any(x in text for x in ["SEDAN", "COUPE", "SUV", "EXCURSION", "EXPLORER", "CAMRY", "CIVIC", "ACCORD", "COROLLA", "JEEP", "TESLA"]):
-        if "EXCURSION" in text or "SUBURBAN" in text or "YUKON" in text:
-             return "SUV" # Or Private Passenger Auto
-        return "Private Passenger Auto"
-        
-    # 7. Fallback to Extracted Type if specific
-    SPECIFIC_TYPES = ["Tractor", "Straight Truck", "Box Truck", "Cargo Van", "Pickup", "Trailer", "Dump Truck", "Tow Truck"]
-    if extracted_type in SPECIFIC_TYPES:
-        return extracted_type
-        
-    # 8. Final Default
-    return "Truck" if "TRUCK" in text else "Auto"
+    # E. Pickups
+    elif any(x in text for x in ["F-150", "F-250", "F-350", "SILVERADO", "SIERRA", "RAM", "PICKUP"]):
+        chassis = "Pickup"
+
+    # F. Passenger
+    elif any(x in text for x in ["SEDAN", "SUV", "EXPLORER", "JEEP", "TESLA", "CAMRY", "COUPE"]):
+        chassis = "Passenger"
+
+    # --- 3. RECOMPOSITION ---
+    final_type = "Truck" # Changed Default from "Auto" to "Truck" for commercial safety
+    
+    if chassis == "Trailer": 
+        final_type = "Trailer"
+    elif chassis == "Tractor": 
+        final_type = "Tractor"
+    elif body == "Box": 
+        final_type = "Box Truck"
+    elif body == "Dump": 
+        final_type = "Dump Truck"
+    elif body == "Tow": 
+        final_type = "Tow Truck"
+    elif body == "Flatbed": 
+        final_type = "Flatbed Truck"
+    elif chassis == "Cargo Van": 
+        final_type = "Cargo Van"
+    elif chassis == "Cab Chassis": 
+        final_type = "Straight Truck"
+    elif chassis == "Pickup": 
+        final_type = "Pickup"
+    elif chassis == "Passenger": 
+        final_type = "Private Passenger Auto"
+    # Fallback for "RAM" generic key without chassis match -> Truck
+    elif "RAM" in text or "FORD" in text or "GMC" in text:
+        final_type = "Truck" 
+
+    return {
+        "chassis": chassis,
+        "body": body,
+        "final_type": final_type,
+        "make": make, # Enriched/Normed
+        "model": model # Enriched/Normed
+    }

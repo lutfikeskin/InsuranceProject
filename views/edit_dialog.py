@@ -24,7 +24,8 @@ def edit_policy_dialog(policy, service: PolicyService):
         with col2:
             new_eff = st.date_input("Effective Date", value=policy.effective_date)
             new_exp = st.date_input("Expiration Date", value=policy.expiration_date)
-            new_limit = st.text_input("Liability Limit", value=policy.liability_limit)
+            new_limit = st.text_input("Auto Liability Limit", value=policy.liability_limit)
+            new_gl_limit = st.text_input("General Liability Limit", value=policy.general_liability_limit if policy.general_liability_limit else "")
             new_cargo = st.text_input("Cargo Limit", value=policy.cargo_limit if policy.cargo_limit else "")
             new_cargo_ded = st.text_input("Cargo Deductible", value=policy.cargo_deductible if policy.cargo_deductible else "")
 
@@ -59,6 +60,7 @@ def edit_policy_dialog(policy, service: PolicyService):
                 "expiration_date": new_exp,
                 "financial_responsibility_name": new_fin_resp,
                 "liability_limit": new_limit,
+                "general_liability_limit": new_gl_limit,
                 "cargo_limit": new_cargo,
                 "cargo_deductible": new_cargo_ded,
                 "insured_address": new_addr,

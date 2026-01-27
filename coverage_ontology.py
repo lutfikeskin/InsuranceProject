@@ -93,6 +93,13 @@ COVERAGE_REGISTRY = {
         "limit_structure": LimitStructure.CSL,
         "allowed_limits": ["combined_single_limit"]
     },
+    "UM_PD": {
+        "display_name": "Uninsured Motorist PD",
+        "family": CoverageFamily.UNINSURED_MOTORIST,
+        "line_of_business": LineOfBusiness.AUTO,
+        "limit_structure": LimitStructure.PER_OCCURRENCE, 
+        "allowed_limits": ["per_occurrence", "per_accident"] 
+    },
     "UIM_BI": {
         "display_name": "Underinsured Motorist BI",
         "family": CoverageFamily.UNDERINSURED_MOTORIST,
@@ -122,8 +129,81 @@ COVERAGE_REGISTRY = {
         "line_of_business": LineOfBusiness.AUTO,
         "limit_structure": LimitStructure.DEDUCTIBLE_ONLY,
         "allowed_limits": []
+    },
+    "RENTAL": {
+        "display_name": "Rental Reimbursement",
+        "family": CoverageFamily.PHYSICAL_DAMAGE,
+        "line_of_business": LineOfBusiness.AUTO,
+        "limit_structure": LimitStructure.PER_OCCURRENCE,
+        "allowed_limits": ["per_occurrence"] 
+    },
+    "TOWING": {
+        "display_name": "Towing & Labor",
+        "family": CoverageFamily.PHYSICAL_DAMAGE, 
+        "line_of_business": LineOfBusiness.AUTO,
+        "limit_structure": LimitStructure.PER_OCCURRENCE,
+        "allowed_limits": ["per_occurrence"]
+    },
+    "MED_PAY": {
+        "display_name": "Medical Payments",
+        "family": CoverageFamily.MEDICAL_PAYMENTS,
+        "line_of_business": LineOfBusiness.AUTO,
+        "limit_structure": LimitStructure.SPLIT, 
+        "allowed_limits": ["per_person"]
+    },
+    "PIP": {
+        "display_name": "Personal Injury Protection",
+        "family": CoverageFamily.PIP,
+        "line_of_business": LineOfBusiness.AUTO,
+        "limit_structure": LimitStructure.CSL, 
+        "allowed_limits": ["combined_single_limit", "per_person"]
+    },
+    "HIRED_AUTO": {
+        "display_name": "Hired Auto Liability",
+        "family": CoverageFamily.AUTO_LIABILITY,
+        "line_of_business": LineOfBusiness.AUTO,
+        "limit_structure": LimitStructure.CSL,
+        "allowed_limits": ["combined_single_limit", "per_occurrence"]
+    },
+    "NON_OWNED_AUTO": {
+        "display_name": "Non-Owned Auto Liability",
+        "family": CoverageFamily.AUTO_LIABILITY,
+        "line_of_business": LineOfBusiness.AUTO,
+        "limit_structure": LimitStructure.CSL,
+        "allowed_limits": ["combined_single_limit", "per_occurrence"]
+    },
+
+    # --- General Liability ---
+    "GL_OCCURRENCE": {
+        "display_name": "General Liability - Per Occurrence",
+        "family": CoverageFamily.GENERAL_LIABILITY,
+        "line_of_business": LineOfBusiness.GENERAL_LIABILITY,
+        "limit_structure": LimitStructure.PER_OCCURRENCE,
+        "allowed_limits": ["per_occurrence"]
+    },
+    "GL_AGGREGATE": {
+        "display_name": "General Liability - Aggregate",
+        "family": CoverageFamily.GENERAL_LIABILITY,
+        "line_of_business": LineOfBusiness.GENERAL_LIABILITY,
+        "limit_structure": LimitStructure.AGGREGATE,
+        "allowed_limits": ["aggregate"]
+    },
+    "GL_PRODUCTS_COMP_OPS": {
+        "display_name": "Products/Completed Operations Aggregate",
+        "family": CoverageFamily.GENERAL_LIABILITY,
+        "line_of_business": LineOfBusiness.GENERAL_LIABILITY,
+        "limit_structure": LimitStructure.AGGREGATE,
+        "allowed_limits": ["aggregate"]
+    },
+
+    # --- Cargo ---
+    "CARGO_LEGAL_LIAB": {
+        "display_name": "Motor Truck Cargo",
+        "family": CoverageFamily.CARGO,
+        "line_of_business": LineOfBusiness.AUTO,
+        "limit_structure": LimitStructure.PER_OCCURRENCE,
+        "allowed_limits": ["per_occurrence"]
     }
-    # ... more mapped as needed in same patterns
 }
 
 def validate_coverage(cov_data):
@@ -196,53 +276,72 @@ def summarize_auto_liability(coverages):
         and COVERAGE_REGISTRY.get(c.get("coverage_code"), {}).get("line_of_business") == LineOfBusiness.AUTO
     ]
 
-    # Strategy: Find coverage with MAX total payout potential.
-    # This handles "Compulsory" (Low Split) vs "Optional" (High CSL) coexistence.
+    # --- DETERMINISTIC PRIORITY (Enterprise Safe) ---
+    # Priority 1: Explicit CSL
+    # Priority 2: Split BI + PD
     
-    best_limit_val = -1
-    best_structure = None
-    
-    # Check CSL candidates
-    csl_candidates = [c for c in auto_liab_coverages if c.get("limit_structure") == LimitStructure.CSL]
-    for c in csl_candidates:
-        val = c.get("limits", {}).get("combined_single_limit") or 0
-        if val > best_limit_val:
-            best_limit_val = val
-            best_structure = {"type": "csl", "value": int(val)}
-
-    # Check Split candidates (BI + PD pair is implied, but we look at BI usually for the main "Headline" limit)
-    # We will treat the BI per-accident limit as the comparable value for sorting.
-    bi_candidates = [c for c in auto_liab_coverages if c.get("coverage_code") == "AUTO_LIAB_BI"]
-    pd_candidates = [c for c in auto_liab_coverages if c.get("coverage_code") == "AUTO_LIAB_PD"]
-    
-    # Just take the best BI limit found
-    for c in bi_candidates:
-        per_acc = c.get("limits", {}).get("per_accident") or 0
-        # If per_accident is missing, fallback to per_person * 2 as heuristic? Or just per_person.
-        # Let's trust per_accident or per_person.
-        if per_acc == 0:
-            per_acc = c.get("limits", {}).get("per_person") or 0
+    # 1. Check for CSL
+    csl_cov = next((c for c in auto_liab_coverages if c.get("coverage_code") == "AUTO_LIAB_CSL"), None)
+    if csl_cov:
+        val = csl_cov.get("limits", {}).get("combined_single_limit")
+        if val:
+            return {"type": "csl", "value": int(val)}
             
-        if per_acc > best_limit_val:
-            # We found a better split limit. Construct the split summary.
-            # We need to pair it with the best PD limit we can find (or the one from the same set if we were fancy, but simply picking best PD is usually fine for summary)
-            best_pd_limit = 0
-            best_pd_cov = None
-            for p in pd_candidates:
-                l = p.get("limits", {}).get("per_occurrence") or 0
-                if l > best_pd_limit:
-                    best_pd_limit = l
-                    best_pd_cov = p
-            
-            best_limit_val = per_acc
-            best_structure = {
-                "type": "split",
-                "bi_person": c.get("limits", {}).get("per_person"),
-                "bi_accident": c.get("limits", {}).get("per_accident"),
-                "pd_accident": best_pd_limit if best_pd_cov else None
-            }
+    # 2. Check for Split
+    bi_cov = next((c for c in auto_liab_coverages if c.get("coverage_code") == "AUTO_LIAB_BI"), None)
+    pd_cov = next((c for c in auto_liab_coverages if c.get("coverage_code") == "AUTO_LIAB_PD"), None)
+    
+    if bi_cov:
+        return {
+            "type": "split",
+            "bi_person": bi_cov.get("limits", {}).get("per_person"),
+            "bi_accident": bi_cov.get("limits", {}).get("per_accident"),
+            "pd_accident": pd_cov.get("limits", {}).get("per_occurrence") if pd_cov else None
+        }
 
-    return best_structure
+    return None
+
+def summarize_general_liability(coverages):
+    """
+    Finds the best GL Occurrence limit.
+    """
+    gl_coverages = [
+        c for c in coverages 
+        if c.get("family") == CoverageFamily.GENERAL_LIABILITY
+        and c.get("coverage_code") == "GL_OCCURRENCE"
+    ]
+    
+    if not gl_coverages:
+        return None
+        
+    # Pick the highest occurrence limit
+    best = max(gl_coverages, key=lambda x: x.get("limits", {}).get("per_occurrence") or 0)
+    val = best.get("limits", {}).get("per_occurrence")
+    
+    if val:
+        return {"type": "per_occurrence", "value": int(val)}
+    return None
+
+def summarize_cargo(coverages):
+    """
+    Finds the best Cargo limit.
+    """
+    cargo_coverages = [
+        c for c in coverages 
+        if c.get("family") == CoverageFamily.CARGO
+    ]
+    
+    if not cargo_coverages:
+        return None
+        
+    # Pick the highest limit
+    best = max(cargo_coverages, key=lambda x: x.get("limits", {}).get("per_occurrence") or 0)
+    val = best.get("limits", {}).get("per_occurrence")
+    ded = best.get("deductible")
+    
+    if val:
+        return {"value": int(val), "deductible": ded}
+    return None
 
 def format_liability_limit(structured_data):
     """
@@ -258,11 +357,14 @@ def format_liability_limit(structured_data):
         
     if structured_data.get("type") == "split":
         parts = []
-        # Shorthand for splits: 100/300/100
         for key in ["bi_person", "bi_accident", "pd_accident"]:
             val = structured_data.get(key)
             if val:
                 parts.append(str(val // 1000 if val >= 1000 else val))
         return "/".join(parts) if parts else None
+        
+    if structured_data.get("type") == "per_occurrence":
+        val = structured_data["value"]
+        return f"{val:,} Occ"
         
     return None
