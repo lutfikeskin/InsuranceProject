@@ -31,7 +31,7 @@ from .schemas import (
     COVERAGE_SCHEMA,
     VEHICLE_SCHEMA,
     DRIVER_SCHEMA,
-    PREMIUM_LOCATOR_SCHEMA
+    UNIVERSAL_SCOUT_SCHEMA
 )
 
 from .prompts import (
@@ -41,7 +41,7 @@ from .prompts import (
     EXTRACT_VEHICLES_PROMPT,
     EXTRACT_DRIVERS_PROMPT,
     get_coverages_prompt,
-    LOCATE_PREMIUM_SIGNALS_PROMPT
+    UNIVERSAL_SCOUT_PROMPT
 )
 
 # --- HELPERS ---
@@ -64,7 +64,7 @@ def get_cached_registry_json(policy_type: str) -> str:
 # --- CONFIGURATION ---
 ROUTING_MODEL = "gemini-2.0-flash"
 EXTRACTION_MODEL = "gemini-2.0-flash"
-CACHE_VERSION = "v4" # Increment this to invalidate all existing caches
+CACHE_VERSION = "v5" # Increment this to invalidate all existing caches
 
 MAX_PAGES = {
   "declarations": 8,
@@ -83,6 +83,7 @@ class ExtractionContext:
     
     classification: dict = field(default_factory=dict)
     section_map: dict = field(default_factory=dict)
+    scout_map: dict = field(default_factory=dict) # Universal Scout Findings
     extracted_data: dict = field(default_factory=dict) # Raw API responses
     
     # Normalized Results
@@ -190,27 +191,53 @@ class GeminiExtractionPipeline:
             print(f"Section Map: {json.dumps(ctx.section_map, indent=2)}")
 
 
-            # 3.5. Locate Premium Signals (NEW Two-Phase Logic)
-            if status_callback: status_callback(" 🔍 Scouting for Premium Signals...")
-            premium_pages = self._locate_premium_signals(uploaded_file)
+
+            # 3.5. Universal Scout (Architecture Update)
+            if status_callback: status_callback(" 🔍 Running Universal Scout...")
+            ctx.scout_map = self._run_universal_scout(uploaded_file)
             
-            # Smart Merge: Add premium pages to 'declarations' slice
-            # This ensures the extractor sees the invoice/summary pages even if Section Locator missed them.
-            current_decs = set(ctx.section_map.get("declarations", []))
-            # Expand range of each signal by +/- 1 page to catch context
-            expanded_premium_pages = set()
-            for p in premium_pages:
-                expanded_premium_pages.add(p)
-                expanded_premium_pages.add(p - 1)
-                expanded_premium_pages.add(p + 1)
+            # --- INTELLIGENT SLICING (SCOUT + LOCATOR) ---
+            # Merge Section Locator findings with Scout Signals
             
-            # Filter valid pages (1 to total_pages)
             total_pages = processor.get_page_count()
-            valid_premium_pages = {p for p in expanded_premium_pages if 1 <= p <= total_pages}
-            
-            final_dec_pages = current_decs.union(valid_premium_pages)
-            ctx.section_map["declarations"] = sorted(list(final_dec_pages))
-            print(f"  - Final Smart Slice (Declarations + Premium Signals): {ctx.section_map['declarations']}")
+
+            def merge_pages(section_key, signal_key, signal_is_object_list=False):
+                """Helper to fuse section pages with scout pages + context."""
+                current_pages = set(ctx.section_map.get(section_key, []))
+                
+                # Extract pages from Scout
+                scout_data = ctx.scout_map.get(signal_key, [])
+                scout_pages = set()
+                
+                for item in scout_data:
+                    if signal_is_object_list:
+                         if isinstance(item, dict):
+                            p = item.get("page")
+                            if isinstance(p, int): scout_pages.add(p)
+                    elif isinstance(item, int):
+                        scout_pages.add(item)
+
+                # Add context (+/- 1 page) to scout findings
+                expanded_scout = set()
+                for p in scout_pages:
+                    expanded_scout.add(p)
+                    expanded_scout.add(p - 1)
+                    expanded_scout.add(p + 1)
+                
+                # Validate range
+                valid_scout = {p for p in expanded_scout if 1 <= p <= total_pages}
+                
+                # Union
+                final_set = current_pages.union(valid_scout)
+                return sorted(list(final_set))
+
+            # Apply Merging Rules
+            ctx.section_map["declarations"] = merge_pages("declarations", "premium_signals", signal_is_object_list=True)
+            ctx.section_map["vehicles"] = merge_pages("vehicles", "vehicle_schedule_signals")
+            ctx.section_map["drivers"] = merge_pages("drivers", "driver_schedule_signals")
+            ctx.section_map["coverages"] = merge_pages("coverages", "coverage_schedule_signals")
+
+            print(f"  - Smart Slices: {json.dumps(ctx.section_map)}")
 
         except Exception as e:
             return None, None, f"Initialization Error: {str(e)}"
@@ -281,33 +308,22 @@ class GeminiExtractionPipeline:
         )
         return self._parse_json_response(response.text)
 
-    def _locate_premium_signals(self, uploaded_file) -> list:
-        """Phase 1: Scan full document for pages containing premium/billing info."""
+    def _run_universal_scout(self, uploaded_file) -> dict:
+        """Phase 1: Universal Scout - Scan full document for ALL key signals."""
         try:
-            print("  - Scanning for Premium Signals (Full PDF)...")
+            print("  - Running Universal Scout (Full PDF)...")
             response = self.client.models.generate_content(
                 model=ROUTING_MODEL,
-                contents=[uploaded_file, LOCATE_PREMIUM_SIGNALS_PROMPT],
+                contents=[uploaded_file, UNIVERSAL_SCOUT_PROMPT],
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
-                    response_schema=PREMIUM_LOCATOR_SCHEMA
+                    response_schema=UNIVERSAL_SCOUT_SCHEMA
                 )
             )
-            data = self._parse_json_response(response.text)
-            signals = data.get("premium_signals", [])
-            
-            # Extract unique page numbers
-            signal_pages = set()
-            for s in signals:
-                p = s.get("page_number")
-                if isinstance(p, int):
-                    signal_pages.add(p)
-            
-            print(f"  - Premium Signals found on pages: {sorted(list(signal_pages))}")
-            return list(signal_pages)
+            return self._parse_json_response(response.text)
         except Exception as e:
-            print(f"Warning: Premium Signal Locator bad response: {e}")
-            return []
+            print(f"Warning: Universal Scout failed: {e}")
+            return {}
 
     def _parse_json_response(self, text: str, ctx: Optional[ExtractionContext] = None) -> dict:
         """Centralized result parser to handle Gemini's list/dict inconsistency recursively."""

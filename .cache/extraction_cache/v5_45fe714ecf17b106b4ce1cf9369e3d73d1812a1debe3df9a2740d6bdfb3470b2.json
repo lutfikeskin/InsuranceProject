@@ -1,0 +1,426 @@
+{
+  "policy": {
+    "carrier_name": "Allstate North American Insurance Company",
+    "policy_number": "974 544 835",
+    "effective_date": "2025-10-09",
+    "expiration_date": "2026-04-09",
+    "insured_name": "ILIER GONZALEZ GUTIERREZ and KIRENIA I MARQUEZ",
+    "insured_address": "17311 CUTHBERT ST",
+    "insured_city": "HUMBLE",
+    "insured_state_code": "TX",
+    "insured_zip": "77346-4857",
+    "premium": "3,017.65",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          493,
+          634,
+          512,
+          841
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          278,
+          634,
+          292,
+          718
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          413,
+          634,
+          428,
+          726
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          429,
+          634,
+          444,
+          724
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          218,
+          634,
+          252,
+          836
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          321,
+          634,
+          336,
+          764
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          337,
+          634,
+          351,
+          680
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          337,
+          682,
+          351,
+          695
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          337,
+          697,
+          351,
+          764
+        ]
+      },
+      {
+        "field": "premium",
+        "page_number": 1,
+        "bbox": [
+          302,
+          540,
+          318,
+          614
+        ]
+      }
+    ],
+    "liability_limit": "30/60/50",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_BI",
+      "family": "auto_liability",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 30000,
+        "per_accident": 60000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          374,
+          400,
+          390,
+          569
+        ]
+      }
+    },
+    {
+      "coverage_code": "AUTO_LIAB_PD",
+      "family": "auto_liability",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 50000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          405,
+          400,
+          422,
+          569
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_BI",
+      "family": "uninsured_motorist",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 30000,
+        "per_accident": 60000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          567,
+          400,
+          585,
+          569
+        ]
+      }
+    },
+    {
+      "coverage_code": "AUTO_LIAB_BI",
+      "family": "auto_liability",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 30000,
+        "per_accident": 60000
+      },
+      "location": {
+        "page_number": 3,
+        "bbox": [
+          242,
+          400,
+          258,
+          569
+        ]
+      }
+    },
+    {
+      "coverage_code": "AUTO_LIAB_PD",
+      "family": "auto_liability",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 50000
+      },
+      "location": {
+        "page_number": 3,
+        "bbox": [
+          273,
+          400,
+          289,
+          569
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 500,
+      "location": {
+        "page_number": 3,
+        "bbox": [
+          326,
+          602,
+          343,
+          631
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 500,
+      "location": {
+        "page_number": 3,
+        "bbox": [
+          357,
+          602,
+          374,
+          631
+        ]
+      }
+    },
+    {
+      "coverage_code": "RENTAL",
+      "family": "physical_damage",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 200
+      },
+      "location": {
+        "page_number": 3,
+        "bbox": [
+          432,
+          400,
+          449,
+          569
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_BI",
+      "family": "uninsured_motorist",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 30000,
+        "per_accident": 60000
+      },
+      "location": {
+        "page_number": 3,
+        "bbox": [
+          486,
+          400,
+          504,
+          569
+        ]
+      }
+    },
+    {
+      "coverage_code": "AUTO_LIAB_BI",
+      "family": "auto_liability",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 30000,
+        "per_accident": 60000
+      },
+      "location": {
+        "page_number": 4,
+        "bbox": [
+          212,
+          400,
+          228,
+          569
+        ]
+      }
+    },
+    {
+      "coverage_code": "AUTO_LIAB_PD",
+      "family": "auto_liability",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 50000
+      },
+      "location": {
+        "page_number": 4,
+        "bbox": [
+          243,
+          400,
+          259,
+          569
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 500,
+      "location": {
+        "page_number": 4,
+        "bbox": [
+          295,
+          602,
+          312,
+          631
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 500,
+      "location": {
+        "page_number": 4,
+        "bbox": [
+          326,
+          602,
+          343,
+          631
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_BI",
+      "family": "uninsured_motorist",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 30000,
+        "per_accident": 60000
+      },
+      "location": {
+        "page_number": 4,
+        "bbox": [
+          455,
+          400,
+          472,
+          569
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2005,
+      "make": "Ford",
+      "model": "Excursion",
+      "vin": "1FMNU40P65EC25074",
+      "type": "passenger_auto"
+    },
+    {
+      "year": 2025,
+      "make": "Hyundai",
+      "model": "Santa Fe",
+      "vin": "5NMP14GL1SH116815",
+      "type": "passenger_auto"
+    },
+    {
+      "year": 2016,
+      "make": "General Motors Company (GMC)",
+      "model": "Canyon",
+      "vin": "1GTG5DE30G1207387",
+      "type": "pickup"
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "ILIER GONZALEZ GUTIERREZ",
+      "is_excluded": false
+    },
+    {
+      "full_name": "KIRENIA I MARQUEZ",
+      "is_excluded": false
+    }
+  ],
+  "classification": {
+    "policy_type": "personal_auto",
+    "confidence": "high",
+    "signals": [
+      "Renewal Policy Declarations",
+      "This is the total for your 6-month policy period",
+      "Listed drivers on your policy"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}

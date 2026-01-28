@@ -14,40 +14,40 @@
         "field": "carrier_name",
         "page_number": 1,
         "bbox": [
-          41,
-          675,
-          67,
-          744
+          35,
+          697,
+          56,
+          755
         ]
       },
       {
         "field": "policy_number",
         "page_number": 1,
         "bbox": [
-          407,
+          409,
           202,
-          423,
-          350
+          427,
+          346
         ]
       },
       {
         "field": "effective_date",
         "page_number": 1,
         "bbox": [
-          407,
-          448,
-          423,
-          538
+          409,
+          449,
+          427,
+          529
         ]
       },
       {
         "field": "expiration_date",
         "page_number": 1,
         "bbox": [
-          407,
-          626,
-          423,
-          724
+          409,
+          627,
+          427,
+          715
         ]
       },
       {
@@ -56,48 +56,48 @@
         "bbox": [
           317,
           202,
-          332,
-          289
+          335,
+          295
         ]
       },
       {
         "field": "insured_address",
         "page_number": 1,
         "bbox": [
-          348,
+          352,
           202,
-          364,
-          328
+          370,
+          332
         ]
       },
       {
         "field": "insured_city",
         "page_number": 1,
         "bbox": [
-          365,
+          370,
           202,
-          381,
-          232
+          388,
+          230
         ]
       },
       {
         "field": "insured_state_code",
         "page_number": 1,
         "bbox": [
-          365,
-          233,
-          381,
-          245
+          370,
+          231,
+          388,
+          242
         ]
       },
       {
         "field": "insured_zip",
         "page_number": 1,
         "bbox": [
-          365,
-          245,
-          381,
-          317
+          370,
+          243,
+          388,
+          298
         ]
       }
     ],
@@ -116,12 +116,12 @@
         "per_accident": 500000
       },
       "location": {
-        "page_number": 1,
+        "page_number": 2,
         "bbox": [
-          473,
-          199,
-          494,
-          248
+          479,
+          174,
+          525,
+          266
         ]
       }
     },
@@ -133,12 +133,12 @@
         "per_occurrence": 100000
       },
       "location": {
-        "page_number": 1,
+        "page_number": 2,
         "bbox": [
-          494,
-          199,
-          514,
-          246
+          493,
+          274,
+          522,
+          344
         ]
       }
     },
@@ -146,14 +146,13 @@
       "coverage_code": "MED_PAY",
       "family": "medical_payments",
       "limit_structure": "split",
-      "limits": {},
       "location": {
-        "page_number": 1,
+        "page_number": 2,
         "bbox": [
-          473,
-          289,
-          494,
-          349
+          566,
+          174,
+          587,
+          228
         ]
       }
     },
@@ -163,12 +162,12 @@
       "limit_structure": "deductible_only",
       "deductible": 1000,
       "location": {
-        "page_number": 1,
+        "page_number": 2,
         "bbox": [
-          519,
-          452,
-          540,
-          491
+          534,
+          589,
+          554,
+          672
         ]
       }
     },
@@ -178,12 +177,30 @@
       "limit_structure": "deductible_only",
       "deductible": 1000,
       "location": {
-        "page_number": 1,
+        "page_number": 2,
         "bbox": [
-          519,
-          707,
-          540,
-          746
+          517,
+          726,
+          538,
+          810
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_BI",
+      "family": "uninsured_motorist",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 250000,
+        "per_accident": 500000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          594,
+          441,
+          617,
+          492
         ]
       }
     }
@@ -208,7 +225,7 @@
       "make": "CHEV",
       "model": "None",
       "vin": "1GCVKREC6EZ381184",
-      "type": "passenger_auto"
+      "type": "pickup"
     }
   ],
   "drivers": [],
@@ -216,8 +233,11 @@
     "policy_type": "personal_auto",
     "confidence": "high",
     "signals": [
-      "CERTIFICATE OF AUTOMOBILE INSURANCE",
-      "COVERAGES: BODILY INJURY MEDICAL PROPERTY DAMAGE"
+      "certificate of automobile insurance",
+      "damage to your auto coverage",
+      "bodily injury",
+      "medical payments",
+      "property damage"
     ]
   },
   "page_dimensions": [

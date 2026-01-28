@@ -151,7 +151,8 @@ DRIVER_SCHEMA = {
     }
 }
 
-PREMIUM_LOCATOR_SCHEMA = {
+
+UNIVERSAL_SCOUT_SCHEMA = {
     "type": "OBJECT",
     "properties": {
         "premium_signals": {
@@ -160,11 +161,34 @@ PREMIUM_LOCATOR_SCHEMA = {
                 "type": "OBJECT",
                 "properties": {
                     "label": {"type": "STRING"},
-                    "page_number": {"type": "INTEGER"},
-                    "confidence": {"type": "STRING", "enum": ["high", "medium", "low"]}
-                }
+                    "page": {"type": "INTEGER"}
+                },
+                "required": ["label", "page"]
+            }
+        },
+        "vehicle_schedule_signals": {
+            "type": "ARRAY",
+            "items": {
+                "type": "INTEGER"
+            }
+        },
+        "driver_schedule_signals": {
+            "type": "ARRAY",
+            "items": {
+                "type": "INTEGER"
+            }
+        },
+        "coverage_schedule_signals": {
+            "type": "ARRAY",
+            "items": {
+                "type": "INTEGER"
             }
         }
     },
-    "required": ["premium_signals"]
+    "required": [
+        "premium_signals",
+        "vehicle_schedule_signals",
+        "driver_schedule_signals",
+        "coverage_schedule_signals"
+    ]
 }

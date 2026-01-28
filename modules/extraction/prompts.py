@@ -33,23 +33,51 @@ LOCATE_SECTIONS_PROMPT = """
     - Do NOT return objects, ranges, or single integers.
     """
 
-LOCATE_PREMIUM_SIGNALS_PROMPT = """
-    Scan the full policy document.
-    Identify ALL mentions related to the policy cost, premium, bills, or invoices.
 
-    Target Signals:
-    - "Gross Premium" / "Total Policy Premium"
-    - "Amount Due" / "Total Amount Due"
-    - "Discounted Premium" / "Adjusted Premium"
-    - "Installment Total" / "Payment Plan"
-    - "Invoice Total" / "Account Balance"
+UNIVERSAL_SCOUT_PROMPT = """
+    You are a document intelligence system analyzing an insurance policy PDF.
 
-    For each signal found:
-    1. Extract the exact Label (e.g. "Total 6 Month Premium").
-    2. Identify the Page Number.
-    3. Assign confidence (high if it looks like a Grand Total).
-    
-    Do NOT extract the actual dollar amounts here. We only need to know WHERE they are.
+    Your task is NOT to extract values.
+    Your task is to identify WHERE important information exists in the document.
+
+    Scan the entire document carefully and identify page numbers for the following signals:
+
+    1. PREMIUM SIGNALS
+       - Any page containing:
+         - Total Policy Premium
+         - Amount Due
+         - Net / Adjusted / Discounted Premium
+         - Invoice Total
+       - Ignore line-item fees or per-coverage charges.
+       - Return ALL possible premium-related pages.
+
+    2. VEHICLE SCHEDULE SIGNALS
+       - Pages containing:
+         - Schedule of Vehicles
+         - Fleet Schedule
+         - VIN Lists
+         - Auto Schedule tables
+
+    3. DRIVER SCHEDULE SIGNALS
+       - Pages containing:
+         - Driver Schedules
+         - Named Driver Lists
+         - Excluded Driver Endorsements
+
+    4. COVERAGE SCHEDULE SIGNALS
+       - Pages containing:
+         - Coverage Schedules
+         - Endorsement-only coverages
+         - Special or added coverage pages
+
+    Rules:
+    - Use 1-based page numbering.
+    - Do NOT guess.
+    - Do NOT extract dollar amounts.
+    - If multiple signals exist, return all of them.
+    - If nothing is found for a category, return an empty list.
+
+    Return only valid JSON matching the provided schema.
 """
 
 EXTRACT_DECLARATIONS_PROMPT = """

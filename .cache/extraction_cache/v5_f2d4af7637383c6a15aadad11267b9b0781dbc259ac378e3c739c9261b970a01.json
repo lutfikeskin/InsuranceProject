@@ -9,106 +9,106 @@
     "insured_city": "PICKERINGTON",
     "insured_state_code": "OH",
     "insured_zip": "43147",
-    "premium": "$77",
+    "premium": "1,863.00",
     "field_locations": [
       {
         "field": "carrier_name",
         "page_number": 1,
         "bbox": [
           120,
-          639,
-          139,
-          809
+          638,
+          138,
+          857
         ]
       },
       {
         "field": "policy_number",
         "page_number": 1,
         "bbox": [
-          94,
-          632,
-          113,
-          757
+          98,
+          638,
+          116,
+          743
         ]
       },
       {
         "field": "effective_date",
         "page_number": 1,
         "bbox": [
-          150,
-          632,
-          169,
-          719
+          157,
+          638,
+          175,
+          724
         ]
       },
       {
         "field": "expiration_date",
         "page_number": 1,
         "bbox": [
-          150,
-          723,
-          169,
-          815
+          157,
+          734,
+          175,
+          811
         ]
       },
       {
         "field": "insured_name",
         "page_number": 1,
         "bbox": [
-          151,
+          150,
           171,
-          164,
-          243
+          168,
+          250
         ]
       },
       {
         "field": "insured_address",
         "page_number": 1,
         "bbox": [
-          167,
+          169,
           171,
-          180,
-          304
+          186,
+          305
         ]
       },
       {
         "field": "insured_city",
         "page_number": 1,
         "bbox": [
-          183,
+          187,
           171,
-          196,
-          247
+          205,
+          259
         ]
       },
       {
         "field": "insured_state_code",
         "page_number": 1,
         "bbox": [
-          183,
-          250,
-          196,
-          264
+          187,
+          260,
+          205,
+          275
         ]
       },
       {
         "field": "insured_zip",
         "page_number": 1,
         "bbox": [
-          183,
-          267,
-          196,
-          304
+          187,
+          278,
+          205,
+          305
         ]
       },
       {
         "field": "premium",
-        "page_number": 1,
+        "page_number": 2,
         "bbox": [
-          749,
-          813,
-          762,
-          825
+          384,
+          804,
+          401,
+          864
         ]
       }
     ],
@@ -129,10 +129,10 @@
       "location": {
         "page_number": 1,
         "bbox": [
-          726,
-          252,
-          740,
-          566
+          712,
+          480,
+          732,
+          763
         ]
       }
     },
@@ -146,10 +146,10 @@
       "location": {
         "page_number": 2,
         "bbox": [
-          684,
-          254,
-          701,
-          557
+          685,
+          480,
+          704,
+          767
         ]
       }
     },
@@ -163,10 +163,10 @@
       "location": {
         "page_number": 2,
         "bbox": [
-          715,
-          254,
-          732,
-          449
+          742,
+          480,
+          758,
+          702
         ]
       }
     },
@@ -180,10 +180,10 @@
       "location": {
         "page_number": 2,
         "bbox": [
-          747,
-          254,
-          763,
-          434
+          772,
+          480,
+          790,
+          682
         ]
       }
     },
@@ -195,10 +195,10 @@
       "location": {
         "page_number": 2,
         "bbox": [
-          778,
-          254,
-          793,
-          349
+          800,
+          480,
+          817,
+          531
         ]
       }
     },
@@ -210,10 +210,10 @@
       "location": {
         "page_number": 2,
         "bbox": [
-          811,
-          254,
-          827,
-          335
+          856,
+          480,
+          874,
+          531
         ]
       }
     },
@@ -227,10 +227,10 @@
       "location": {
         "page_number": 2,
         "bbox": [
-          828,
-          254,
-          844,
-          527
+          884,
+          480,
+          902,
+          756
         ]
       }
     },
@@ -239,14 +239,13 @@
       "display_name": "Roadside Assistance",
       "family": "physical_damage",
       "limit_structure": "per_occurrence",
-      "limits": {},
       "location": {
         "page_number": 2,
         "bbox": [
-          845,
-          254,
-          860,
-          401
+          913,
+          480,
+          928,
+          613
         ]
       }
     }
@@ -274,7 +273,8 @@
     "confidence": "high",
     "signals": [
       "Auto Insurance Coverage Summary",
-      "PROGRESSIVE AUTO"
+      "Policy Number",
+      "declarations page"
     ]
   },
   "page_dimensions": [
