@@ -2,8 +2,9 @@
 
 A Streamlit-based application for extracting data from insurance policy PDFs using Google Gemini AI, managing policy history in a local database, and automatically generating Certificates of Insurance (COI).
 
-> [!TIP]
-> **New to the project?** Read the [Full Project Guide](file:///c:/Users/Lutfi/Documents/InsuranceProject/GUIDE.md) for a deep dive into the architecture, data flows, and module structure.
+### 📘 Documentation
+
+For a deep dive into the architecture, extraction pipeline, and ontology rules, see the **[Full Project Documentation](DOCUMENTATION.md)**.
 
 ## Features
 
