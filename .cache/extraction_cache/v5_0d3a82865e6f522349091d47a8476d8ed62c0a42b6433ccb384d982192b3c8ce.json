@@ -1,0 +1,314 @@
+{
+  "policy": {
+    "carrier_name": "Liberty Mutual",
+    "naic_number": "",
+    "policy_number": "AOV24320052280",
+    "effective_date": "2025-07-01",
+    "expiration_date": "2026-07-01",
+    "account_type": "",
+    "insured_name": "Kurt E Green Vera Green",
+    "insured_address": "4082 Carmanwood Dr",
+    "insured_city": "Flint",
+    "insured_state_code": "MI",
+    "insured_zip": "48507-5502",
+    "business_name": "",
+    "premium": "",
+    "financial_responsibility_name": "CommunityWide FCU",
+    "state": "MI",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          43,
+          762,
+          80,
+          867
+        ]
+      },
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          957,
+          354,
+          969,
+          642
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          420,
+          210,
+          432,
+          363
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          420,
+          438,
+          432,
+          537
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          420,
+          643,
+          432,
+          741
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          330,
+          118,
+          342,
+          213
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          342,
+          118,
+          354,
+          212
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          354,
+          118,
+          366,
+          286
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          366,
+          118,
+          378,
+          155
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          366,
+          158,
+          378,
+          179
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          366,
+          183,
+          378,
+          248
+        ]
+      },
+      {
+        "field": "financial_responsibility_name",
+        "page_number": 1,
+        "bbox": [
+          849,
+          122,
+          861,
+          268
+        ]
+      },
+      {
+        "field": "state",
+        "page_number": 1,
+        "bbox": [
+          366,
+          158,
+          378,
+          179
+        ]
+      }
+    ],
+    "liability_limit": "250/500/100",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_BI",
+      "display_name": "Bodily Injury Liability",
+      "family": "auto_liability",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 250,
+        "per_accident": 500
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          499,
+          210,
+          514,
+          273
+        ]
+      }
+    },
+    {
+      "coverage_code": "AUTO_LIAB_PD",
+      "display_name": "Property Damage Liability",
+      "family": "auto_liability",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 100000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          515,
+          210,
+          529,
+          273
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "display_name": "Collision",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          507,
+          512,
+          521,
+          608
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "display_name": "Comprehensive / OTC",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          507,
+          650,
+          521,
+          746
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_BI",
+      "display_name": "Uninsured Motorist BI",
+      "family": "uninsured_motorist",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 250,
+        "per_accident": 500
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          539,
+          439,
+          554,
+          497
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2022,
+      "make": "MRBZ",
+      "model": "MRBZ",
+      "vin": "W1Y4DCHY3NT089405",
+      "gvw": 0,
+      "type": "passenger_auto"
+    },
+    {
+      "year": 2015,
+      "make": "NSSN",
+      "model": "NSSN",
+      "vin": "JN8AF5MV7FT558834",
+      "gvw": 0,
+      "type": "passenger_auto"
+    },
+    {
+      "year": 2014,
+      "make": "CHEV",
+      "model": "Pickup",
+      "vin": "1GCVKREC6EZ381184",
+      "gvw": 0,
+      "type": "pickup"
+    }
+  ],
+  "drivers": [],
+  "classification": {
+    "policy_type": "personal_auto",
+    "confidence": "high",
+    "signals": [
+      "CERTIFICATE OF AUTOMOBILE INSURANCE",
+      "DESCRIPTION OF AUTOMOBILES",
+      "Certificate of Automobile Insurance (Binder)",
+      "Liberty Mutual Personal Insurance Company",
+      "automobile",
+      "covered auto"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}

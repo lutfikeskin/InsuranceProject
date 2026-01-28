@@ -1,0 +1,280 @@
+{
+  "policy": {
+    "carrier_name": "Midwest Family Mutual Insurance Company",
+    "naic_number": "",
+    "policy_number": "CPKS0560137865",
+    "effective_date": "01/29/25",
+    "expiration_date": "01/29/26",
+    "account_type": "Commercial",
+    "insured_name": "JEEWAN GURUNG",
+    "insured_address": "11115 KIMBALL AVE",
+    "insured_city": "KANSAS CITY",
+    "insured_state_code": "KS",
+    "insured_zip": "66109",
+    "business_name": "",
+    "premium": "$4,491",
+    "financial_responsibility_name": "",
+    "state": "KS",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          106,
+          107,
+          155,
+          574
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          265,
+          87,
+          276,
+          222
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          280,
+          313,
+          291,
+          381
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          280,
+          461,
+          291,
+          532
+        ]
+      },
+      {
+        "field": "account_type",
+        "page_number": 1,
+        "bbox": [
+          209,
+          439,
+          220,
+          563
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          310,
+          84,
+          321,
+          194
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          324,
+          84,
+          335,
+          230
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          338,
+          84,
+          349,
+          187
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          338,
+          191,
+          349,
+          218
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          338,
+          220,
+          349,
+          271
+        ]
+      },
+      {
+        "field": "premium",
+        "page_number": 1,
+        "bbox": [
+          792,
+          888,
+          803,
+          930
+        ]
+      },
+      {
+        "field": "state",
+        "page_number": 1,
+        "bbox": [
+          338,
+          191,
+          349,
+          218
+        ]
+      }
+    ],
+    "liability_limit": "1,000,000 CSL",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "display_name": "Liability CSL (BI)",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          591,
+          597,
+          608,
+          693
+        ]
+      }
+    },
+    {
+      "coverage_code": "PIP",
+      "display_name": "Personal Injury Protection",
+      "family": "pip",
+      "limit_structure": "csl",
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          621,
+          126,
+          638,
+          290
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_CSL",
+      "display_name": "Uninsured Motorist CSL (BI)",
+      "family": "uninsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          666,
+          597,
+          683,
+          693
+        ]
+      }
+    },
+    {
+      "coverage_code": "UIM_CSL",
+      "display_name": "Underinsured Motorist CSL (BI)",
+      "family": "underinsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          701,
+          597,
+          718,
+          693
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "display_name": "Physical Damage Comprehensive",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          341,
+          687,
+          357,
+          735
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "display_name": "Collision",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          323,
+          687,
+          338,
+          735
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2021,
+      "make": "MERC",
+      "model": "2500",
+      "vin": "W1W4DCHY4MT050894",
+      "type": "cargo_van"
+    }
+  ],
+  "drivers": [],
+  "classification": {
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "Commercial Auto Policy",
+      "Business Auto Coverage Form",
+      "Commercial Auto Forms",
+      "Kansas Commercial Auto Coverage Changes",
+      "KS-Business Auto Advantage Endorsement",
+      "Schedule of Coverages and Covered Autos"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    }
+  ]
+}

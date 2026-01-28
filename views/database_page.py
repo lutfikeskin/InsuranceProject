@@ -35,7 +35,25 @@ def page_database(api_key):
                     
                     if results is not None:
                         st.success(f"Found {len(results)} results")
-                        st.dataframe(pd.DataFrame(results), width=1000)
+                        res_df = pd.DataFrame(results)
+                        
+                        # Format columns to Title Case (e.g., insured_name -> Insured Name)
+                        res_df.columns = [col.replace('_', ' ').title() for col in res_df.columns]
+                        
+                        from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
+                        gb_res = GridOptionsBuilder.from_dataframe(res_df)
+                        gb_res.configure_default_column(sortable=True, filterable=True, resizable=True)
+                        gb_res.configure_pagination(paginationAutoPageSize=True)
+                        res_grid_options = gb_res.build()
+                        
+                        AgGrid(
+                            res_df,
+                            gridOptions=res_grid_options,
+                            height=300,
+                            theme='streamlit',
+                            fit_columns_on_grid_load=True,
+                            key="ai_search_results_grid"
+                        )
                     else:
                         st.error(f"Could not answer: {debug_sql}")
         

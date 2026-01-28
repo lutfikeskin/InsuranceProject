@@ -1,0 +1,287 @@
+{
+  "policy": {
+    "carrier_name": "GEICO Marine Insurance Company",
+    "naic_number": "",
+    "policy_number": "9300271559-00",
+    "effective_date": "01-27-2026",
+    "expiration_date": "01-27-2027",
+    "account_type": "Limited Liability Company",
+    "insured_name": "GINA & JOHN MULTI SERVICE & TRUCKING LLC",
+    "insured_address": "5224 RISING COMET LN",
+    "insured_city": "LAKE WORTH",
+    "insured_state_code": "FL",
+    "insured_zip": "33463",
+    "business_name": "GINA & JOHN MULTI SERVICE & TRUCKING LLC",
+    "premium": "$12,843",
+    "financial_responsibility_name": "",
+    "state": "FL",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          170,
+          71,
+          183,
+          290
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          226,
+          381,
+          237,
+          477
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          240,
+          308,
+          252,
+          383
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          240,
+          420,
+          252,
+          497
+        ]
+      },
+      {
+        "field": "account_type",
+        "page_number": 1,
+        "bbox": [
+          362,
+          169,
+          373,
+          335
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          317,
+          72,
+          329,
+          368
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          328,
+          72,
+          340,
+          222
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          340,
+          72,
+          351,
+          149
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          340,
+          155,
+          351,
+          172
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          340,
+          179,
+          351,
+          224
+        ]
+      },
+      {
+        "field": "business_name",
+        "page_number": 1,
+        "bbox": [
+          317,
+          72,
+          329,
+          368
+        ]
+      },
+      {
+        "field": "premium",
+        "page_number": 2,
+        "bbox": [
+          724,
+          604,
+          735,
+          663
+        ]
+      },
+      {
+        "field": "state",
+        "page_number": 1,
+        "bbox": [
+          340,
+          155,
+          351,
+          172
+        ]
+      }
+    ],
+    "liability_limit": "1,000,000 CSL",
+    "cargo_limit": "$100,000",
+    "cargo_deductible": "1000",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "CARGO_LEGAL_LIAB",
+      "display_name": "Motor Truck Cargo Coverage",
+      "family": "cargo",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 100000
+      },
+      "deductible": 1000,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          439,
+          74,
+          452,
+          417
+        ]
+      }
+    },
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "display_name": "Covered Auto Liability",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          227,
+          65,
+          238,
+          335
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_CSL",
+      "display_name": "Uninsured Motorists",
+      "family": "uninsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 100000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          386,
+          65,
+          396,
+          335
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "display_name": "Physical Damage Comprehensive Coverage",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 500,
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          458,
+          65,
+          506,
+          345
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "display_name": "Physical Damage Collision Coverage",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 500,
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          538,
+          65,
+          571,
+          345
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2025,
+      "make": "DODGE",
+      "model": "RAM 3500",
+      "vin": "3C6MRVJG4SE539173",
+      "gvw": 10000,
+      "type": "cargo_van"
+    }
+  ],
+  "drivers": [],
+  "classification": {
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "Business Auto Declaration",
+      "GEICO for your business",
+      "Description of Business: Other For- Hire Trucking Operations",
+      "Schedule Of Coverages And Covered Autos",
+      "Covered Auto Liability",
+      "Physical Damage Comprehensive Coverage",
+      "2025, DODGE RAM, 3500",
+      "Delivery Van > 10,000 GVW",
+      "Use Class: Commercial",
+      "Motor Truck Cargo Coverage"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 595.22,
+      "height": 842.0
+    },
+    {
+      "width": 595.22,
+      "height": 842.0
+    },
+    {
+      "width": 595.22,
+      "height": 842.0
+    }
+  ]
+}
