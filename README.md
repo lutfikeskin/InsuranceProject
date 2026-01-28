@@ -7,9 +7,9 @@ A Streamlit-based application for extracting data from insurance policy PDFs usi
 
 ## Features
 
-- **AI Extraction**: Upload PDF policies to extract key data (Limits, Dates, Coverages, Drivers, Vehicles) using Google Gemini 1.5 Flash.
+- **AI Extraction**: Upload PDF policies to extract key data (Limits, Dates, Coverages, Drivers, Vehicles) using Google Gemini 2.5 Flash.
   - **High-Precision Scouting**: Uses a multi-phase "Universal Scout" + "Smart Slicing" architecture to find signals before extraction.
-- **Data Management**: View, filter, and delete extracted policies from a local SQLite database.
+- **Data Management**: View, filter, edit, and delete extracted policies from a local SQLite database.
 - **COI Generation**: Select a policy, pick a certificate holder, and generate a pre-filled PDF Certificate of Insurance.
   - **Auto-Logic**: Automatically hides/shows "General Liability", "Auto", and "Cargo" sections based on coverage presence.
   - **Smart Formatting**: Pre-fills the "Description of Operations" with vehicle/driver lists and required clauses.
@@ -53,7 +53,9 @@ A Streamlit-based application for extracting data from insurance policy PDFs usi
     - Go to **Process Policies** tab.
     - Drag & Drop PDF files.
     - Click **Start Extraction**.
-    - Review extracted data in the **Dashboard** or **History** tab.
+    - Review Extracted Data, Compare with the source material PDF and make adjustments if needed before daving to the database.
+    - Control all the data in the **Dashboard** or **Database** tab.
+    - Communicate with the AI Powered Chatbot in the Database for specific information requests in a conversation-like style.
 
 3.  **Generate COI**:
     - Go to **Create COI** tab.
@@ -64,7 +66,7 @@ A Streamlit-based application for extracting data from insurance policy PDFs usi
 
 ## Project Structure
 
-- **`app.py`**: The main Streamlit application handling the UI and routing.
+- **`app.py`**: Streamlit application handling the UI and routing.
 - **`extractor.py`**: Interacts with Google Gemini to parse PDF text into structured JSON.
 - **`database.py`**: Defines the SQLite database schema (`insurance_data.db`) using SQLAlchemy.
 - **`coi_generator.py`**: Handles filling the `COI Example.pdf` template with data.
