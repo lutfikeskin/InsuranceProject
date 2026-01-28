@@ -49,6 +49,7 @@ AI may:
 
 - Read PDFs
 - Identify sections
+- Scout for information locations (Universal Scouting)
 - Extract explicit values
 - Map coverages to ontology codes
 
@@ -64,7 +65,8 @@ AI may NOT:
 - Extraction must be **section-based**
 - Separate AI calls for:
   - Classification
-  - Section detection
+  - Section detection & Location
+  - Universal Scouting
   - Declarations
   - Coverages
   - Vehicles
@@ -140,7 +142,12 @@ If Bodily Injury and Property Damage are separate:
 - Cache:
   - Policy classification
   - Section locations
+  - Universal Scout (Scouting signals)
 - Avoid reprocessing identical PDFs
+
+### 7.1 Smart Slicing
+
+- **Use Smart Slicing**: Combine Universal Scout signals with Section Locator findings (including +/- 1 page context) to create optimized byte-slices for parallel extraction.
 
 Speed improvements must never reduce accuracy.
 

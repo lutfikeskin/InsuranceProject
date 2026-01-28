@@ -22,6 +22,8 @@ from core.coverage_ontology import (
     is_coverage_allowed_for_policy_type,
     format_liability_limit
 )
+from core.database import get_session, create_engine
+from core.services import UsageService
 
 # Import schemas and prompts
 from .schemas import (
@@ -62,8 +64,8 @@ def get_cached_registry_json(policy_type: str) -> str:
     return json.dumps(filtered_registry, indent=2)
 
 # --- CONFIGURATION ---
-ROUTING_MODEL = "gemini-2.0-flash"
-EXTRACTION_MODEL = "gemini-2.0-flash"
+ROUTING_MODEL = "gemini-2.5-flash"
+EXTRACTION_MODEL = "gemini-2.5-flash"
 CACHE_VERSION = "v5" # Increment this to invalidate all existing caches
 
 MAX_PAGES = {
@@ -147,6 +149,10 @@ class ExtractionCache:
 class GeminiExtractionPipeline:
     def __init__(self, api_key: str):
         self.client = genai.Client(api_key=api_key)
+        # Initialize usage tracking
+        self.engine = create_engine("sqlite:///insurance_data.db")
+        self.session = get_session(self.engine)
+        self.usage_service = UsageService(self.session)
 
     def run(self, file_bytes: bytes, status_callback=None, force_refresh=False) -> tuple[dict, dict, str]:
         """
@@ -286,25 +292,50 @@ class GeminiExtractionPipeline:
         finally:
             os.remove(tmp_path)
 
-    def _classify_policy(self, uploaded_file) -> dict:
+    def _call_gemini(self, model: str, contents: list, config: types.GenerateContentConfig, request_type: str = "extraction"):
+        """Centralized wrapper to enforce $2.50 daily budget and log usage."""
+        if self.usage_service.is_over_budget(daily_limit=2.5):
+             # Hard stop for safety
+             raise Exception("STOPS: API Daily Quota Exceeded ($2.50). Processing halted to prevent billing.")
+        
         response = self.client.models.generate_content(
+            model=model,
+            contents=contents,
+            config=config
+        )
+        
+        # Log tokens if available
+        if response.usage_metadata:
+            self.usage_service.log_usage(
+                model_name=model,
+                input_tokens=response.usage_metadata.prompt_token_count,
+                output_tokens=response.usage_metadata.candidates_token_count,
+                request_type=request_type
+            )
+            
+        return response
+
+    def _classify_policy(self, uploaded_file) -> dict:
+        response = self._call_gemini(
             model=ROUTING_MODEL,
             contents=[uploaded_file, CLASSIFY_POLICY_PROMPT],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=CLASSIFICATION_SCHEMA
-            )
+            ),
+            request_type="classification"
         )
         return self._parse_json_response(response.text)
 
     def _locate_sections(self, uploaded_file) -> dict:
-        response = self.client.models.generate_content(
+        response = self._call_gemini(
             model=ROUTING_MODEL,
             contents=[uploaded_file, LOCATE_SECTIONS_PROMPT],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=SECTION_LOCATOR_SCHEMA
-            )
+            ),
+            request_type="locator"
         )
         return self._parse_json_response(response.text)
 
@@ -312,17 +343,19 @@ class GeminiExtractionPipeline:
         """Phase 1: Universal Scout - Scan full document for ALL key signals."""
         try:
             print("  - Running Universal Scout (Full PDF)...")
-            response = self.client.models.generate_content(
+            response = self._call_gemini(
                 model=ROUTING_MODEL,
                 contents=[uploaded_file, UNIVERSAL_SCOUT_PROMPT],
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=UNIVERSAL_SCOUT_SCHEMA
-                )
+                ),
+                request_type="scout"
             )
             return self._parse_json_response(response.text)
         except Exception as e:
             print(f"Warning: Universal Scout failed: {e}")
+            if "STOPS" in str(e): raise e # Critical quota stop
             return {}
 
     def _parse_json_response(self, text: str, ctx: Optional[ExtractionContext] = None) -> dict:
@@ -432,9 +465,11 @@ class GeminiExtractionPipeline:
     # --- API WRAPPERS ---
     
     def _extract_declarations(self, part, ctx):
-        res = self.client.models.generate_content(
-            model=EXTRACTION_MODEL, contents=[part, EXTRACT_DECLARATIONS_PROMPT],
-            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=DECLARATIONS_SCHEMA)
+        res = self._call_gemini(
+            model=EXTRACTION_MODEL, 
+            contents=[part, EXTRACT_DECLARATIONS_PROMPT],
+            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=DECLARATIONS_SCHEMA),
+            request_type="extraction_declarations"
         )
         return self._parse_json_response(res.text, ctx)
 
@@ -443,23 +478,29 @@ class GeminiExtractionPipeline:
         registry_json = get_cached_registry_json(policy_type)
 
         prompt = get_coverages_prompt(registry_json, policy_type)
-        res = self.client.models.generate_content(
-            model=EXTRACTION_MODEL, contents=[part, prompt],
-            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=COVERAGE_SCHEMA)
+        res = self._call_gemini(
+            model=EXTRACTION_MODEL, 
+            contents=[part, prompt],
+            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=COVERAGE_SCHEMA),
+            request_type="extraction_coverages"
         )
         return self._parse_json_response(res.text, ctx)
 
     def _extract_vehicles(self, part, ctx):
-        res = self.client.models.generate_content(
-            model=EXTRACTION_MODEL, contents=[part, EXTRACT_VEHICLES_PROMPT],
-            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=VEHICLE_SCHEMA)
+        res = self._call_gemini(
+            model=EXTRACTION_MODEL, 
+            contents=[part, EXTRACT_VEHICLES_PROMPT],
+            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=VEHICLE_SCHEMA),
+            request_type="extraction_vehicles"
         )
         return self._parse_json_response(res.text, ctx)
 
     def _extract_drivers(self, part, ctx):
-        res = self.client.models.generate_content(
-            model=EXTRACTION_MODEL, contents=[part, EXTRACT_DRIVERS_PROMPT],
-            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=DRIVER_SCHEMA)
+        res = self._call_gemini(
+            model=EXTRACTION_MODEL, 
+            contents=[part, EXTRACT_DRIVERS_PROMPT],
+            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=DRIVER_SCHEMA),
+            request_type="extraction_drivers"
         )
         return self._parse_json_response(res.text, ctx)
 

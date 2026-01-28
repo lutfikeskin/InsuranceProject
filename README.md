@@ -8,6 +8,7 @@ A Streamlit-based application for extracting data from insurance policy PDFs usi
 ## Features
 
 - **AI Extraction**: Upload PDF policies to extract key data (Limits, Dates, Coverages, Drivers, Vehicles) using Google Gemini 1.5 Flash.
+  - **High-Precision Scouting**: Uses a multi-phase "Universal Scout" + "Smart Slicing" architecture to find signals before extraction.
 - **Data Management**: View, filter, and delete extracted policies from a local SQLite database.
 - **COI Generation**: Select a policy, pick a certificate holder, and generate a pre-filled PDF Certificate of Insurance.
   - **Auto-Logic**: Automatically hides/shows "General Liability", "Auto", and "Cargo" sections based on coverage presence.

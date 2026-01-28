@@ -1,0 +1,310 @@
+{
+  "policy": {
+    "carrier_name": "PROGRESSIVE\nCOMMERCIAL",
+    "policy_number": "999152403",
+    "effective_date": "2025-06-20",
+    "expiration_date": "2026-06-20",
+    "insured_name": "REUBEN BALIRAINE INC",
+    "insured_address": "88 HEYWOOD ST APT 2L",
+    "insured_city": "WORCESTER",
+    "insured_state_code": "MA",
+    "insured_zip": "01604",
+    "premium": "7,282",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          28,
+          660,
+          49,
+          776
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          94,
+          632,
+          111,
+          734
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          149,
+          632,
+          166,
+          698
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          149,
+          730,
+          166,
+          796
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          151,
+          172,
+          169,
+          282
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          169,
+          172,
+          185,
+          302
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          185,
+          172,
+          202,
+          275
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          185,
+          276,
+          202,
+          293
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          185,
+          293,
+          202,
+          320
+        ]
+      },
+      {
+        "field": "premium",
+        "page_number": 2,
+        "bbox": [
+          582,
+          746,
+          600,
+          781
+        ]
+      }
+    ],
+    "liability_limit": "1,000,000 CSL",
+    "cargo_limit": "$100,000",
+    "cargo_deductible": "1000",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_PD",
+      "family": "auto_liability",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 5000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          528,
+          171,
+          544,
+          410
+        ]
+      }
+    },
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          544,
+          171,
+          561,
+          410
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_CSL",
+      "family": "uninsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 100000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          561,
+          171,
+          576,
+          410
+        ]
+      }
+    },
+    {
+      "coverage_code": "UIM_CSL",
+      "family": "underinsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 100000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          576,
+          171,
+          592,
+          410
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          796,
+          209,
+          811,
+          280
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          796,
+          415,
+          811,
+          487
+        ]
+      }
+    },
+    {
+      "coverage_code": "RENTAL",
+      "family": "physical_damage",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 40
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          835,
+          182,
+          851,
+          229
+        ]
+      }
+    },
+    {
+      "coverage_code": "TOWING",
+      "family": "physical_damage",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 0
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          851,
+          273,
+          867,
+          284
+        ]
+      }
+    },
+    {
+      "coverage_code": "CARGO_LEGAL_LIAB",
+      "family": "cargo",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 100000
+      },
+      "deductible": 1000,
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          418,
+          171,
+          434,
+          410
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2022,
+      "make": "MERCEDES-BENZ",
+      "model": "SPRINTER",
+      "vin": "W1Y40BHY3NT108525",
+      "type": "cargo_van"
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "REUBEN J BALIRAINE"
+    }
+  ],
+  "classification": {
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "Commercial Auto Insurance Coverage Summary",
+      "Motor Truck Cargo coverage part"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}

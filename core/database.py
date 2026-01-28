@@ -1,9 +1,21 @@
-from sqlalchemy import create_engine, Column, Integer, String, Date, Boolean, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Date, Boolean, ForeignKey, Float, DateTime
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 import os
 from datetime import datetime
 
 Base = declarative_base()
+
+class ApiUsage(Base):
+    __tablename__ = 'api_usage'
+    
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    model_name = Column(String)
+    input_tokens = Column(Integer)
+    output_tokens = Column(Integer)
+    cost = Column(Float) # Estimated USD
+    status = Column(String) # success/failure
+    request_type = Column(String) # e.g. "scout", "extraction", "query"
 
 class Policy(Base):
     __tablename__ = 'policies'
@@ -175,6 +187,9 @@ def init_db(db_name="insurance_data.db"):
         if 'body' not in veh_columns:
             conn.execute(text("ALTER TABLE vehicles ADD COLUMN body VARCHAR"))
             
+        # API Usage Migration Note: 
+        # Base.metadata.create_all(engine) above handles new tables like api_usage
+        # But for consistency, we ensures the transaction is committed.
         conn.commit()
             
     return engine

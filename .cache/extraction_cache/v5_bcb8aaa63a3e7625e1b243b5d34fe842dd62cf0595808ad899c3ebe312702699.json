@@ -1,0 +1,250 @@
+{
+  "policy": {
+    "carrier_name": "GEICO Marine Insurance Company",
+    "policy_number": "9300224495",
+    "effective_date": "2025-10-14",
+    "expiration_date": "2026-10-14",
+    "insured_name": "Mustapha Abdulmajid Ibrahim",
+    "insured_address": "5705 APEX DR",
+    "insured_city": "INDIANAPOLIS",
+    "insured_state_code": "IN",
+    "insured_zip": "46250",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          94,
+          162,
+          113,
+          355
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          71,
+          162,
+          89,
+          275
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          71,
+          483,
+          89,
+          590
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          71,
+          704,
+          89,
+          812
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          113,
+          483,
+          132,
+          647
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          132,
+          483,
+          150,
+          564
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          151,
+          483,
+          169,
+          583
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          151,
+          583,
+          169,
+          600
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          151,
+          600,
+          169,
+          647
+        ]
+      }
+    ],
+    "liability_limit": "1,000,000 CSL",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          355,
+          161,
+          375,
+          395
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_CSL",
+      "family": "uninsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          473,
+          161,
+          493,
+          395
+        ]
+      }
+    },
+    {
+      "coverage_code": "UIM_CSL",
+      "family": "underinsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          513,
+          161,
+          533,
+          395
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_PD",
+      "family": "uninsured_motorist",
+      "limit_structure": "per_occurrence",
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          553,
+          161,
+          573,
+          405
+        ]
+      }
+    },
+    {
+      "coverage_code": "MED_PAY",
+      "family": "medical_payments",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 1000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          593,
+          161,
+          613,
+          245
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 500,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          697,
+          543,
+          717,
+          825
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 500,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          718,
+          543,
+          737,
+          819
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2017,
+      "make": "INTERNATIONAL",
+      "model": "MA025",
+      "vin": "1HTMMMML6HH465433"
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "Mustapha Abdulmajid Ibrahim, Davon Smith"
+    }
+  ],
+  "classification": {
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "COMMERCIAL AUTOMOBILE LIABILITY",
+      "COMMERCIAL AUTOMOBILE OTHER COVERAGES"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}

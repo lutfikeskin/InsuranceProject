@@ -1,6 +1,7 @@
 import streamlit as st
 import os
-from core.database import init_db
+from core.database import init_db, get_session
+from core.services import UsageService
 from streamlit_option_menu import option_menu
 
 # Import Views
@@ -98,6 +99,30 @@ with st.sidebar:
     
     if api_key:
         st.success("API Active", icon="✅")
+        
+        # --- BUDGET METER (NEW) ---
+        try:
+            from core.services import UsageService
+            usage_service = UsageService(get_session(st.session_state.db_engine))
+            daily_spend = usage_service.get_daily_usage()
+            budget_limit = 2.5
+            
+            progress = min(daily_spend / budget_limit, 1.0)
+            
+            st.markdown(f"""
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #eee; margin-top: 10px;">
+                <p style="margin:0; font-size: 0.8rem; color: #666;">Daily Budget ($2.50)</p>
+                <h4 style="margin:5px 0;">${daily_spend:.4f}</h4>
+                <div style="background: #eee; height: 8px; border-radius: 4px;">
+                    <div style="background: {'#ff4b4b' if progress > 0.8 else '#005AA9'}; width: {progress*100}%; height: 100%; border-radius: 4px;"></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if daily_spend >= budget_limit:
+                st.error("Quota Exceeded! 🛑")
+        except Exception as e:
+            st.error(f"Usage Error: {e}")
     else:
         st.warning("API Missing", icon="⚠️")
 

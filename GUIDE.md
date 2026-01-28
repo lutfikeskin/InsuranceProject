@@ -64,15 +64,17 @@ graph TD
 
 ### 3.3 Extraction Module (`modules/extraction/`)
 
-This is the most complex part of the system, using a multi-phase approach:
+This is the most complex component, utilizing a multi-phase, parallelized pipeline:
 
 1.  **`pdf_ops.py`**: Handles low-level PDF manipulation (hashing, slicing, counting pages).
 2.  **`pipeline.py` (`GeminiExtractionPipeline`)**:
-    - **Step 1 (Scouting)**: Uploads the full PDF to Gemini to **Classify** (Personal vs Commercial) and **Locate** (find page ranges for Decs, Vehicles, etc.).
-    - **Step 2 (Slicing)**: Slices the PDF into small byte-chunks based on the locations found in Step 1.
+    - **Step 0 (Universal Scouting) [NEW]**: Before slicing, the system runs a fast, full-document scout using `UNIVERSAL_SCOUT_PROMPT`. This identifies specific pages containing **Premium Signals**, **Vehicle Schedules**, **Driver Lists**, and **Coverage Schedules**.
+    - **Step 1 (Section Locating)**: Identifies general page ranges for major sections (Declarations, Vehicles, etc.).
+    - **Step 2 (Smart Slicing)**: Merges findings from the Scout and the Section Locator. It expands discovered pages by +/- 1 to ensure full context, creating optimized "Smart Slices".
     - **Step 3 (Parallel Extraction)**: Runs 4 parallel Gemini calls (one for each slice) using specialized **Prompts** and **Schemas**.
     - **Step 4 (Assembly)**: Merges the parallel results, applies CSL/Split rules, and validates against the Ontology.
 3.  **`prompts.py` / `schemas.py`**: Define the instructions and the strict JSON output format the AI must follow.
+4.  **`ExtractionCache`**: A versioned caching system that prevents re-processing identical PDF hashes, saving API costs and time.
 
 ### 3.4 Utilities (`utils/`)
 
@@ -93,9 +95,12 @@ This is the most complex part of the system, using a multi-phase approach:
 
 1.  User uploads `policy.pdf` in `process_policies.py`.
 2.  `process_pdf()` starts the pipeline.
-3.  Gemini identifies pages -> PDF is sliced -> Parallel extraction occurs.
-4.  The results are returned to the UI as a "Review Page".
-5.  If approved, `PolicyService.save_policy_from_extraction()` converts the JSON into SQLAlchemy objects and commits them to `insurance_data.db`.
+3.  **Phase 0**: Universal Scout identifies specific pages for Premium, Vehicles, Drivers, and Coverages.
+4.  **Phase 1**: Section Locator identifies general page ranges.
+5.  **Phase 2**: **Smart Slicing** merges Scout + Locator results into optimized PDF slices with context (+/- 1 page).
+6.  **Phase 3**: Gemini performs **Parallel Extraction** on the slices.
+7.  The results are returned to the UI as a "Review Page" for verification.
+8.  If approved, `PolicyService.save_policy_from_extraction()` converts the normalized JSON into SQLAlchemy objects and commits them to `insurance_data.db`.
 
 ### 4.2 From Database to COI
 

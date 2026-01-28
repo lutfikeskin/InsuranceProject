@@ -1,0 +1,517 @@
+{
+  "policy": {
+    "carrier_name": "CIRCLE STAR INSURANCE COMPANY, A RISK RETENTION",
+    "policy_number": "AL314549-40144",
+    "effective_date": "2025-10-16",
+    "expiration_date": "2026-10-16",
+    "insured_name": "NOUNOU TRANSPORTATION LLC",
+    "insured_address": "6156 N SAM HOUSTON PKWY W",
+    "insured_city": "HOUSTON",
+    "insured_state_code": "TX",
+    "insured_zip": "77066",
+    "premium": "$20,107.00",
+    "financial_responsibility_name": "NOUNOU TRANSPORTATION LLC",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          78,
+          297,
+          119,
+          701
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          22,
+          107,
+          38,
+          259
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          49,
+          129,
+          65,
+          214
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          49,
+          315,
+          65,
+          400
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          261,
+          325,
+          278,
+          506
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          278,
+          325,
+          305,
+          519
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          294,
+          325,
+          310,
+          376
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          294,
+          376,
+          310,
+          391
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          294,
+          391,
+          310,
+          427
+        ]
+      },
+      {
+        "field": "premium",
+        "page_number": 1,
+        "bbox": [
+          681,
+          683,
+          697,
+          747
+        ]
+      },
+      {
+        "field": "financial_responsibility_name",
+        "page_number": 6,
+        "bbox": [
+          364,
+          324,
+          380,
+          514
+        ]
+      }
+    ],
+    "liability_limit": "1,000,000 CSL",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "location": {
+        "page_number": 4,
+        "bbox": [
+          675,
+          399,
+          700,
+          486
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 2500,
+      "location": {
+        "page_number": 5,
+        "bbox": [
+          101,
+          375,
+          167,
+          795
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 2500,
+      "location": {
+        "page_number": 5,
+        "bbox": [
+          206,
+          375,
+          272,
+          795
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2020,
+      "make": "KENWORTH",
+      "model": "T680",
+      "vin": "1XKYDP9X0LJ400899",
+      "gvw": 33000,
+      "type": "tractor"
+    }
+  ],
+  "drivers": [],
+  "classification": {
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "POLICY NUMBER:",
+      "POLICY PERIOD:",
+      "CIRCLE STAR INSURANCE COMPANY, A RISK RETENTION",
+      "COMMERCIAL AUTO",
+      "COMMON POLICY DECLARATIONS",
+      "MOTOR CARRIER COVERAGE FORM"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    }
+  ]
+}

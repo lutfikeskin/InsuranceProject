@@ -1,5 +1,7 @@
 from sqlalchemy.orm import Session
-from .database import get_session, Policy, Vehicle, Driver, Coverage
+from .database import get_session, Policy, Vehicle, Driver, Coverage, ApiUsage
+from datetime import datetime, timedelta
+from sqlalchemy import func
 from utils.naic_utils import get_naic_for_carrier
 from .coverage_ontology import summarize_auto_liability, format_liability_limit
 from utils.vehicle_utils import refine_vehicle_type
@@ -342,3 +344,45 @@ class COIService:
             desc_lines.append(f"Driver List: {d_str}")
             
         return p_data, desc_lines
+
+
+class UsageService:
+    PRICING = {
+        "gemini-2.5-flash": {"input": 0.10 / 1_000_000, "output": 0.40 / 1_000_000},
+        "gemini-2.0-flash": {"input": 0.10 / 1_000_000, "output": 0.40 / 1_000_000},
+        "gemini-1.5-flash": {"input": 0.075 / 1_000_000, "output": 0.30 / 1_000_000},
+        "default": {"input": 0.10 / 1_000_000, "output": 0.40 / 1_000_000}
+    }
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def log_usage(self, model_name: str, input_tokens: int, output_tokens: int, request_type: str = "extraction"):
+        """Logs a single API request's token usage and estimated cost."""
+        pricing = self.PRICING.get(model_name, self.PRICING["default"])
+        cost = (input_tokens * pricing["input"]) + (output_tokens * pricing["output"])
+        
+        usage = ApiUsage(
+            model_name=model_name,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost=cost,
+            status="success",
+            request_type=request_type,
+            timestamp=datetime.utcnow()
+        )
+        self.session.add(usage)
+        self.session.commit()
+        return usage
+
+    def get_daily_usage(self):
+        """Returns the total cost for the current day."""
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        total_cost = self.session.query(func.sum(ApiUsage.cost)).filter(
+            ApiUsage.timestamp >= today_start
+        ).scalar() or 0.0
+        return total_cost
+
+    def is_over_budget(self, daily_limit: float = 1.0):
+        """Checks if the daily spend has exceeded the limit."""
+        return self.get_daily_usage() >= daily_limit
