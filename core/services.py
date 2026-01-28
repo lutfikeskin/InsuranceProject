@@ -120,6 +120,14 @@ class PolicyService:
             cargo_limit=p_data.get('cargo_limit'),
             cargo_deductible=p_data.get('cargo_deductible'),
             general_liability_limit=p_data.get('general_liability_limit'),
+            
+            # New Summaries
+            um_uim_limit=p_data.get('um_uim_limit'),
+            med_pay_limit=p_data.get('med_pay_limit'),
+            pip_limit=p_data.get('pip_limit'),
+            comp_deductible=p_data.get('comp_deductible'),
+            coll_deductible=p_data.get('coll_deductible'),
+
             has_full_collision=p_data.get('has_full_collision'),
             has_general_liability=p_data.get('has_general_liability', False),
             has_auto_liability=p_data.get('has_auto_liability', False),

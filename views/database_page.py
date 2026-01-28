@@ -105,6 +105,7 @@ def page_database(api_key):
                     "State": p.insured_state_code,
                     "Zip": p.insured_zip,
                     "Vehicles": len(p.vehicles),
+                    "Vehicle Types": v_types_str,
                     "Drivers": len(p.drivers),
                     "Effective": p.effective_date.strftime("%Y-%m-%d") if p.effective_date else "N/A",
                     "Expiration": p.expiration_date.strftime("%Y-%m-%d") if p.expiration_date else "N/A",
@@ -113,6 +114,10 @@ def page_database(api_key):
                     "Cargo": p.cargo_limit,
                     "Cargo Ded": p.cargo_deductible,
                     "GL Limit": p.general_liability_limit,
+                    "UM/UIM": p.um_uim_limit,
+                    "Med Pay": p.med_pay_limit,
+                    "Comp Ded": p.comp_deductible,
+                    "Coll Ded": p.coll_deductible,
                     "Has GL": "✅" if p.has_general_liability else "❌",
                     "Comp/Coll": "✅" if p.has_full_collision else "❌",
                     "Expedite": eligibility_status,
@@ -142,13 +147,22 @@ def page_database(api_key):
                         "premium": p.premium, 
                         "state": p.state, 
                         "financial_responsibility_name": p.financial_responsibility_name, 
+                        "financial_responsibility_name": p.financial_responsibility_name, 
                         "liability_limit": p.liability_limit, 
                         "general_liability_limit": p.general_liability_limit,
+                        "vehicle_types_summary": v_types_str, # Added to export
                         "cargo_limit": p.cargo_limit, 
                         "cargo_deductible": p.cargo_deductible,
                         "has_full_collision": p.has_full_collision,
                         "has_general_liability": p.has_general_liability,
-                        "has_auto_liability": p.has_auto_liability
+                        "has_auto_liability": p.has_auto_liability,
+                        
+                    # New Columns for Export
+                    "um_uim_limit": p.um_uim_limit,
+                    "med_pay_limit": p.med_pay_limit,
+                    "pip_limit": p.pip_limit,
+                    "comp_deductible": p.comp_deductible,
+                    "coll_deductible": p.coll_deductible
                     },
                     "vehicles": [{"year": v.year, "make": v.make, "model": v.model, "vin": v.vin, "gvw": v.gvw, "type": v.vehicle_type, "chassis": v.chassis, "body": v.body} for v in p.vehicles],
                     "coverages": [

@@ -156,6 +156,14 @@ def page_process_policies(api_key):
             m_cargo = l3.text_input("Cargo Limit")
             m_cargo_ded = l4.text_input("Cargo Deductible")
             
+            # New Manual Inputs
+            n1, n2, n3, n4, n5 = st.columns(5)
+            m_um = n1.text_input("UM/UIM")
+            m_med = n2.text_input("Med Pay")
+            m_pip = n3.text_input("PIP")
+            m_comp = n4.text_input("Comp Ded")
+            m_coll = n5.text_input("Coll Ded")
+            
             f1, f2, f3 = st.columns(3)
             m_gl = f1.checkbox("Has General Liabilities", value=True)
             m_auto = f2.checkbox("Has Auto Liabilities", value=True)
@@ -191,6 +199,13 @@ def page_process_policies(api_key):
                             general_liability_limit=m_gl_limit,
                             cargo_limit=m_cargo,
                             cargo_deductible=m_cargo_ded,
+                            
+                            # New Manual Fields
+                            um_uim_limit=m_um,
+                            med_pay_limit=m_med,
+                            pip_limit=m_pip,
+                            comp_deductible=m_comp,
+                            coll_deductible=m_coll,
                             has_general_liability=m_gl,
                             has_auto_liability=m_auto,
                             has_full_collision=m_coll,
@@ -267,6 +282,15 @@ def page_process_policies(api_key):
                 r_gl_limit = st.text_input("GL Limit", value=p.get('general_liability_limit', ''))
                 r_cargo = st.text_input("Cargo Limit", value=p.get('cargo_limit', ''))
                 r_cargo_ded = st.text_input("Cargo Ded", value=p.get('cargo_deductible', ''))
+                
+                # New Review Inputs
+                st.markdown("##### Additional Coverages")
+                rc1, rc2, rc3, rc4, rc5 = st.columns(5)
+                r_um = rc1.text_input("UM/UIM", value=p.get('um_uim_limit', ''))
+                r_med = rc2.text_input("Med Pay", value=p.get('med_pay_limit', ''))
+                r_pip = rc3.text_input("PIP", value=p.get('pip_limit', ''))
+                r_comp = rc4.text_input("Comp Ded", value=p.get('comp_deductible', ''))
+                r_coll = rc5.text_input("Coll Ded", value=p.get('coll_deductible', ''))
                 
                 r_gl = st.checkbox("Has GL", value=p.get('has_general_liability', True))
                 r_auto = st.checkbox("Has Auto", value=p.get('has_auto_liability', True))
@@ -364,6 +388,13 @@ def page_process_policies(api_key):
                             general_liability_limit=r_gl_limit,
                             cargo_limit=r_cargo,
                             cargo_deductible=r_cargo_ded,
+                            
+                            # New Review Fields
+                            um_uim_limit=r_um,
+                            med_pay_limit=r_med,
+                            pip_limit=r_pip,
+                            comp_deductible=r_comp,
+                            coll_deductible=r_coll,
                             has_general_liability=r_gl,
                             has_auto_liability=r_auto,
                             account_type=p.get('account_type'),

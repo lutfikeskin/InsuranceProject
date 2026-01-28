@@ -368,3 +368,110 @@ def format_liability_limit(structured_data):
         return f"{val:,} Occ"
         
     return None
+
+def summarize_um_uim(coverages):
+    """
+    Summarizes Uninsured/Underinsured Motorist limits.
+    Returns string directly or structured dict. 
+    Here we return structured for consistency, formatted later.
+    """
+    um_covs = [c for c in coverages if c.get("family") == CoverageFamily.UNINSURED_MOTORIST]
+    uim_covs = [c for c in coverages if c.get("family") == CoverageFamily.UNDERINSURED_MOTORIST]
+    
+    if not um_covs and not uim_covs:
+        return None
+
+    def get_limit_str(cov):
+        limits = cov.get("limits", {})
+        if cov.get("limit_structure") == "csl":
+            val = limits.get("combined_single_limit")
+            return f"{val:,} CSL" if val else None
+        elif cov.get("limit_structure") == "split":
+            pp = limits.get("per_person")
+            pa = limits.get("per_accident")
+            if pp and pa:
+                return f"{pp//1000}/{pa//1000}" 
+            elif pp:
+                return f"{pp//1000} (BI)"
+        return None
+
+    # Priority: CSL > Split
+    um_str = None
+    uim_str = None
+
+    if um_covs:
+        # Prefer CSL
+        csl = next((c for c in um_covs if c.get("limit_structure") == "csl"), None)
+        if csl:
+            um_str = get_limit_str(csl)
+        else:
+            # Prefer BI
+            bi = next((c for c in um_covs if "BI" in (c.get("coverage_code") or "")), None) or um_covs[0]
+            um_str = get_limit_str(bi)
+
+    if uim_covs:
+        csl = next((c for c in uim_covs if c.get("limit_structure") == "csl"), None)
+        if csl:
+            uim_str = get_limit_str(csl)
+        else:
+            bi = next((c for c in uim_covs if "BI" in (c.get("coverage_code") or "")), None) or uim_covs[0]
+            uim_str = get_limit_str(bi)
+
+    if um_str and uim_str:
+        if um_str == uim_str:
+            return f"{um_str}" # Implies both
+        else:
+            return f"UM: {um_str} / UIM: {uim_str}"
+    elif um_str:
+        return f"UMOnly: {um_str}"
+    elif uim_str:
+        return f"UIMOnly: {uim_str}"
+        
+    return None
+
+def summarize_med_pay(coverages):
+    meds = [c for c in coverages if c.get("family") == CoverageFamily.MEDICAL_PAYMENTS]
+    if not meds: return None
+    
+    # Almost always split per_person
+    best = meds[0]
+    val = best.get("limits", {}).get("per_person")
+    if val:
+        return f"{val:,}"
+    return None
+
+def summarize_pip(coverages):
+    pips = [c for c in coverages if c.get("family") == CoverageFamily.PIP]
+    if not pips: return None
+    
+    best = pips[0]
+    val = best.get("limits", {}).get("combined_single_limit") or best.get("limits", {}).get("per_person")
+    if val:
+        return f"{val:,}"
+    return None
+
+def summarize_physical_damage(coverages):
+    """
+    Returns dict: {'comp': '500', 'coll': '1000'}
+    """
+    phys = [c for c in coverages if c.get("family") == CoverageFamily.PHYSICAL_DAMAGE]
+    res = {}
+    
+    comp = next((c for c in phys if "COMP" in (c.get("coverage_code") or "")), None)
+    if comp:
+        ded = comp.get("deductible")
+        if ded is not None:
+             res['comp'] = f"{ded}"
+        else:
+             # Look for "full glass" or similar logic if we had flags, defaulting to just Exists
+             res['comp'] = "Exists"
+
+    coll = next((c for c in phys if "COLL" in (c.get("coverage_code") or "")), None)
+    if coll:
+        ded = coll.get("deductible")
+        if ded is not None:
+             res['coll'] = f"{ded}"
+        else:
+             res['coll'] = "Exists"
+             
+    return res if res else None

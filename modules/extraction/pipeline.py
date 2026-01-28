@@ -18,6 +18,10 @@ from core.coverage_ontology import (
     summarize_auto_liability, 
     summarize_general_liability,
     summarize_cargo,
+    summarize_um_uim,
+    summarize_med_pay,
+    summarize_pip,
+    summarize_physical_damage,
     validate_coverage, 
     is_coverage_allowed_for_policy_type,
     format_liability_limit
@@ -66,7 +70,7 @@ def get_cached_registry_json(policy_type: str) -> str:
 # --- CONFIGURATION ---
 ROUTING_MODEL = "gemini-2.5-flash"
 EXTRACTION_MODEL = "gemini-2.5-flash"
-CACHE_VERSION = "v5" # Increment this to invalidate all existing caches
+CACHE_VERSION = "v6" # Incremented for new coverage fields
 
 MAX_PAGES = {
   "declarations": 8,
@@ -571,8 +575,19 @@ class GeminiExtractionPipeline:
              if raw_cargo.get("deductible"):
                   final["policy"]["cargo_deductible"] = str(raw_cargo["deductible"])
         
-        # Flags
+        # New Summaries
         covs = final["coverages"]
+        
+        final["policy"]["um_uim_limit"] = summarize_um_uim(covs)
+        final["policy"]["med_pay_limit"] = summarize_med_pay(covs)
+        final["policy"]["pip_limit"] = summarize_pip(covs)
+        
+        phys_dam = summarize_physical_damage(covs)
+        if phys_dam:
+            final["policy"]["comp_deductible"] = phys_dam.get("comp")
+            final["policy"]["coll_deductible"] = phys_dam.get("coll")
+
+        # Flags
         final["policy"]["has_auto_liability"] = any(c.get("family") == "auto_liability" for c in covs)
         final["policy"]["has_general_liability"] = any(c.get("family") == "general_liability" for c in covs)
         final["policy"]["has_full_collision"] = any(c.get("family") == "physical_damage" for c in covs)

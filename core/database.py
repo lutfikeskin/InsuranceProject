@@ -54,6 +54,14 @@ class Policy(Base):
     # Conditional Coverages
     has_general_liability = Column(Boolean, default=True) # New
     has_auto_liability = Column(Boolean, default=True) # New
+    
+    # Expanded Coverage Summaries
+    um_uim_limit = Column(String)
+    med_pay_limit = Column(String)
+    pip_limit = Column(String)
+    comp_deductible = Column(String)
+    coll_deductible = Column(String)
+
     status = Column(String, default='Active') # New Status Field
 
     # Relationships
@@ -164,6 +172,18 @@ def init_db(db_name="insurance_data.db"):
             conn.execute(text("ALTER TABLE policies ADD COLUMN has_general_liability BOOLEAN DEFAULT 1"))
         if 'has_auto_liability' not in columns:
             conn.execute(text("ALTER TABLE policies ADD COLUMN has_auto_liability BOOLEAN DEFAULT 1"))
+        
+        # Expanded Visibility Migrations
+        if 'um_uim_limit' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN um_uim_limit VARCHAR"))
+        if 'med_pay_limit' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN med_pay_limit VARCHAR"))
+        if 'pip_limit' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN pip_limit VARCHAR"))
+        if 'comp_deductible' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN comp_deductible VARCHAR"))
+        if 'coll_deductible' not in columns:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN coll_deductible VARCHAR"))
             
         # Classification Metadata Migrations
         if 'policy_type' not in columns:

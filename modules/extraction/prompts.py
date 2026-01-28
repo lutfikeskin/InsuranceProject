@@ -97,7 +97,7 @@ EXTRACT_DECLARATIONS_PROMPT = """
     - Business Name (if different from Insured Name)
     - State of Jurisdiction (if different from address state)
     - Financial Responsibility Name (Registered name for filings, e.g., on Form E or MCS-90)
-    - Premium Amount (Documents can have different type of payments and amounts mentioned on them, we want to pick the amount that the customer will pay, actualy total premium of the policy)
+    - Premium Amount (Documents can have different type of payments and amounts mentioned on them, we want to pick the amount that the customer will pay, actually total premium of the policy)
 
     NEGATIVE CONSTRAINTS:
     - Do NOT extract a value if it is associated with a specific coverage (e.g., "Uninsured Motorist: $77").
