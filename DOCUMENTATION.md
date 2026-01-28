@@ -12,6 +12,12 @@ Welcome to the comprehensive technical and operational manual for the **Insuranc
 4. [API & Module Reference](#4-api--module-reference)
 5. [Setup & Operations](#5-setup--operations)
 6. [Data Flow & Communication](#6-data-flow--communication)
+7. [UI & View Reference](#7-ui--view-reference)
+8. [Utility & Helper Modules](#8-utility--helper-modules)
+9. [COI Generation & Mapping](#9-coi-generation--mapping)
+10. [Troubleshooting & FAQ](#10-troubleshooting--faq)
+11. [Development Utilities](#11-development-utilities)
+12. [Directory Map](#12-directory-map)
 
 ---
 
@@ -124,7 +130,20 @@ The `validate_coverage()` function ensures adherence to the registry:
 2. Install dependencies: `pip install -r requirements.txt`
 3. Configure API Key: Create a `.env` file with `GOOGLE_API_KEY=...`
 
-### 5.2 Cache Management
+### 5.2 Docker Deployment
+
+The project includes a `Dockerfile` for containerized environments.
+
+- **Build**: `docker build -t insurance-hub .`
+- **Run**: `docker run -p 8501:8501 --env-file .env insurance-hub`
+
+### 5.3 Database & Migration Logic
+
+The system uses a custom, lightweight migration bridge in `core/database.py`.
+
+- **Automatic Schema Updates**: On startup, `init_db()` inspects the existing SQLite schema and automatically performs `ALTER TABLE` commands if new columns have been added to the models. This ensures zero-downtime updates for local development.
+
+### 5.4 Cache Management
 
 The system uses a versioned cache in `.cache/extraction_cache/`.
 
@@ -148,4 +167,85 @@ The system uses a specialized prompt that provides the **full schema** to Gemini
 
 ---
 
-_Document Version: 1.0 (January 2026)_
+## 7. UI & View Reference
+
+The frontend is built with **Streamlit** and located in the `views/` directory.
+
+- **`dashboard.py`**: High-level business intelligence. Displays total policies, vehicle counts, and aggregate premiums using metrics cards and charts.
+- **`process_policies.py`**: The extraction engine's primary interface. Handles PDF uploads, progress tracking, and intermediate review before database commit.
+- **`database_page.py`**: CRUD interface for existing policies. Supports filtering by carrier, searching by policy number, and bulk deletion.
+- **`edit_dialog.py`**: A modal component that allows users to manually correct AI-extracted values (e.g., typos in names or slightly off limit values) before finalizing the record.
+- **`create_coi.py`**: The certificate generation workflow. Allows selection of a policy and holder, then triggers the COI generator.
+
+---
+
+## 8. Utility & Helper Modules
+
+Located in `utils/`, these modules provide deterministic enhancements to AI output.
+
+- **`vehicle_utils.py` (`refine_vehicle_type`)**: Enhances vehicle classification. If the AI provides a VIN and GVW, this utility uses weight-based logic (e.g., GVW > 26,000 lbs = "Tractor") to standardize vehicle types.
+- **`naic_utils.py`**: Contains a dictionary of common insurance carriers and their NAIC numbers. Used as a fallback if the AI fails to find the NAIC code on the PDF.
+- **`exporter.py`**: Uses `pandas` and `openpyxl` to generate formatted Excel reports from the SQLite policy table.
+
+---
+
+## 9. COI Generation & Mapping
+
+The system generates ACORD 25 certificates using `modules/coi/`.
+
+- **`generator.py`**: Uses the `pypdf` library to perform low-level form-filling. It injects data into the `data/COI Example.pdf` template.
+- **`mapping.json`**: Acts as the translation layer. It maps human-friendly keys (e.g., `policy_number`) to the specific, technical Field IDs inside the ACORD PDF form.
+- **`COIService.prepare_coi_data()`**: The pre-processing step that aggregates vehicles and drivers into descriptive strings for the "Description of Operations" box.
+
+---
+
+## 10. Troubleshooting & FAQ
+
+### 10.1 "Quota Exceeded" Errors
+
+- **Cause**: The Gemini API has per-minute and per-day token limits.
+- **Solution**: Check the `Usage Dashboard` to see if you have hit your limit. Use the `ExtractionCache` to avoid re-processing existing files.
+
+### 10.2 Missing Coverages
+
+- **Cause**: The AI couldn't find a mapping in `COVERAGE_REGISTRY` or the text was too illegible.
+- **Solution**: Check `modules/extraction/prompts.py` to ensure the registry is being passed correctly. Review the "Smart Slicing" pages to ensure the relevant text was in the slice.
+
+### 10.3 Limit Parsing Errors
+
+- **Cause**: Formats like "Split Limits" (100/300/50) can sometimes be misinterpreted as CSL.
+- **Solution**: The `summarize_auto_liability` function in `core/coverage_ontology.py` is the deterministic source of truth. Check the logic there to see how it resolves conflicts.
+
+---
+
+## 11. Development Utilities
+
+The `scripts/` directory contains tools for debugging and maintenance:
+
+- **`check_models.py`**: A diagnostic script that verifies the database schema and prints current column structures.
+- **`inspect_pdf.py`**: A utility for low-level inspection of PDF metadata and page count, useful for debugging slicing issues.
+
+---
+
+## 12. Directory Map
+
+```text
+/
+├── app.py                # Main Entry Point
+├── core/
+│   ├── coverage_ontology.py # Registry & Validation
+│   ├── database.py       # SQLAlchemy Schemas
+│   └── services.py       # Business Services & NL2SQL
+├── modules/
+│   ├── extraction/       # AI Pipeline (Scout, Slice, Extract)
+│   └── coi/              # PDF COI Generation
+├── views/                # Streamlit Page modules
+├── data/                 # SQLite DB, PDF Templates, Mappings
+├── utils/                # Vehicle/NAIC/Export Helpers
+├── assets/               # CSS & Styling
+└── .cache/               # Extraction PDF Cache
+```
+
+---
+
+_Document Version: 1.1 (January 2026)_
