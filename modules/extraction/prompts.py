@@ -17,22 +17,11 @@ CLASSIFY_POLICY_PROMPT = """
     - Base decision on explicit wording and structure.
     - Prefer declarations and coverage titles.
     - If unsure, return "unknown".
+    
+    DOMINANCE RULE:
+    - Classify based on the PRIMARY policy form, not endorsements.
+    - If multiple coverage types exist, choose the base policy (e.g., Commercial Auto + Cargo endorsement -> commercial_auto).
     """
-
-LOCATE_SECTIONS_PROMPT = """
-    Analyze the PDF and identify page numbers for the following sections.
-
-    Sections:
-    - declarations (Policy info, dates, insured, Policy Premium Amount, Rating Worksheet, Invoice, Payment Schedule, Premium Summary)
-    - coverages (Limits, deductibles)
-    - vehicles (Schedule of all vehicles)
-    - drivers (List of all drivers)
-
-    Rules:
-    - Use EMPTY ARRAY [] if a section is missing.
-    - Do NOT return objects, ranges, or single integers.
-    """
-
 
 UNIVERSAL_SCOUT_PROMPT = """
     You are a document intelligence system analyzing an insurance policy PDF.
@@ -50,6 +39,8 @@ UNIVERSAL_SCOUT_PROMPT = """
          - Invoice Total
        - Ignore line-item fees or per-coverage charges.
        - Return ALL possible premium-related pages.
+       - CLASSIFY TYPE: "gross", "net", "total", "installment", "fee", or "unknown".
+       - IDENTIFY PERIOD: Does it explicitly state "Annual", "6-Month", or "Monthly"?
 
     2. VEHICLE SCHEDULE SIGNALS
        - Pages containing:
@@ -104,6 +95,11 @@ EXTRACT_DECLARATIONS_PROMPT = """
     - Do NOT extract "Policy Coverage Amount" if it is just a subsection sum.
     - We want the GRAND TOTAL for the policy term.
 
+    PREMIUM SELECTION RULE:
+    - Multiple premium amounts may exist across the document.
+    - Use only the amount that represents the FINAL total premium for the full policy term.
+    - If multiple candidates remain ambiguous, choose NONE and leave blank.
+
     For each extracted field, identify its location in the document.
     Return 'field_locations' array containing {field, page_number, bbox}.
     bbox format: [ymin, xmin, ymax, xmax] (0-1000 scale).
@@ -121,16 +117,17 @@ EXTRACT_VEHICLES_PROMPT = """
     - type
 
     VEHICLE TYPE RULES (STRICT):
-    - Cargo Van examples: Ram ProMaster, Ford Transit, Mercedes Sprinter → "cargo_van"
-    - Box Truck / Straight Truck (14ft–26ft) → "box_truck"
-    - Semi / Tractor → "tractor"
-    - Pickup (F-150, Silverado, RAM 1500) → "pickup"
-    - Passenger vehicles → "passenger_auto"
+    - Cargo Van examples: Ram ProMaster, Ford Transit, Mercedes Sprinter -> "cargo_van"
+    - Box Truck / Straight Truck (14ft-26ft) -> "box_truck"
+    - Semi / Tractor -> "tractor"
+    - Pickup (F-150, Silverado, RAM 1500) -> "pickup"
+    - Passenger vehicles -> "passenger_auto"
 
     Rules:
     - Do NOT default to "auto".
     - If unsure, infer type from model name and GVW.
     - Never leave type empty.
+    - CONTINUITY RULE: If a table spans multiple pages, treat it as a single vehicle schedule.
     """
 
 EXTRACT_DRIVERS_PROMPT = """
@@ -145,6 +142,7 @@ EXTRACT_DRIVERS_PROMPT = """
     - If a driver is marked "Excluded", set is_excluded = true.
     - If no drivers are listed, return an empty array.
     - Do NOT infer exclusions.
+    - Do NOT treat underwriting questions or questionnaires as driver lists.
     """
 
 def get_coverages_prompt(registry_text, policy_type):
@@ -170,6 +168,7 @@ def get_coverages_prompt(registry_text, policy_type):
     - Do NOT invent coverages not explicitly shown.
     - If a coverage limit is unclear, OMIT it.
     - Never create duplicate Auto Liability entries.
+    - SAMPLE TABLE EXCLUSION: If a limit appears in an example, legend, or explanatory section, OMIT it.
 
     VALIDATION CHECK:
     Before returning results, verify that:

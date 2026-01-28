@@ -161,7 +161,9 @@ UNIVERSAL_SCOUT_SCHEMA = {
                 "type": "OBJECT",
                 "properties": {
                     "label": {"type": "STRING"},
-                    "page": {"type": "INTEGER"}
+                    "page": {"type": "INTEGER"},
+                    "type": {"type": "STRING", "enum": ["gross", "net", "total", "installment", "fee", "unknown"]},
+                    "period": {"type": "STRING", "enum": ["annual", "6-month", "monthly", "unknown"]}
                 },
                 "required": ["label", "page"]
             }

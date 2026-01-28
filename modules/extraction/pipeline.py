@@ -42,7 +42,6 @@ from .schemas import (
 
 from .prompts import (
     CLASSIFY_POLICY_PROMPT,
-    LOCATE_SECTIONS_PROMPT,
     EXTRACT_DECLARATIONS_PROMPT,
     EXTRACT_VEHICLES_PROMPT,
     EXTRACT_DRIVERS_PROMPT,
@@ -197,25 +196,15 @@ class GeminiExtractionPipeline:
             if ctx.policy_type == "unknown":
                 return None, None, "Unknown Policy Type"
 
-            ctx.section_map = self._locate_sections(uploaded_file)
-            print(f"Section Map: {json.dumps(ctx.section_map, indent=2)}")
-
-
-
             # 3.5. Universal Scout (Architecture Update)
             if status_callback: status_callback(" 🔍 Running Universal Scout...")
             ctx.scout_map = self._run_universal_scout(uploaded_file)
             
-            # --- INTELLIGENT SLICING (SCOUT + LOCATOR) ---
-            # Merge Section Locator findings with Scout Signals
-            
+            # --- INTELLIGENT SLICING (SCOUT ONLY) ---
             total_pages = processor.get_page_count()
 
-            def merge_pages(section_key, signal_key, signal_is_object_list=False):
-                """Helper to fuse section pages with scout pages + context."""
-                current_pages = set(ctx.section_map.get(section_key, []))
-                
-                # Extract pages from Scout
+            def map_scout_pages(signal_key, signal_is_object_list=False):
+                """Helper to extract pages from scout signals + context."""
                 scout_data = ctx.scout_map.get(signal_key, [])
                 scout_pages = set()
                 
@@ -235,19 +224,17 @@ class GeminiExtractionPipeline:
                     expanded_scout.add(p + 1)
                 
                 # Validate range
-                valid_scout = {p for p in expanded_scout if 1 <= p <= total_pages}
-                
-                # Union
-                final_set = current_pages.union(valid_scout)
-                return sorted(list(final_set))
+                return sorted([p for p in expanded_scout if 1 <= p <= total_pages])
 
-            # Apply Merging Rules
-            ctx.section_map["declarations"] = merge_pages("declarations", "premium_signals", signal_is_object_list=True)
-            ctx.section_map["vehicles"] = merge_pages("vehicles", "vehicle_schedule_signals")
-            ctx.section_map["drivers"] = merge_pages("drivers", "driver_schedule_signals")
-            ctx.section_map["coverages"] = merge_pages("coverages", "coverage_schedule_signals")
+            # Map Scout Signals to Section Map
+            ctx.section_map = {
+                "declarations": map_scout_pages("premium_signals", signal_is_object_list=True),
+                "vehicles": map_scout_pages("vehicle_schedule_signals"),
+                "drivers": map_scout_pages("driver_schedule_signals"),
+                "coverages": map_scout_pages("coverage_schedule_signals")
+            }
 
-            print(f"  - Smart Slices: {json.dumps(ctx.section_map)}")
+            print(f"  - Smart Slices (Scout Driven): {json.dumps(ctx.section_map)}")
 
         except Exception as e:
             return None, None, f"Initialization Error: {str(e)}"
