@@ -12,17 +12,17 @@
     "insured_state_code": "TX",
     "insured_zip": "77346-4857",
     "business_name": "",
-    "premium": "$3,017.65",
-    "financial_responsibility_name": "",
+    "premium": "3017.65",
+    "financial_responsibility_name": "HYUNDAI MOTOR FINANCE CO, LA FAMILIA AUTOS",
     "state": "TX",
     "field_locations": [
       {
         "field": "carrier_name",
         "page_number": 1,
         "bbox": [
-          489,
-          674,
-          513,
+          490,
+          675,
+          517,
           919
         ]
       },
@@ -30,10 +30,10 @@
         "field": "policy_number",
         "page_number": 1,
         "bbox": [
-          289,
-          674,
-          303,
-          764
+          287,
+          678,
+          298,
+          775
         ]
       },
       {
@@ -41,89 +41,109 @@
         "page_number": 1,
         "bbox": [
           433,
-          747,
-          447,
-          856
+          715,
+          444,
+          868
         ]
       },
       {
         "field": "expiration_date",
         "page_number": 1,
         "bbox": [
-          449,
-          747,
-          462,
-          843
+          448,
+          715,
+          459,
+          856
         ]
       },
       {
         "field": "insured_name",
         "page_number": 1,
         "bbox": [
-          229,
-          674,
+          228,
+          678,
           258,
-          914
+          920
         ]
       },
       {
         "field": "insured_address",
         "page_number": 1,
         "bbox": [
+          329,
+          678,
           340,
-          674,
-          353,
-          804
+          792
         ]
       },
       {
         "field": "insured_city",
         "page_number": 1,
         "bbox": [
-          356,
-          674,
-          369,
-          725
+          344,
+          678,
+          355,
+          731
         ]
       },
       {
         "field": "insured_state_code",
         "page_number": 1,
         "bbox": [
-          356,
-          730,
-          369,
-          755
+          344,
+          740,
+          355,
+          759
         ]
       },
       {
         "field": "insured_zip",
         "page_number": 1,
         "bbox": [
-          356,
+          344,
           762,
-          369,
-          850
+          355,
+          843
         ]
       },
       {
         "field": "premium",
         "page_number": 1,
         "bbox": [
-          308,
-          550,
-          321,
-          638
+          307,
+          549,
+          318,
+          617
+        ]
+      },
+      {
+        "field": "financial_responsibility_name",
+        "page_number": 5,
+        "bbox": [
+          447,
+          66,
+          458,
+          252
+        ]
+      },
+      {
+        "field": "financial_responsibility_name",
+        "page_number": 5,
+        "bbox": [
+          473,
+          66,
+          484,
+          196
         ]
       },
       {
         "field": "state",
         "page_number": 1,
         "bbox": [
-          356,
-          730,
-          369,
-          755
+          344,
+          740,
+          355,
+          759
         ]
       }
     ],
@@ -135,7 +155,7 @@
   "coverages": [
     {
       "coverage_code": "AUTO_LIAB_BI",
-      "display_name": "Bodily Injury Liability",
+      "display_name": "Liability Insurance - Bodily Injury",
       "family": "auto_liability",
       "limit_structure": "split",
       "limits": {
@@ -145,16 +165,16 @@
       "location": {
         "page_number": 2,
         "bbox": [
-          382,
-          368,
-          407,
-          524
+          383,
+          365,
+          415,
+          621
         ]
       }
     },
     {
       "coverage_code": "AUTO_LIAB_PD",
-      "display_name": "Property Damage Liability",
+      "display_name": "Liability Insurance - Property Damage",
       "family": "auto_liability",
       "limit_structure": "per_occurrence",
       "limits": {
@@ -164,15 +184,15 @@
         "page_number": 2,
         "bbox": [
           415,
-          368,
-          427,
-          497
+          365,
+          428,
+          621
         ]
       }
     },
     {
       "coverage_code": "UM_BI",
-      "display_name": "Uninsured Motorist BI",
+      "display_name": "Uninsured Motorists Insurance - Bodily Injury",
       "family": "uninsured_motorist",
       "limit_structure": "split",
       "limits": {
@@ -182,16 +202,16 @@
       "location": {
         "page_number": 2,
         "bbox": [
-          577,
-          368,
-          603,
-          524
+          562,
+          365,
+          594,
+          621
         ]
       }
     },
     {
       "coverage_code": "AUTO_LIAB_BI",
-      "display_name": "Bodily Injury Liability",
+      "display_name": "Liability Insurance - Bodily Injury",
       "family": "auto_liability",
       "limit_structure": "split",
       "limits": {
@@ -201,16 +221,16 @@
       "location": {
         "page_number": 3,
         "bbox": [
-          269,
-          367,
-          294,
-          525
+          273,
+          365,
+          305,
+          621
         ]
       }
     },
     {
       "coverage_code": "AUTO_LIAB_PD",
-      "display_name": "Property Damage Liability",
+      "display_name": "Liability Insurance - Property Damage",
       "family": "auto_liability",
       "limit_structure": "per_occurrence",
       "limits": {
@@ -219,48 +239,48 @@
       "location": {
         "page_number": 3,
         "bbox": [
-          302,
-          367,
-          314,
-          497
+          305,
+          365,
+          318,
+          621
         ]
       }
     },
     {
       "coverage_code": "COLL",
-      "display_name": "Collision",
+      "display_name": "Collision Insurance",
       "family": "physical_damage",
       "limit_structure": "deductible_only",
       "deductible": 500,
       "location": {
         "page_number": 3,
         "bbox": [
-          356,
-          649,
-          368,
-          680
+          348,
+          365,
+          361,
+          621
         ]
       }
     },
     {
       "coverage_code": "COMP",
-      "display_name": "Comprehensive / OTC",
+      "display_name": "Comprehensive Insurance",
       "family": "physical_damage",
       "limit_structure": "deductible_only",
       "deductible": 500,
       "location": {
         "page_number": 3,
         "bbox": [
-          383,
-          649,
-          395,
-          680
+          362,
+          365,
+          374,
+          621
         ]
       }
     },
     {
       "coverage_code": "RENTAL",
-      "display_name": "Rental Reimbursement",
+      "display_name": "Transportation Expense",
       "family": "physical_damage",
       "limit_structure": "per_occurrence",
       "limits": {
@@ -269,16 +289,16 @@
       "location": {
         "page_number": 3,
         "bbox": [
-          454,
-          367,
-          466,
-          497
+          413,
+          365,
+          426,
+          621
         ]
       }
     },
     {
       "coverage_code": "UM_BI",
-      "display_name": "Uninsured Motorist BI",
+      "display_name": "Uninsured Motorists Insurance - Bodily Injury",
       "family": "uninsured_motorist",
       "limit_structure": "split",
       "limits": {
@@ -288,16 +308,16 @@
       "location": {
         "page_number": 3,
         "bbox": [
-          498,
-          367,
-          523,
-          525
+          444,
+          365,
+          476,
+          621
         ]
       }
     },
     {
       "coverage_code": "AUTO_LIAB_BI",
-      "display_name": "Bodily Injury Liability",
+      "display_name": "Liability Insurance - Bodily Injury",
       "family": "auto_liability",
       "limit_structure": "split",
       "limits": {
@@ -307,16 +327,16 @@
       "location": {
         "page_number": 4,
         "bbox": [
-          269,
-          367,
-          294,
-          525
+          273,
+          365,
+          305,
+          621
         ]
       }
     },
     {
       "coverage_code": "AUTO_LIAB_PD",
-      "display_name": "Property Damage Liability",
+      "display_name": "Liability Insurance - Property Damage",
       "family": "auto_liability",
       "limit_structure": "per_occurrence",
       "limits": {
@@ -325,48 +345,48 @@
       "location": {
         "page_number": 4,
         "bbox": [
-          302,
-          367,
-          314,
-          497
+          305,
+          365,
+          318,
+          621
         ]
       }
     },
     {
       "coverage_code": "COLL",
-      "display_name": "Collision",
+      "display_name": "Collision Insurance",
       "family": "physical_damage",
       "limit_structure": "deductible_only",
       "deductible": 500,
       "location": {
         "page_number": 4,
         "bbox": [
-          356,
-          649,
-          368,
-          680
+          348,
+          365,
+          361,
+          621
         ]
       }
     },
     {
       "coverage_code": "COMP",
-      "display_name": "Comprehensive / OTC",
+      "display_name": "Comprehensive Insurance",
       "family": "physical_damage",
       "limit_structure": "deductible_only",
       "deductible": 500,
       "location": {
         "page_number": 4,
         "bbox": [
-          383,
-          649,
-          395,
-          680
+          362,
+          365,
+          374,
+          621
         ]
       }
     },
     {
       "coverage_code": "UM_BI",
-      "display_name": "Uninsured Motorist BI",
+      "display_name": "Uninsured Motorists Insurance - Bodily Injury",
       "family": "uninsured_motorist",
       "limit_structure": "split",
       "limits": {
@@ -376,10 +396,10 @@
       "location": {
         "page_number": 4,
         "bbox": [
-          484,
-          367,
-          509,
-          525
+          444,
+          365,
+          476,
+          621
         ]
       }
     }
@@ -390,6 +410,7 @@
       "make": "Ford",
       "model": "Excursion",
       "vin": "1FMNU40P65EC25074",
+      "gvw": 0,
       "type": "passenger_auto"
     },
     {
@@ -397,13 +418,15 @@
       "make": "Hyundai",
       "model": "Santa Fe",
       "vin": "5NMP14GL1SH116815",
+      "gvw": 0,
       "type": "passenger_auto"
     },
     {
       "year": 2016,
-      "make": "GMC",
+      "make": "General Motors Company",
       "model": "Canyon",
       "vin": "1GTG5DE30G1207387",
+      "gvw": 0,
       "type": "pickup"
     }
   ],
@@ -424,12 +447,17 @@
     "confidence": "high",
     "signals": [
       "Renewal Policy Declarations",
-      "Vehicles listed: 2005 Ford Excursion, 2025 Hyundai Santa Fe, 2016 General Motors Company (GMC) Canyon",
-      "Texas Motor Vehicle Crime Prevention Authority Fee",
-      "Coverages like Liability, Collision, Comprehensive, Uninsured Motorists Insurance",
-      "Explicitly states 'Vehicle Type: Auto' on pages 2, 3, 4",
-      "Explicitly states 'Your auto policy' on page 5",
-      "Policy document codes starting with 'MV' (Motor Vehicle)"
+      "auto policy",
+      "2005 Ford Excursion",
+      "2025 Hyundai Santa Fe",
+      "2016 General Motors Company (GMC) Canyon",
+      "Listed drivers",
+      "Liability Insurance - Bodily Injury",
+      "Liability Insurance - Property Damage",
+      "Collision Insurance",
+      "Comprehensive Insurance",
+      "Uninsured Motorists Insurance",
+      "Drivewise"
     ]
   },
   "page_dimensions": [

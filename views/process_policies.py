@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
+from core.constants import VEHICLE_TYPES, INTEREST_TYPES, VIN_REGEX
 import json
 from core.services import PolicyService
-from core.database import get_session, Policy, Vehicle, Driver, Coverage
+from core.database import get_session, Policy, Vehicle, Driver, Coverage, AdditionalInterest
 from modules.extraction import process_pdf
 from utils.vehicle_utils import refine_vehicle_type
 from utils.naic_utils import get_naic_for_carrier
@@ -27,8 +28,14 @@ def page_process_policies(api_key):
         expanded_upload = not (bool(st.session_state["review_queue"]) or bool(st.session_state["temp_extracted"]))
         
         with st.expander("Step 1: Upload & Extract", expanded=expanded_upload):
+            if not api_key:
+                 st.warning("⚠️ Access Restricted: Please add your Gemini API Key in Settings to proceed.")
+            
             uploaded_files = st.file_uploader("Drop PDF files here", type=["pdf"], accept_multiple_files=True)
-
+            
+            if not uploaded_files:
+                st.info("👆 **Tip:** You can select multiple PDF files at once. The AI will process them sequentially.")
+                
             if st.button("Start Extraction", type="primary") and uploaded_files:
                 force_refresh = st.checkbox("Force Refresh (Bypass Cache)", value=False, help="Enable this to re-process files even if they were processed before.")
                 
@@ -263,6 +270,72 @@ def page_process_policies(api_key):
                 
                 r_gl = st.checkbox("Has GL", value=p.get('has_general_liability', True))
                 r_auto = st.checkbox("Has Auto", value=p.get('has_auto_liability', True))
+                r_status = st.selectbox("Status", ["Active", "Pending", "Quote", "Expired"], index=0)
+
+                st.divider()
+                st.markdown("#### Detailed Inventory (Editable)")
+                t1, t2, t3 = st.tabs(["🚙 Vehicles", "👤 Drivers", "🏢 Additional Interests"])
+
+                with t1:
+                    v_data = current_item['data'].get('vehicles', [])
+                    v_df = pd.DataFrame(v_data)
+                    # Helper to ensures columns exist
+                    for col in ["year", "make", "model", "vin", "type", "gvw"]:
+                        if col not in v_df.columns: v_df[col] = None
+                    
+                    edited_v = st.data_editor(
+                        v_df,
+                        num_rows="dynamic",
+                        column_config={
+                            "year": st.column_config.NumberColumn("Year", min_value=1900, max_value=2030, format="%d"),
+                            "make": st.column_config.TextColumn("Make", required=True),
+                            "model": st.column_config.TextColumn("Model"),
+                            "vin": st.column_config.TextColumn("VIN", max_chars=17, validate=VIN_REGEX),
+                            "type": st.column_config.SelectboxColumn("Type", options=VEHICLE_TYPES),
+                            "gvw": st.column_config.NumberColumn("GVW", format="%d")
+                        },
+                        use_container_width=True,
+                        key=f"edt_v_{fname}"
+                    )
+
+                with t2:
+                    d_data = current_item['data'].get('drivers', [])
+                    d_df = pd.DataFrame(d_data)
+                    for col in ["full_name", "license_number", "is_excluded"]:
+                        if col not in d_df.columns: d_df[col] = None
+                        
+                    edited_d = st.data_editor(
+                        d_df,
+                        num_rows="dynamic",
+                        column_config={
+                            "full_name": st.column_config.TextColumn("Driver Name", required=True),
+                            "license_number": st.column_config.TextColumn("License #"),
+                            "is_excluded": st.column_config.CheckboxColumn("Excluded?", default=False)
+                        },
+                        use_container_width=True,
+                        key=f"edt_d_{fname}"
+                    )
+
+                with t3:
+                    ai_data = current_item['data'].get('additional_interests', [])
+                    ai_df = pd.DataFrame(ai_data)
+                    for col in ["name", "address", "interest_type"]:
+                        if col not in ai_df.columns: ai_df[col] = None
+
+                    edited_ai = st.data_editor(
+                        ai_df,
+                        num_rows="dynamic",
+                        column_config={
+                            "name": st.column_config.TextColumn("Entity Name", required=True),
+                            "address": st.column_config.TextColumn("Address"),
+                            "interest_type": st.column_config.SelectboxColumn(
+                                "Interest Type", 
+                                options=INTEREST_TYPES
+                            )
+                        },
+                        use_container_width=True,
+                        key=f"edt_ai_{fname}"
+                    )
 
                 st.markdown("---")
                 b_col1, b_col2 = st.columns(2)
@@ -299,44 +372,65 @@ def page_process_policies(api_key):
                             classification_signals=json.dumps(classification.get('signals', [])),
                             business_name=p.get('business_name'),
                             premium=r_premium,
-                            state=p.get('state'),
                             financial_responsibility_name=p.get('financial_responsibility_name'),
-                            has_full_collision=p.get('has_full_collision')
+                            has_full_collision=p.get('has_full_collision'),
+                            status=r_status
                         )
                         
-                        # Add sub-objects
-                        for v in current_item['data'].get('vehicles', []):
-                            refined = refine_vehicle_type(v.get('year'), v.get('make'), v.get('model'), v.get('vin'), v.get('type'))
-                            policy.vehicles.append(Vehicle(
-                                year=v.get('year'), 
-                                make=v.get('make'), 
-                                model=v.get('model'), 
-                                vin=v.get('vin'), 
-                                gvw=v.get('gvw'), 
-                                vehicle_type=refined.get('final_type'),
-                                chassis=refined.get('chassis'),
-                                body=refined.get('body')
-                            ))
-                        for d in current_item['data'].get('drivers', []):
-                            policy.drivers.append(Driver(full_name=d.get('full_name'), license_number=d.get('license_number'), is_excluded=d.get('is_excluded')))
+                        # Add sub-objects from EDITED tables
+                        
+                        # Vehicles
+                        if not edited_v.empty:
+                            for _, v in edited_v.iterrows():
+                                if pd.isna(v.get('vin')) and pd.isna(v.get('make')): continue
+                                
+                                refined = refine_vehicle_type(v.get('year'), v.get('make'), v.get('model'), v.get('vin'), v.get('type'))
+                                policy.vehicles.append(Vehicle(
+                                    year=v.get('year'), 
+                                    make=v.get('make'), 
+                                    model=v.get('model'), 
+                                    vin=v.get('vin'), 
+                                    gvw=v.get('gvw'), 
+                                    vehicle_type=refined.get('final_type'),
+                                    chassis=refined.get('chassis'),
+                                    body=refined.get('body')
+                                ))
+
+                        # Drivers
+                        if not edited_d.empty:
+                            for _, d in edited_d.iterrows():
+                                if pd.isna(d.get('full_name')): continue
+                                policy.drivers.append(Driver(
+                                    full_name=d.get('full_name'), 
+                                    license_number=d.get('license_number'), 
+                                    is_excluded=d.get('is_excluded') == True
+                                ))
+                        
+                        # Copy Coverages (Not editable in this view yet, using extraction)
                         for c in current_item['data'].get('coverages', []):
                              policy.coverages.append(Coverage(
                                  type=c.get('display_name') or c.get('type'), 
                                  coverage_code=c.get('coverage_code'),
                                  family=c.get('family'),
-                                 
-                                 # New Structured Limits
                                  per_person=c.get('limits', {}).get('per_person'),
                                  per_accident=c.get('limits', {}).get('per_accident'),
                                  per_occurrence=c.get('limits', {}).get('per_occurrence'),
                                  combined_single_limit=c.get('limits', {}).get('combined_single_limit'),
                                  aggregate=c.get('limits', {}).get('aggregate'),
-                                 
-                                 # Fallback
                                  limit_per_person=c.get('limit_person'), 
                                  limit_per_accident=c.get('limit_accident'), 
                                  deductible=c.get('deductible')
                              ))
+
+                        # Additional Interests
+                        if not edited_ai.empty:
+                            for _, a in edited_ai.iterrows():
+                                if pd.isna(a.get('name')): continue
+                                policy.additional_interests.append(AdditionalInterest(
+                                    name=a.get('name'),
+                                    address=a.get('address'),
+                                    interest_type=a.get('interest_type')
+                                ))
 
                         # We should use service.save_policy_object
                         success, msg = service.save_policy_object(policy)

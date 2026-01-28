@@ -57,7 +57,7 @@ POLICY_TYPE_CONSTRAINTS = {
 COVERAGE_REGISTRY = {
     # --- Auto Liability ---
     "AUTO_LIAB_CSL": {
-        "display_name": "Auto Liability - Combined Single Limit",
+        "display_name": "Auto Liability - Combined Single Limit - Automobile Liability",
         "family": CoverageFamily.AUTO_LIABILITY,
         "line_of_business": LineOfBusiness.AUTO,
         "limit_structure": LimitStructure.CSL,

@@ -54,11 +54,14 @@ class Policy(Base):
     # Conditional Coverages
     has_general_liability = Column(Boolean, default=True) # New
     has_auto_liability = Column(Boolean, default=True) # New
+    status = Column(String, default='Active') # New Status Field
 
     # Relationships
     vehicles = relationship("Vehicle", back_populates="policy", cascade="all, delete-orphan")
     drivers = relationship("Driver", back_populates="policy", cascade="all, delete-orphan")
     coverages = relationship("Coverage", back_populates="policy", cascade="all, delete-orphan")
+    history = relationship("PolicyHistory", back_populates="policy", cascade="all, delete-orphan")
+    additional_interests = relationship("AdditionalInterest", back_populates="policy", cascade="all, delete-orphan")
 
 class Vehicle(Base):
     __tablename__ = 'vehicles'
@@ -87,6 +90,17 @@ class Driver(Base):
     is_excluded = Column(Boolean, default=False)
 
     policy = relationship("Policy", back_populates="drivers")
+
+class AdditionalInterest(Base):
+    __tablename__ = 'additional_interests'
+    
+    id = Column(Integer, primary_key=True)
+    policy_id = Column(Integer, ForeignKey('policies.id'))
+    name = Column(String)
+    address = Column(String)
+    interest_type = Column(String) # e.g. "Certificate Holder", "Additional Insured", "Loss Payee"
+    
+    policy = relationship("Policy", back_populates="additional_interests")
 
 class Coverage(Base):
     __tablename__ = 'coverages'
@@ -158,6 +172,10 @@ def init_db(db_name="insurance_data.db"):
             conn.execute(text("ALTER TABLE policies ADD COLUMN classification_confidence VARCHAR"))
         if 'classification_signals' not in columns:
             conn.execute(text("ALTER TABLE policies ADD COLUMN classification_signals VARCHAR"))
+        
+        # New Status Column
+        if 'status' not in columns:
+             conn.execute(text("ALTER TABLE policies ADD COLUMN status VARCHAR DEFAULT 'Active'"))
             
         # Coverage Migrations
         cov_columns = [c['name'] for c in inspector.get_columns('coverages')]
@@ -186,6 +204,25 @@ def init_db(db_name="insurance_data.db"):
             conn.execute(text("ALTER TABLE vehicles ADD COLUMN chassis VARCHAR"))
         if 'body' not in veh_columns:
             conn.execute(text("ALTER TABLE vehicles ADD COLUMN body VARCHAR"))
+        
+        # Additional Interest Table is created by Base.metadata.create_all if it doesn't exist
+        # But if we were migrating an existing DB that didn't have it, create_all does it.
+
+        # History Migrations
+        if inspector.has_table("policy_history"):
+            hist_columns = [c['name'] for c in inspector.get_columns('policy_history')]
+            if 'event_type' not in hist_columns:
+                 conn.execute(text("ALTER TABLE policy_history ADD COLUMN event_type VARCHAR DEFAULT 'UPDATE'"))
+            if 'policy_version' not in hist_columns:
+                 conn.execute(text("ALTER TABLE policy_history ADD COLUMN policy_version INTEGER DEFAULT 1"))
+            # Fix for missing base columns
+            if 'source' not in hist_columns:
+                 conn.execute(text("ALTER TABLE policy_history ADD COLUMN source VARCHAR"))
+            if 'changes' not in hist_columns:
+                 # SQLite doesn't have JSON type, effectively TEXT
+                 conn.execute(text("ALTER TABLE policy_history ADD COLUMN changes TEXT"))
+            if 'timestamp' not in hist_columns:
+                 conn.execute(text("ALTER TABLE policy_history ADD COLUMN timestamp DATETIME"))
             
         # API Usage Migration Note: 
         # Base.metadata.create_all(engine) above handles new tables like api_usage

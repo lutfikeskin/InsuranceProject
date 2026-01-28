@@ -81,16 +81,18 @@ class PolicyService:
             "policy": policy_data,
             "vehicles": extraction_result.get('vehicles', []),
             "coverages": extraction_result.get('coverages', []),
-            "drivers": extraction_result.get('drivers', [])
+            "drivers": extraction_result.get('drivers', []),
+            "additional_interests": extraction_result.get('additional_interests', [])
         }
 
-    def save_policy_from_extraction(self, extraction_result):
-        # Normalize the data first
+    def _create_policy_instance(self, extraction_result):
+        """Helper to create a transient Policy object from data."""
         normalized = self.normalize_policy_data(extraction_result)
         p_data = normalized['policy']
         vehicles_data = normalized['vehicles']
         coverages_data = normalized['coverages']
         drivers_data = normalized['drivers']
+        ai_data = normalized['additional_interests']
         
         effective_dt = pd.to_datetime(p_data.get('effective_date'), errors='coerce')
         expiration_dt = pd.to_datetime(p_data.get('expiration_date'), errors='coerce')
@@ -120,23 +122,16 @@ class PolicyService:
             general_liability_limit=p_data.get('general_liability_limit'),
             has_full_collision=p_data.get('has_full_collision'),
             has_general_liability=p_data.get('has_general_liability', False),
-            has_auto_liability=p_data.get('has_auto_liability', False)
+            has_auto_liability=p_data.get('has_auto_liability', False),
+            status=p_data.get('status', 'Active')
         )
 
         for v in vehicles_data:
-            # Refine Type (Now returns a dict)
-            refinement = refine_vehicle_type(
-                v.get('year'), 
-                v.get('make'), 
-                v.get('model'), 
-                v.get('vin'), 
-                v.get('type')
-            )
-            
+            refinement = refine_vehicle_type(v.get('year'), v.get('make'), v.get('model'), v.get('vin'), v.get('type'))
             new_vehicle = Vehicle(
                 year=v.get('year'),
-                make=refinement.get('make') or v.get('make'), # Use enriched if available
-                model=refinement.get('model') or v.get('model'), # Use enriched if available
+                make=refinement.get('make') or v.get('make'),
+                model=refinement.get('model') or v.get('model'),
                 vin=v.get('vin'),
                 gvw=v.get('gvw'),
                 vehicle_type=refinement.get('final_type'),
@@ -151,34 +146,94 @@ class PolicyService:
                 type=c.get('display_name') or c.get('type'), 
                 coverage_code=c.get('coverage_code'),
                 family=c.get('family'),
-                
-                # New Ontology Limits (Structured)
                 per_person=limits.get('per_person'),
                 per_accident=limits.get('per_accident'),
                 per_occurrence=limits.get('per_occurrence'),
                 combined_single_limit=limits.get('combined_single_limit'),
                 aggregate=limits.get('aggregate'),
-                
-                # Fallback for old schema if mixed
                 limit_per_person=c.get('limit_person'), 
                 limit_per_accident=c.get('limit_accident'), 
                 limit_property_damage=c.get('limit_property_damage'), 
-                
                 deductible=c.get('deductible')
             ))
         
         for d in drivers_data:
             policy.drivers.append(Driver(full_name=d.get('full_name'), license_number=d.get('license_number'), is_excluded=d.get('is_excluded')))
+            
+        for a in ai_data:
+            from .database import AdditionalInterest
+            policy.additional_interests.append(AdditionalInterest(
+                name=a.get('name'), 
+                address=a.get('address'), 
+                interest_type=a.get('interest_type')
+            ))
+            
+        return policy
 
-        # Duplicate check should ideally happen before calling save, or handled here.
-        # Mirroring app.py logic which checked before adding.
-        existing = self.get_policy_by_number(p_data.get('policy_number'))
-        if existing:
-            return False, f"Skipped duplicate: {p_data.get('policy_number')}"
+    def save_policy_from_extraction(self, extraction_result):
+        # 1. Create Transient Policy Object
+        new_policy = self._create_policy_instance(extraction_result)
         
-        self.session.add(policy)
-        self.session.commit()
-        return True, "Saved successfully"
+        # 2. Check for Existing
+        existing = self.get_policy_by_number(new_policy.policy_number)
+        
+        if existing:
+            # UPDATE LOGIC WITH HISTORY
+            from .history_service import HistoryService
+            history_svc = HistoryService(self.session)
+            
+            # Use strict diff
+            # I will USE THE HELPERS I WROTE: compare_and_record(existing, normalized_dict)
+            
+            normalized = self.normalize_policy_data(extraction_result)
+            is_changed, changes, collection_changes = history_svc.compare_and_record(existing, normalized, source="AI_Re-Extraction", event_type="AI_EXTRACTION")
+            
+            if is_changed:
+                # IMPORTANT: scalar fields were updated by compare_and_record.
+                
+                # Update Collections Atomically if needed
+                if collection_changes["vehicles"]:
+                    existing.vehicles.clear()
+                    for v in new_policy.vehicles:
+                         # Append Copy (Re-creating objects to ensure no session conflict)
+                         existing.vehicles.append(Vehicle(
+                                year=v.year, make=v.make, model=v.model, vin=v.vin,
+                                gvw=v.gvw, vehicle_type=v.vehicle_type, chassis=v.chassis, body=v.body
+                         ))
+
+                if collection_changes["coverages"]:
+                    existing.coverages.clear()
+                    for c in new_policy.coverages:
+                        existing.coverages.append(Coverage(
+                            type=c.type, coverage_code=c.coverage_code, family=c.family,
+                            per_person=c.per_person, per_accident=c.per_accident, per_occurrence=c.per_occurrence,
+                            combined_single_limit=c.combined_single_limit, aggregate=c.aggregate,
+                            limit_per_person=c.limit_per_person, limit_per_accident=c.limit_per_accident,
+                            limit_property_damage=c.limit_property_damage, deductible=c.deductible
+                        ))
+
+                if collection_changes["drivers"]:
+                    existing.drivers.clear()
+                    for d in new_policy.drivers:
+                        existing.drivers.append(Driver(full_name=d.full_name, license_number=d.license_number, is_excluded=d.is_excluded))
+                
+                if collection_changes["additional_interests"]:
+                    existing.additional_interests.clear()
+                    for a in new_policy.additional_interests:
+                        from .database import AdditionalInterest
+                        existing.additional_interests.append(AdditionalInterest(
+                            name=a.name, address=a.address, interest_type=a.interest_type
+                        ))
+                
+                self.session.commit()
+                return True, f"Updated existing policy. {len(changes)} changes logged (Version updated)."
+            else:
+                 return False, "No changes detected."
+
+        else:
+            self.session.add(new_policy)
+            self.session.commit()
+            return True, "Saved successfully"
 
     def save_policy_object(self, policy: Policy):
         # Used when constructing object manually in review
@@ -193,14 +248,59 @@ class PolicyService:
 
     def update_policy(self, policy: Policy, updated_data: dict):
         """
-        Updates an existing policy with a dictionary of new data.
+        Updates an existing policy.
+        If 'policy' key is present in updated_data, assumes full payload structure.
+        Otherwise, assumes updated_data is just scalar policy fields (legacy behavior).
         """
-        for key, value in updated_data.items():
-            if hasattr(policy, key):
-                setattr(policy, key, value)
+        from .history_service import HistoryService
+        history_svc = HistoryService(self.session)
         
-        self.session.commit()
-        return True
+        # Determine payload structure
+        if "policy" in updated_data or "vehicles" in updated_data or "drivers" in updated_data:
+             # It is already a structured payload
+             final_payload = updated_data
+        else:
+             # Legacy: Wrap scalar fields
+             final_payload = {"policy": updated_data}
+        
+        is_changed, changes, collection_changes = history_svc.compare_and_record(policy, final_payload, source="Manual_Edit", event_type="MANUAL_EDIT")
+        
+        if is_changed:
+            # Apply Collection Updates if flagged
+            if collection_changes.get("vehicles"):
+                new_vehs = final_payload.get('vehicles', [])
+                policy.vehicles.clear()
+                for v in new_vehs:
+                    # Reconstruct Vehicle objects
+                    # v is a dict here
+                    policy.vehicles.append(Vehicle(
+                        year=v.get('year'), make=v.get('make'), model=v.get('model'), 
+                        vin=v.get('vin'), gvw=v.get('gvw'), vehicle_type=v.get('type') or v.get('vehicle_type'),
+                        chassis=v.get('chassis'), body=v.get('body')
+                    ))
+            
+            if collection_changes.get("drivers"):
+                new_drvs = final_payload.get('drivers', [])
+                policy.drivers.clear()
+                for d in new_drvs:
+                    policy.drivers.append(Driver(
+                        full_name=d.get('full_name'), license_number=d.get('license_number'), 
+                        is_excluded=d.get('is_excluded')
+                    ))
+                    
+            if collection_changes.get("additional_interests"):
+                new_ais = final_payload.get('additional_interests', [])
+                from .database import AdditionalInterest
+                policy.additional_interests.clear()
+                for a in new_ais:
+                    policy.additional_interests.append(AdditionalInterest(
+                        name=a.get('name'), address=a.get('address'), interest_type=a.get('interest_type')
+                    ))
+
+            self.session.commit()
+            return True, f"Updated ({len(changes)} changes logged)."
+        else:
+            return True, "No changes detected."
 
     def ask_your_data(self, user_query, api_key):
         """

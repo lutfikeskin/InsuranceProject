@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from core.services import PolicyService
 from core.database import get_session
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
 from views.edit_dialog import edit_policy_dialog
 
@@ -15,11 +16,11 @@ def page_dashboard():
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Total Policies", total_policies)
+            st.metric("Total Policies", total_policies, delta="Total Active")
         with col2:
-            st.metric("Total Vehicles", total_vehicles)
+            st.metric("Total Vehicles", total_vehicles, delta="In System")
         with col3:
-            st.metric("Total Premium", f"${total_premium:,.2f}")
+            st.metric("Total Premium", f"${total_premium:,.2f}", delta="Estimated")
         
         st.divider()
         
@@ -57,20 +58,33 @@ def page_dashboard():
                     if clean_cargo: cargo_val = float(clean_cargo)
 
                  if liab_val < 1000000 or cargo_val < 100000:
-                     status = "⚠️ Not Eligible for Expedite"
+                     status = "⚠️ Not Eligible"
 
                  data.append({
                      "Policy #": p.policy_number,
                      "Insured": p.insured_name,
                      "Carrier": p.carrier_name,
-                     "Effective": p.effective_date,
-                     "Premium": p.premium,
-                     "Vehicles": len(p.vehicles),
-                     "Liability": p.liability_limit,
-                     "Cargo": p.cargo_limit,
+                     "Effective": p.effective_date.strftime("%Y-%m-%d") if p.effective_date else "N/A",
                      "Status": status
                  })
-            st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
+            
+            df = pd.DataFrame(data)
+            
+            # AgGrid Configuration
+            gb = GridOptionsBuilder.from_dataframe(df)
+            gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=5)
+            gb.configure_column("Status", cellStyle={'color': 'black'}) 
+            gb.configure_default_column(editable=False, groupable=True)
+            gridOptions = gb.build()
+            
+            AgGrid(
+                df,
+                gridOptions=gridOptions,
+                fit_columns_on_grid_load=True,
+                height=300,
+                theme='streamlit' 
+            )
+            
         else:
             st.info("No policies extracted yet. Start by uploading files in the 'Process Policies' tab.")
 

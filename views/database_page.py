@@ -35,7 +35,7 @@ def page_database(api_key):
                     
                     if results is not None:
                         st.success(f"Found {len(results)} results")
-                        st.dataframe(pd.DataFrame(results), use_container_width=True)
+                        st.dataframe(pd.DataFrame(results), width=1000)
                     else:
                         st.error(f"Could not answer: {debug_sql}")
         
@@ -43,8 +43,8 @@ def page_database(api_key):
         export_data = []
         for p in policies:
             if search_query.lower() in p.policy_number.lower() or search_query.lower() in p.insured_name.lower():
-                # Status Logic
-                status = "✅ Eligible for Expedite"
+                # Expedite Eligibility Logic
+                eligibility_status = "✅ Eligible for Expedite"
                 def parse_limit(val_str):
                     if not val_str: return 0.0
                     s = str(val_str).lower().strip()
@@ -64,28 +64,42 @@ def page_database(api_key):
                 cargo_val = parse_limit(p.cargo_limit)
 
                 if liab_val < 1000000 or cargo_val < 100000:
-                     status = "⚠️ Not Eligible for Expedite"
+                     eligibility_status = "⚠️ Not Eligible for Expedite"
 
                 # Aggregate Vehicle Types
                 v_types = [v.vehicle_type for v in p.vehicles if v.vehicle_type]
                 v_types_unique = sorted(list(set(v_types)))
                 v_types_str = ", ".join(v_types_unique) if v_types_unique else "N/A"
+                
+                # Policy Status
+                pol_status = p.status if p.status else "Active"
 
                 data_list.append({
-                    "ID": p.id, 
+                    "ID": p.id,
+                    "Status": pol_status,
                     "Policy#": p.policy_number, 
-                    "Type": p.policy_type,
-                    "Conf": p.classification_confidence,
                     "Carrier": p.carrier_name, 
-                    "Insured": p.insured_name, 
-                    "Effective": p.effective_date,
+                    "NAIC": p.naic_number,
+                    "Insured": p.insured_name,
+                    "Business Name": p.business_name,
+                    "Address": p.insured_address,
+                    "City": p.insured_city,
+                    "State": p.insured_state_code,
+                    "Zip": p.insured_zip,
+                    "Vehicles": len(p.vehicles),
+                    "Drivers": len(p.drivers),
+                    "Effective": p.effective_date.strftime("%Y-%m-%d") if p.effective_date else "N/A",
+                    "Expiration": p.expiration_date.strftime("%Y-%m-%d") if p.expiration_date else "N/A",
                     "Premium": p.premium,
-                    "Liability": p.liability_limit,
-                    "GL Limit": p.general_liability_limit,
+                    "Auto Liability": p.liability_limit,
                     "Cargo": p.cargo_limit,
-                    "Vehicle Types": v_types_str,
-                    "Comp/Coll": "✅ Yes" if p.has_full_collision else "❌ No",
-                    "Status": status
+                    "Cargo Ded": p.cargo_deductible,
+                    "GL Limit": p.general_liability_limit,
+                    "Has GL": "✅" if p.has_general_liability else "❌",
+                    "Comp/Coll": "✅" if p.has_full_collision else "❌",
+                    "Expedite": eligibility_status,
+                    "Type": p.policy_type,
+                    "Confidence": p.classification_confidence
                 })
                 
                 # Reconstruct for exporter
@@ -98,6 +112,7 @@ def page_database(api_key):
                         "expiration_date": str(p.expiration_date), 
                         "account_type": p.account_type, 
                         "policy_type": p.policy_type,
+                        "status": pol_status,
                         "classification_confidence": p.classification_confidence,
                         "classification_signals": p.classification_signals,
                         "insured_name": p.insured_name, 
@@ -133,12 +148,59 @@ def page_database(api_key):
                             "deductible": c.deductible
                         } for c in p.coverages
                     ],
-                    "drivers": [{"full_name": d.full_name, "license_number": d.license_number, "is_excluded": d.is_excluded} for d in p.drivers]
+                    "drivers": [{"full_name": d.full_name, "license_number": d.license_number, "is_excluded": d.is_excluded} for d in p.drivers],
+                    "additional_interests": [{"name": a.name, "address": a.address, "type": a.interest_type} for a in p.additional_interests]
                 }
                 export_data.append(dict_data)
 
         if data_list:
-            st.dataframe(pd.DataFrame(data_list), use_container_width=True, hide_index=True)
+            # st.dataframe(pd.DataFrame(data_list), width=1000, hide_index=True)
+            from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
+            
+            st.markdown("### 📋 Policy Records")
+            
+            df = pd.DataFrame(data_list) # Restored
+            
+            # --- Column Visibility Control ---
+            all_cols = list(df.columns)
+            
+            # Start with a strict default set
+            strict_defaults = [
+                "Status", "Policy#", "Carrier", "Insured", 
+                "Effective", "Premium", "Auto Liability", "Cargo", 
+                "Vehicles", "Drivers"
+            ]
+            # Filter to ensure they exist in dataframe
+            default_cols = [c for c in strict_defaults if c in all_cols]
+
+            cols_to_show = st.multiselect("Select Columns to Display", all_cols, default=default_cols)
+            
+            if not cols_to_show:
+                st.warning("Please select at least one column.")
+                return
+
+            df_visible = df[cols_to_show]
+            
+            gb = GridOptionsBuilder.from_dataframe(df_visible)
+            gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
+            gb.configure_side_bar() # Add sidebar for columns
+            gb.configure_default_column(groupable=True, valueFormatter="x.toLocaleString()", filterable=True, sortable=True, resizable=True)
+            gb.configure_selection('single', use_checkbox=True)
+            gridOptions = gb.build()
+            
+            st.markdown("### 📋 Policy Records")
+            grid_response = AgGrid(
+                df, 
+                gridOptions=gridOptions,
+                update_mode=GridUpdateMode.SELECTION_CHANGED, 
+                data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+                fit_columns_on_grid_load=False,
+                height=500,
+                width='100%',
+                theme='streamlit'
+            )
+            
+            selected = grid_response['selected_rows']
             
             c1, c2, c3 = st.columns(3)
             with c1:
@@ -148,12 +210,35 @@ def page_database(api_key):
                 with open("insurance_data.db", "rb") as f:
                     st.download_button("💾 Database Backup", data=f.read(), file_name="insurance_data.db", use_container_width=True)
             with c3:
-                # Add Edit Trigger here
-                policy_map = {f"{p.policy_number} | {p.insured_name}": p for p in policies}
-                target_p = st.selectbox("Select Policy to Edit", options=[""] + list(policy_map.keys()), key="db_edit_sel")
-                if target_p:
-                    if st.button("Edit Selected", type="primary", use_container_width=True):
-                        edit_policy_dialog(policy_map[target_p], service)
+                # Add Edit Trigger via Grid Selection
+                # Robust selection check (handle DataFrame vs List)
+                has_selection = False
+                if selected is not None:
+                    if isinstance(selected, pd.DataFrame):
+                        if not selected.empty:
+                            has_selection = True
+                    elif isinstance(selected, list) and len(selected) > 0:
+                        has_selection = True
+
+                if has_selection:
+                     # Get the first row safely
+                     if isinstance(selected, pd.DataFrame):
+                         sel_row = selected.iloc[0]
+                     else:
+                         sel_row = selected[0]
+
+                     # selected is a list of dicts or DataFrame row. We find the policy by ID
+                     # If DataFrame row, accessing by key works like dict usually, or explicitly
+                     p_id = sel_row['ID']
+                     
+                     # Find policy object
+                     target_pol = next((p for p in policies if p.id == p_id), None)
+                     
+                     if target_pol:
+                         if st.button(f"✏️ Edit Policy {target_pol.policy_number}", type="primary", use_container_width=True):
+                             edit_policy_dialog(target_pol, service)
+                else:
+                    st.info("Select a row above to edit.")
 
         else:
             st.warning("No policies match your search.")
