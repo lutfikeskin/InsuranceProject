@@ -11,13 +11,19 @@ from typing import Optional, Dict, List, Any
 from functools import lru_cache
 
 # Internal Modules
+from core.logger import logger
 from .pdf_ops import PdfProcessor
+from modules.resolution.premium_resolver import audit_premium_extraction
 from core.coverage_ontology import (
     COVERAGE_REGISTRY, 
     POLICY_TYPE_CONSTRAINTS,
     summarize_auto_liability, 
     summarize_general_liability,
     summarize_cargo,
+    summarize_um_uim,
+    summarize_med_pay,
+    summarize_pip,
+    summarize_physical_damage,
     validate_coverage, 
     is_coverage_allowed_for_policy_type,
     format_liability_limit
@@ -38,7 +44,6 @@ from .schemas import (
 
 from .prompts import (
     CLASSIFY_POLICY_PROMPT,
-    LOCATE_SECTIONS_PROMPT,
     EXTRACT_DECLARATIONS_PROMPT,
     EXTRACT_VEHICLES_PROMPT,
     EXTRACT_DRIVERS_PROMPT,
@@ -66,7 +71,7 @@ def get_cached_registry_json(policy_type: str) -> str:
 # --- CONFIGURATION ---
 ROUTING_MODEL = "gemini-2.5-flash"
 EXTRACTION_MODEL = "gemini-2.5-flash"
-CACHE_VERSION = "v5" # Increment this to invalidate all existing caches
+CACHE_VERSION = "v6" # Incremented for new coverage fields
 
 MAX_PAGES = {
   "declarations": 8,
@@ -130,10 +135,10 @@ class ExtractionCache:
             cache_path = os.path.join(self.cache_dir, f"{key}.json")
             if os.path.exists(cache_path):
                 with open(cache_path, 'r') as f:
-                    print(f"CACHE HIT: {key}")
+                    logger.info(f"CACHE HIT: {key}")
                     return json.load(f)
         except Exception as e:
-            print(f"Cache Read Error: {e}")
+            logger.error(f"Cache Read Error: {e}")
         return None
 
     def save(self, file_hash: str, data: dict):
@@ -142,9 +147,9 @@ class ExtractionCache:
             cache_path = os.path.join(self.cache_dir, f"{key}.json")
             with open(cache_path, 'w') as f:
                 json.dump(data, f, indent=2)
-            print(f"CACHE SAVED: {key}")
+            logger.debug(f"CACHE SAVED: {key}")
         except Exception as e:
-            print(f"Cache Write Error: {e}")
+            logger.error(f"Cache Write Error: {e}")
 
 class GeminiExtractionPipeline:
     def __init__(self, api_key: str):
@@ -176,11 +181,11 @@ class GeminiExtractionPipeline:
         
         try:
             # 2. Upload (File API)
-            print("Uploading to Gemini File API...")
+            logger.info("Uploading to Gemini File API...")
             if status_callback: status_callback(" Uploading to Google AI Studio...")
             
             uploaded_file = self._upload_to_gemini(file_bytes)
-            print(f"File uploaded: {uploaded_file.name}")
+            logger.info(f"File uploaded: {uploaded_file.name}")
             
             # 3. Classify & Locate
             if status_callback: status_callback(" Classifying & Locating Sections...")
@@ -188,30 +193,20 @@ class GeminiExtractionPipeline:
             # TODO: Add Caching here based on ctx.file_hash if needed in future
             
             ctx.classification = self._classify_policy(uploaded_file)
-            print(f"Policy Type: {ctx.policy_type} ({ctx.confidence})")
+            logger.info(f"Policy Type: {ctx.policy_type} ({ctx.confidence})")
             
             if ctx.policy_type == "unknown":
                 return None, None, "Unknown Policy Type"
-
-            ctx.section_map = self._locate_sections(uploaded_file)
-            print(f"Section Map: {json.dumps(ctx.section_map, indent=2)}")
-
-
 
             # 3.5. Universal Scout (Architecture Update)
             if status_callback: status_callback(" 🔍 Running Universal Scout...")
             ctx.scout_map = self._run_universal_scout(uploaded_file)
             
-            # --- INTELLIGENT SLICING (SCOUT + LOCATOR) ---
-            # Merge Section Locator findings with Scout Signals
-            
+            # --- INTELLIGENT SLICING (SCOUT ONLY) ---
             total_pages = processor.get_page_count()
 
-            def merge_pages(section_key, signal_key, signal_is_object_list=False):
-                """Helper to fuse section pages with scout pages + context."""
-                current_pages = set(ctx.section_map.get(section_key, []))
-                
-                # Extract pages from Scout
+            def map_scout_pages(signal_key, signal_is_object_list=False):
+                """Helper to extract pages from scout signals + context."""
                 scout_data = ctx.scout_map.get(signal_key, [])
                 scout_pages = set()
                 
@@ -231,19 +226,17 @@ class GeminiExtractionPipeline:
                     expanded_scout.add(p + 1)
                 
                 # Validate range
-                valid_scout = {p for p in expanded_scout if 1 <= p <= total_pages}
-                
-                # Union
-                final_set = current_pages.union(valid_scout)
-                return sorted(list(final_set))
+                return sorted([p for p in expanded_scout if 1 <= p <= total_pages])
 
-            # Apply Merging Rules
-            ctx.section_map["declarations"] = merge_pages("declarations", "premium_signals", signal_is_object_list=True)
-            ctx.section_map["vehicles"] = merge_pages("vehicles", "vehicle_schedule_signals")
-            ctx.section_map["drivers"] = merge_pages("drivers", "driver_schedule_signals")
-            ctx.section_map["coverages"] = merge_pages("coverages", "coverage_schedule_signals")
+            # Map Scout Signals to Section Map
+            ctx.section_map = {
+                "declarations": map_scout_pages("premium_signals", signal_is_object_list=True),
+                "vehicles": map_scout_pages("vehicle_schedule_signals"),
+                "drivers": map_scout_pages("driver_schedule_signals"),
+                "coverages": map_scout_pages("coverage_schedule_signals")
+            }
 
-            print(f"  - Smart Slices: {json.dumps(ctx.section_map)}")
+            logger.info(f"Smart Slices (Scout Driven): {json.dumps(ctx.section_map)}")
 
         except Exception as e:
             return None, None, f"Initialization Error: {str(e)}"
@@ -253,9 +246,9 @@ class GeminiExtractionPipeline:
             if uploaded_file:
                 try:
                     self.client.files.delete(name=uploaded_file.name)
-                    print(f"Deleted remote file: {uploaded_file.name}")
+                    logger.debug(f"Deleted remote file: {uploaded_file.name}")
                 except Exception as e:
-                    print(f"Warning: Failed to delete file: {e}")
+                    logger.warning(f"Failed to delete file: {e}")
             
             # AGREEMENT: Remote file is deleted immediately after section location.
             # This is SAFE because:
@@ -277,7 +270,7 @@ class GeminiExtractionPipeline:
         try:
             cache_system.save(ctx.file_hash, final_result)
         except Exception as e:
-            print(f"Failed to save cache: {e}")
+            logger.error(f"Failed to save cache: {e}")
 
         return final_result, ctx.usage_metadata, None
 
@@ -342,7 +335,7 @@ class GeminiExtractionPipeline:
     def _run_universal_scout(self, uploaded_file) -> dict:
         """Phase 1: Universal Scout - Scan full document for ALL key signals."""
         try:
-            print("  - Running Universal Scout (Full PDF)...")
+            logger.info("Running Universal Scout (Full PDF)...")
             response = self._call_gemini(
                 model=ROUTING_MODEL,
                 contents=[uploaded_file, UNIVERSAL_SCOUT_PROMPT],
@@ -354,7 +347,7 @@ class GeminiExtractionPipeline:
             )
             return self._parse_json_response(response.text)
         except Exception as e:
-            print(f"Warning: Universal Scout failed: {e}")
+            logger.warning(f"Universal Scout failed: {e}")
             if "STOPS" in str(e): raise e # Critical quota stop
             return {}
 
@@ -375,7 +368,7 @@ class GeminiExtractionPipeline:
                 return data
             return {}
         except Exception as e:
-            print(f"JSON Parse Error: {e}")
+            logger.error(f"JSON Parse Error: {e}")
             return {}
 
     def _perform_extraction(self, ctx: ExtractionContext, processor: PdfProcessor):
@@ -457,7 +450,7 @@ class GeminiExtractionPipeline:
         # Apply MAX_PAGES Cap (Take first N pages)
         max_p = MAX_PAGES.get(section_name, 10)
         if len(selected_pages) > max_p:
-            print(f"Capping {section_name} from {len(selected_pages)} to {max_p} pages.")
+            logger.warning(f"Capping {section_name} from {len(selected_pages)} to {max_p} pages.")
             selected_pages = selected_pages[:max_p]
             
         return selected_pages
@@ -538,6 +531,28 @@ class GeminiExtractionPipeline:
         # 4. Summarize Limits
         self._compute_summaries(final)
         
+        final["policy"]["has_full_collision"] = any(c.get("family") == "physical_damage" for c in final["coverages"])
+
+        # 5. Premium Auditing (Resolver)
+        # We need the page number of the extracted premium to check against Scout.
+        # Check extraction metadata for premium location.
+        prem_locs = final["policy"].get("field_locations", [])
+        prem_page = None
+        for loc in prem_locs:
+            if loc.get("field") == "premium":
+                prem_page = loc.get("page_number")
+                break
+        
+        if prem_page:
+            scout_signals = ctx.scout_map.get("premium_signals", [])
+            audit_meta = audit_premium_extraction(prem_page, scout_signals)
+            final["policy"]["premium_audit"] = audit_meta
+            # Log the finding
+            if audit_meta["confidence"] == "low":
+                logger.warning(f"Premium Audit Warning: {audit_meta['flag']} on page {prem_page}")
+            else:
+                logger.info(f"Premium Audit: {audit_meta['flag']}")
+
         return final
 
     def _apply_auto_liability_rules(self, coverages, policy_type):
@@ -550,7 +565,7 @@ class GeminiExtractionPipeline:
         has_split = any(c.get("limit_structure") == "split" for c in auto_liabs)
         
         if has_csl and has_split:
-            print("Refactor: Pruning Split limits in favor of CSL.")
+            logger.info("Refactor: Pruning Split limits in favor of CSL.")
             coverages[:] = [c for c in coverages if not (c.get("family") == "auto_liability" and c.get("limit_structure") == "split")]
 
     def _compute_summaries(self, final):
@@ -571,8 +586,19 @@ class GeminiExtractionPipeline:
              if raw_cargo.get("deductible"):
                   final["policy"]["cargo_deductible"] = str(raw_cargo["deductible"])
         
-        # Flags
+        # New Summaries
         covs = final["coverages"]
+        
+        final["policy"]["um_uim_limit"] = summarize_um_uim(covs)
+        final["policy"]["med_pay_limit"] = summarize_med_pay(covs)
+        final["policy"]["pip_limit"] = summarize_pip(covs)
+        
+        phys_dam = summarize_physical_damage(covs)
+        if phys_dam:
+            final["policy"]["comp_deductible"] = phys_dam.get("comp")
+            final["policy"]["coll_deductible"] = phys_dam.get("coll")
+
+        # Flags
         final["policy"]["has_auto_liability"] = any(c.get("family") == "auto_liability" for c in covs)
         final["policy"]["has_general_liability"] = any(c.get("family") == "general_liability" for c in covs)
         final["policy"]["has_full_collision"] = any(c.get("family") == "physical_damage" for c in covs)

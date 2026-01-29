@@ -1,0 +1,33 @@
+# core/constants.py
+
+# Policy Constants
+POLICY_TYPES = [
+    "personal_auto", 
+    "commercial_auto", 
+    "general_liability", 
+    "bop", 
+    "commercial_package", 
+    "umbrella", 
+    "motor_truck_cargo", 
+    "unknown"
+]
+
+STATUS_OPTIONS = ["Active", "Pending", "Quote", "Expired", "Cancelled"]
+
+CONFIDENCE_OPTIONS = ["high", "medium", "low"]
+
+# Vehicle Constants
+VEHICLE_TYPES = ["Private Passenger", "Truck", "Trailer", "Tractor", "Van", "Bus", "Motorcycle", "Unknown"]
+
+# Interest Constants
+INTEREST_TYPES = [
+    "Loss Payee", 
+    "Additional Insured", 
+    "Lienholder", 
+    "Certificate Holder", 
+    "Mortgagee", 
+    "Other"
+]
+
+# Validation Patterns
+VIN_REGEX = "^[A-HJ-NPR-Z0-9]{17}$"

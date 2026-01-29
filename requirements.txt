@@ -7,3 +7,8 @@ pypdf
 requests
 streamlit-option-menu
 streamlit-pdf-viewer
+streamlit-aggrid
+loguru
+pytest
+pytest-mock
+alembic

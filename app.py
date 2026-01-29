@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 from core.database import init_db, get_session
+import core.history_model # Ensure model is registered
 from core.services import UsageService
 from streamlit_option_menu import option_menu
 
