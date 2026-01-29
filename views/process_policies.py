@@ -23,7 +23,22 @@ def page_process_policies(api_key):
         st.session_state["temp_extracted"] = []
         
     tab_upload, tab_manual = st.tabs(["📄 Upload & Extract", "✍️ Manual Entry"])
-    
+
+    def get_source_help(field_name, field_locations):
+        """Helper to generate tooltip text for a field."""
+        if not field_locations:
+            return None
+        formatted_key = field_name
+        # Map simple keys to field_locations keys if different
+        # Currently the pipeline saves keys like "premium", "policy_number" directly.
+        
+        for loc in field_locations:
+             if loc.get("field") == field_name:
+                 page = loc.get("page_number")
+                 # bbox = loc.get("bbox") # Optional: Add bbox details if valuable
+                 return f"Found on Page {page}"
+        return None
+
     with tab_upload:
         expanded_upload = not (bool(st.session_state["review_queue"]) or bool(st.session_state["temp_extracted"]))
         
@@ -248,8 +263,12 @@ def page_process_policies(api_key):
             st.markdown("#### Verify Extracted Data")
             with st.form(key=f"review_form_{fname}"):
                 c1, c2 = st.columns(2)
-                r_carrier = c1.text_input("Carrier", value=p.get('carrier_name', ''))
-                r_pol_num = c2.text_input("Policy Number", value=p.get('policy_number', ''))
+                
+                # Metadata for Tooltips (Global fetch inside form)
+                locs = p.get('field_locations', [])
+                
+                r_carrier = c1.text_input("Carrier", value=p.get('carrier_name', ''), help=get_source_help("carrier_name", locs))
+                r_pol_num = c2.text_input("Policy Number", value=p.get('policy_number', ''), help=get_source_help("policy_number", locs))
                 
                 # Show Classification Info
                 classification = current_item['data'].get('classification', {})
@@ -263,11 +282,29 @@ def page_process_policies(api_key):
                 current_naic = p.get('naic_number', '')
                 if not current_naic:
                     current_naic = get_naic_for_carrier(p.get('carrier_name', ''))
-                    
+                
+                # Metadata for Tooltips
+                locs = p.get('field_locations', [])
+                
                 r_naic = c3.text_input("NAIC Code", value=current_naic)
-                r_premium = c3.text_input("Premium", value=p.get('premium', ''))
-                r_eff = c4.text_input("Effective Date", value=p.get('effective_date', ''))
-                r_exp = c4.text_input("Expiration Date", value=p.get('expiration_date', ''))
+                
+                # Premium with Audit & Tooltip
+                prem_help = get_source_help("premium", locs)
+                audit_meta = p.get("premium_audit", {})
+                
+                # Premium Label with Indicator
+                prem_label = "Premium"
+                if audit_meta.get("confidence") == "low":
+                    prem_label += " ⚠️ (Check Split/Installment)"
+                elif audit_meta.get("confidence") == "high":
+                    prem_label += " ✅"
+
+                r_premium = c3.text_input(prem_label, value=p.get('premium', ''), help=prem_help)
+                
+                if audit_meta and audit_meta.get("confidence") == "low":
+                    st.caption(f"**Audit Flag:** {audit_meta.get('flag')}")
+                r_eff = c4.text_input("Effective Date", value=p.get('effective_date', ''), help=get_source_help("effective_date", locs))
+                r_exp = c4.text_input("Expiration Date", value=p.get('expiration_date', ''), help=get_source_help("expiration_date", locs))
                 
                 st.divider()
                 r_ins_name = st.text_input("Insured Name", value=p.get('insured_name', ''))
