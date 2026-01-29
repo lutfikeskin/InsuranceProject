@@ -198,37 +198,37 @@ def page_process_policies(api_key):
                         from core.services import ACCOUNT_TYPE_BY_POLICY
                         acc_type = ACCOUNT_TYPE_BY_POLICY.get(m_type, "Commercial")
                         
-                        policy = Policy(
-                            carrier_name=m_carrier,
-                            naic_number=m_naic,
-                            policy_number=m_pol_num,
-                            effective_date=m_eff,
-                            expiration_date=m_exp,
-                            insured_name=m_ins_name,
-                            insured_address=m_ins_addr,
-                            insured_city=m_city,
-                            insured_state_code=m_state,
-                            insured_zip=m_zip,
-                            premium=m_premium,
-                            liability_limit=m_liab,
-                            general_liability_limit=m_gl_limit,
-                            cargo_limit=m_cargo,
-                            cargo_deductible=m_cargo_ded,
-                            
-                            # New Manual Fields
-                            um_uim_limit=m_um,
-                            med_pay_limit=m_med,
-                            pip_limit=m_pip,
-                            comp_deductible=m_comp,
-                            coll_deductible=m_coll,
-                            has_general_liability=m_gl,
-                            has_auto_liability=m_auto,
-                            has_full_collision=m_coll,
-                            policy_type=m_type,
-                            account_type=acc_type,
-                            classification_confidence=m_conf,
-                            classification_signals=json.dumps(["Manual Entry"])
-                        )
+                        policy_payload = {
+                            "carrier_name": m_carrier,
+                            "naic_number": m_naic,
+                            "policy_number": m_pol_num,
+                            "effective_date": m_eff,
+                            "expiration_date": m_exp,
+                            "insured_name": m_ins_name,
+                            "insured_address": m_ins_addr,
+                            "insured_city": m_city,
+                            "insured_state_code": m_state,
+                            "insured_zip": m_zip,
+                            "premium": m_premium,
+                            "liability_limit": m_liab,
+                            "general_liability_limit": m_gl_limit,
+                            "cargo_limit": m_cargo,
+                            "cargo_deductible": m_cargo_ded,
+                            "um_uim_limit": m_um,
+                            "med_pay_limit": m_med,
+                            "pip_limit": m_pip,
+                            "comp_deductible": m_comp,
+                            "coll_deductible": m_coll,
+                            "has_general_liability": m_gl,
+                            "has_auto_liability": m_auto,
+                            "has_full_collision": m_coll,
+                            "policy_type": m_type,
+                            "account_type": acc_type,
+                            "classification_confidence": m_conf,
+                            "classification_signals": ["Manual Entry"]
+                        }
+                        
+                        policy = service.create_policy_from_dict(policy_payload)
                         
                         success, msg = service.save_policy_object(policy)
                         if success:
@@ -335,7 +335,7 @@ def page_process_policies(api_key):
 
                 st.divider()
                 st.markdown("#### Detailed Inventory (Editable)")
-                t1, t2, t3 = st.tabs(["🚙 Vehicles", "👤 Drivers", "🏢 Additional Interests"])
+                t1, t2, t3, t4 = st.tabs(["🚙 Vehicles", "👤 Drivers", "🛡️ Coverages", "🏢 Additional Interests"])
 
                 with t1:
                     v_data = current_item['data'].get('vehicles', [])
@@ -376,8 +376,42 @@ def page_process_policies(api_key):
                         use_container_width=True,
                         key=f"edt_d_{fname}"
                     )
-
+                
                 with t3:
+                    c_data = current_item['data'].get('coverages', [])
+                    # Flatten current extracted limits for editor if needed or present as is
+                    c_rows = []
+                    for c in c_data:
+                         row = {
+                             "type": c.get('display_name') or c.get('type'),
+                             "coverage_code": c.get('coverage_code'),
+                             "per_occurrence": c.get('limits', {}).get('per_occurrence'),
+                             "aggregate": c.get('limits', {}).get('aggregate'),
+                             "combined_single_limit": c.get('limits', {}).get('combined_single_limit'),
+                             "deductible": c.get('deductible')
+                         }
+                         c_rows.append(row)
+                    
+                    c_df = pd.DataFrame(c_rows)
+                    if c_df.empty:
+                        c_df = pd.DataFrame(columns=["type", "coverage_code", "per_occurrence", "aggregate", "combined_single_limit", "deductible"])
+
+                    edited_c = st.data_editor(
+                        c_df,
+                        num_rows="dynamic",
+                        column_config={
+                            "type": st.column_config.TextColumn("Coverage Type", required=True),
+                            "coverage_code": st.column_config.TextColumn("Code"),
+                            "per_occurrence": st.column_config.NumberColumn("Occ Limit", format="$%d"),
+                            "aggregate": st.column_config.NumberColumn("Agg Limit", format="$%d"),
+                            "combined_single_limit": st.column_config.NumberColumn("CSL", format="$%d"),
+                            "deductible": st.column_config.NumberColumn("Ded", format="$%d"),
+                        },
+                        use_container_width=True,
+                        key=f"edt_c_{fname}"
+                    )
+
+                with t4:
                     ai_data = current_item['data'].get('additional_interests', [])
                     ai_df = pd.DataFrame(ai_data)
                     for col in ["name", "address", "interest_type"]:
@@ -407,98 +441,47 @@ def page_process_policies(api_key):
                     session = get_session(st.session_state.db_engine)
                     service = PolicyService(session)
                     try:
-                        ef_dt = pd.to_datetime(r_eff, errors='coerce')
-                        ex_dt = pd.to_datetime(r_exp, errors='coerce')
-                        
-                        policy = Policy(
-                            carrier_name=r_carrier,
-                            naic_number=r_naic,
-                            policy_number=r_pol_num,
-                            effective_date=ef_dt.date() if pd.notnull(ef_dt) else None,
-                            expiration_date=ex_dt.date() if pd.notnull(ex_dt) else None,
-                            insured_name=r_ins_name,
-                            insured_address=r_ins_addr,
-                            insured_city=r_ins_city,
-                            insured_state_code=r_ins_state,
-                            insured_zip=r_ins_zip,
-                            liability_limit=r_liab,
-                            general_liability_limit=r_gl_limit,
-                            cargo_limit=r_cargo,
-                            cargo_deductible=r_cargo_ded,
+                        # Construct flattened dictionary for factory
+                        policy_payload = {
+                            "carrier_name": r_carrier,
+                            "naic_number": r_naic,
+                            "policy_number": r_pol_num,
+                            "effective_date": r_eff, # Factory handles parsing
+                            "expiration_date": r_exp,
+                            "insured_name": r_ins_name,
+                            "insured_address": r_ins_addr,
+                            "insured_city": r_ins_city,
+                            "insured_state_code": r_ins_state,
+                            "insured_zip": r_ins_zip,
+                            "liability_limit": r_liab,
+                            "general_liability_limit": r_gl_limit,
+                            "cargo_limit": r_cargo,
+                            "cargo_deductible": r_cargo_ded,
+                            "um_uim_limit": r_um,
+                            "med_pay_limit": r_med,
+                            "pip_limit": r_pip,
+                            "comp_deductible": r_comp,
+                            "coll_deductible": r_coll,
+                            "has_general_liability": r_gl,
+                            "has_auto_liability": r_auto,
+                            "account_type": p.get('account_type'),
+                            "policy_type": classification.get('policy_type'),
+                            "classification_confidence": classification.get('confidence'),
+                            "classification_signals": classification.get('signals', []),
+                            "business_name": p.get('business_name'),
+                            "premium": r_premium,
+                            "financial_responsibility_name": p.get('financial_responsibility_name'),
+                            "has_full_collision": p.get('has_full_collision'),
+                            "status": r_status,
                             
-                            # New Review Fields
-                            um_uim_limit=r_um,
-                            med_pay_limit=r_med,
-                            pip_limit=r_pip,
-                            comp_deductible=r_comp,
-                            coll_deductible=r_coll,
-                            has_general_liability=r_gl,
-                            has_auto_liability=r_auto,
-                            account_type=p.get('account_type'),
-                            policy_type=classification.get('policy_type'),
-                            classification_confidence=classification.get('confidence'),
-                            classification_signals=json.dumps(classification.get('signals', [])),
-                            business_name=p.get('business_name'),
-                            premium=r_premium,
-                            financial_responsibility_name=p.get('financial_responsibility_name'),
-                            has_full_collision=p.get('has_full_collision'),
-                            status=r_status
-                        )
+                            # Collections (Editor DFs converted to list of dicts)
+                            "vehicles": edited_v.to_dict('records') if not edited_v.empty else [],
+                            "drivers": edited_d.to_dict('records') if not edited_d.empty else [],
+                            "coverages": edited_c.to_dict('records') if not edited_c.empty else [],
+                            "additional_interests": edited_ai.to_dict('records') if not edited_ai.empty else []
+                        }
                         
-                        # Add sub-objects from EDITED tables
-                        
-                        # Vehicles
-                        if not edited_v.empty:
-                            for _, v in edited_v.iterrows():
-                                if pd.isna(v.get('vin')) and pd.isna(v.get('make')): continue
-                                
-                                refined = refine_vehicle_type(v.get('year'), v.get('make'), v.get('model'), v.get('vin'), v.get('type'))
-                                policy.vehicles.append(Vehicle(
-                                    year=v.get('year'), 
-                                    make=v.get('make'), 
-                                    model=v.get('model'), 
-                                    vin=v.get('vin'), 
-                                    gvw=v.get('gvw'), 
-                                    vehicle_type=refined.get('final_type'),
-                                    chassis=refined.get('chassis'),
-                                    body=refined.get('body')
-                                ))
-
-                        # Drivers
-                        if not edited_d.empty:
-                            for _, d in edited_d.iterrows():
-                                if pd.isna(d.get('full_name')): continue
-                                policy.drivers.append(Driver(
-                                    full_name=d.get('full_name'), 
-                                    license_number=d.get('license_number'), 
-                                    is_excluded=d.get('is_excluded') == True
-                                ))
-                        
-                        # Copy Coverages (Not editable in this view yet, using extraction)
-                        for c in current_item['data'].get('coverages', []):
-                             policy.coverages.append(Coverage(
-                                 type=c.get('display_name') or c.get('type'), 
-                                 coverage_code=c.get('coverage_code'),
-                                 family=c.get('family'),
-                                 per_person=c.get('limits', {}).get('per_person'),
-                                 per_accident=c.get('limits', {}).get('per_accident'),
-                                 per_occurrence=c.get('limits', {}).get('per_occurrence'),
-                                 combined_single_limit=c.get('limits', {}).get('combined_single_limit'),
-                                 aggregate=c.get('limits', {}).get('aggregate'),
-                                 limit_per_person=c.get('limit_person'), 
-                                 limit_per_accident=c.get('limit_accident'), 
-                                 deductible=c.get('deductible')
-                             ))
-
-                        # Additional Interests
-                        if not edited_ai.empty:
-                            for _, a in edited_ai.iterrows():
-                                if pd.isna(a.get('name')): continue
-                                policy.additional_interests.append(AdditionalInterest(
-                                    name=a.get('name'),
-                                    address=a.get('address'),
-                                    interest_type=a.get('interest_type')
-                                ))
+                        policy = service.create_policy_from_dict(policy_payload)
 
                         # We should use service.save_policy_object
                         success, msg = service.save_policy_object(policy)

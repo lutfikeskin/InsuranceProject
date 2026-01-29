@@ -85,3 +85,4 @@
 2026-01-28 18:52:50 | DEBUG    | modules.extraction.pipeline:run:249 - Deleted remote file: files/orrzptmwxrmn
 2026-01-28 18:53:11 | INFO     | modules.extraction.pipeline:_assemble_result:554 - Premium Audit: MATCHES_TOTAL_SIGNAL
 2026-01-28 18:53:11 | DEBUG    | modules.extraction.pipeline:save:150 - CACHE SAVED: v6_afccefc7335d11122e3994134a62da1dadbf18ddc11c9fc953d12719c9a0283d
+2026-01-28 19:52:32 | INFO     | modules.extraction.pipeline:_apply_auto_liability_rules:568 - Refactor: Pruning Split limits in favor of CSL.

@@ -11,17 +11,16 @@ class HistoryService:
 
     def _normalize(self, val):
         """Reduces '100,000' and 100000 to same value for comparison."""
-        if val is None:
-            return None
-        if isinstance(val, str):
-            # Strip whitespace, commas, $
-            s = val.strip().replace(",", "").replace("$", "").lower()
-            if s == "none" or s == "": return None
-            # Handle booleans in string form
-            if s == "true": return True
-            if s == "false": return False
-            return s
-        return val
+        from utils.text_utils import normalize_string, parse_currency
+        
+        # Special case for currency-like values
+        if isinstance(val, str) and ('$' in val or ',' in val):
+             # Try parsing as currency first if it looks like one, but only if it parses cleanly
+             # For history diffing, strictly speaking we treat mostly as strings unless they are clearly numbers.
+             # But the prompt said "replace internal _normalize with utils.text_utils.normalize_string"
+             pass
+
+        return normalize_string(val)
 
     def _get_next_version(self, policy_id: int) -> int:
         """Calculates next version number."""
