@@ -186,3 +186,29 @@
 2026-01-28 21:04:17 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing vehicles -> Pages [0, 1, 2, 3, 4, 5]
 2026-01-28 21:04:17 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing drivers -> Pages []
 2026-01-28 21:04:37 | DEBUG    | modules.extraction.pipeline:save:152 - CACHE SAVED: v8_0d3a82865e6f522349091d47a8476d8ed62c0a42b6433ccb384d982192b3c8ce
+2026-01-29 10:52:39 | INFO     | modules.extraction.pipeline:run:186 - Uploading to Gemini File API...
+2026-01-29 10:52:41 | INFO     | modules.extraction.pipeline:run:190 - File uploaded: files/rd3mrjd0lg61
+2026-01-29 10:52:42 | DEBUG    | modules.extraction.pipeline:run:262 - Deleted remote file: files/rd3mrjd0lg61
+2026-01-29 10:54:27 | INFO     | modules.extraction.pipeline:run:186 - Uploading to Gemini File API...
+2026-01-29 10:54:29 | INFO     | modules.extraction.pipeline:run:190 - File uploaded: files/ej7c6zrrrd6d
+2026-01-29 10:54:30 | DEBUG    | modules.extraction.pipeline:run:262 - Deleted remote file: files/ej7c6zrrrd6d
+2026-01-29 10:56:06 | INFO     | modules.extraction.pipeline:run:186 - Uploading to Gemini File API...
+2026-01-29 10:56:07 | INFO     | modules.extraction.pipeline:run:190 - File uploaded: files/e2ml5wpxa772
+2026-01-29 10:56:09 | DEBUG    | modules.extraction.pipeline:run:262 - Deleted remote file: files/e2ml5wpxa772
+2026-01-29 10:59:25 | INFO     | modules.extraction.pipeline:run:186 - Uploading to Gemini File API...
+2026-01-29 10:59:26 | INFO     | modules.extraction.pipeline:run:190 - File uploaded: files/ljw8icu1ublh
+2026-01-29 10:59:26 | WARNING  | modules.extraction.pipeline:run:264 - Failed to delete file: 404 Not Found. {'message': '', 'status': 'Not Found'}
+2026-01-29 11:13:53 | INFO     | modules.extraction.pipeline:run:186 - Uploading to Gemini File API...
+2026-01-29 11:13:54 | INFO     | modules.extraction.pipeline:run:190 - File uploaded: files/epwitov2mg66
+2026-01-29 11:13:56 | DEBUG    | modules.extraction.pipeline:run:262 - Deleted remote file: files/epwitov2mg66
+2026-01-29 11:16:36 | INFO     | modules.extraction.pipeline:run:186 - Uploading to Gemini File API...
+2026-01-29 11:16:37 | INFO     | modules.extraction.pipeline:run:190 - File uploaded: files/yn3w21alpwz3
+2026-01-29 11:16:43 | INFO     | modules.extraction.pipeline:run:198 - Policy Type: personal_auto (high)
+2026-01-29 11:16:48 | INFO     | modules.extraction.pipeline:run:205 - Broad Slices (Locator): {"declarations": [1], "coverages": [2, 3, 4], "vehicles": [2, 3, 4], "drivers": [1]}
+2026-01-29 11:16:48 | INFO     | modules.extraction.pipeline:_run_universal_scout:351 - Running Universal Scout (Full PDF)...
+2026-01-29 11:17:00 | INFO     | modules.extraction.pipeline:run:252 - Smart Slices (Merged): {"declarations": [1, 2], "vehicles": [1, 2, 3, 4, 5], "drivers": [1, 2], "coverages": [1, 2, 3, 4, 5]}
+2026-01-29 11:17:01 | DEBUG    | modules.extraction.pipeline:run:262 - Deleted remote file: files/yn3w21alpwz3
+2026-01-29 11:17:01 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing declarations -> Pages [0, 1]
+2026-01-29 11:17:01 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing coverages -> Pages [0, 1, 2, 3, 4]
+2026-01-29 11:17:01 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing vehicles -> Pages [0, 1, 2, 3, 4]
+2026-01-29 11:17:01 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing drivers -> Pages [0, 1]

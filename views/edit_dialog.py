@@ -107,9 +107,9 @@ def edit_policy_dialog(policy, service: PolicyService):
     with tab_vehs:
         st.subheader("Manage Vehicles")
         # Prepare Data
-        v_data = [{"year": v.year, "make": v.make, "model": v.model, "vin": v.vin, "type": v.vehicle_type, "gvw": v.gvw} for v in policy.vehicles]
+        v_data = [{"year": v.year, "make": v.make, "model": v.model, "vin": v.vin, "type": v.vehicle_type, "gvw": v.gvw, "chassis": v.chassis, "body": v.body} for v in policy.vehicles]
         v_df = pd.DataFrame(v_data)
-        if v_df.empty: v_df = pd.DataFrame(columns=["year", "make", "model", "vin", "type", "gvw"])
+        if v_df.empty: v_df = pd.DataFrame(columns=["year", "make", "model", "vin", "type", "gvw", "chassis", "body"])
         
         with st.form("edit_fleet_form"):
              
@@ -124,7 +124,9 @@ def edit_policy_dialog(policy, service: PolicyService):
                      "model": st.column_config.TextColumn("Model"),
                      "vin": st.column_config.TextColumn("VIN", max_chars=17, validate=VIN_REGEX),
                      "type": st.column_config.SelectboxColumn("Type", options=VEHICLE_TYPES),
-                     "gvw": st.column_config.NumberColumn("GVW (lbs)", format="%d")
+                     "gvw": st.column_config.NumberColumn("GVW (lbs)", format="%d"),
+                     "chassis": st.column_config.TextColumn("Chassis"),
+                     "body": st.column_config.TextColumn("Body")
                  }
              )
              
@@ -136,7 +138,8 @@ def edit_policy_dialog(policy, service: PolicyService):
                      if pd.isna(row.get('vin')) and pd.isna(row.get('make')): continue
                      new_vehs_list.append({
                          "year": row.get('year'), "make": row.get('make'), "model": row.get('model'),
-                         "vin": row.get('vin'), "type": row.get('type'), "gvw": row.get('gvw')
+                         "vin": row.get('vin'), "type": row.get('type'), "gvw": row.get('gvw'),
+                         "chassis": row.get('chassis'), "body": row.get('body')
                      })
                  
                  # Send Payload

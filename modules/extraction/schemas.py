@@ -127,7 +127,9 @@ VEHICLE_SCHEMA = {
                     "model": {"type": "STRING"},
                     "vin": {"type": "STRING"},
                     "gvw": {"type": "INTEGER"},
-                    "type": {"type": "STRING"}
+                    "type": {"type": "STRING"},
+                    "chassis": {"type": "STRING"},
+                    "body": {"type": "STRING"}
                 }
             }
         }

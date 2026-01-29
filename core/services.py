@@ -319,7 +319,7 @@ class PolicyService:
                     model=v.get('model'),
                     vin=v.get('vin'),
                     gvw=v.get('gvw'),
-                    vehicle_type=ref_type,
+                    vehicle_type=v.get('type'),
                     chassis=v.get('chassis'),
                     body=v.get('body')
                 ))

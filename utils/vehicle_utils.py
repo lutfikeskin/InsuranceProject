@@ -53,7 +53,7 @@ def decode_vin_nhtsa(vin):
         
     return None
 
-def refine_vehicle_type(year, make, model, vin, extracted_type=None):
+def refine_vehicle_type(year, make, model, vin, extracted_type=None, extracted_chassis=None, extracted_body=None):
     """
     Refines the vehicle type based on a two-layer Chassis + Body model.
     Prioritizes NHTSA values if available, falls back to Regex.
@@ -63,6 +63,8 @@ def refine_vehicle_type(year, make, model, vin, extracted_type=None):
     model = str(model).upper() if model else ""
     vin = str(vin).upper() if vin else ""
     extracted_type = str(extracted_type) if extracted_type else ""
+    extracted_chassis = str(extracted_chassis) if extracted_chassis else ""
+    extracted_body = str(extracted_body) if extracted_body else ""
     
     # --- 0a. Try NHTSA Decoding (The Gold Standard) ---
     nhtsa_data = decode_vin_nhtsa(vin)
@@ -86,7 +88,7 @@ def refine_vehicle_type(year, make, model, vin, extracted_type=None):
         if wmi_val:
             make = wmi_val.upper()
             
-    text = f"{make} {model} {extracted_type}".upper()
+    text = f"{make} {model} {extracted_type} {extracted_chassis} {extracted_body}".upper()
 
     # --- 1. BODY DETECTION (Upfits/Brands) ---
     body = None

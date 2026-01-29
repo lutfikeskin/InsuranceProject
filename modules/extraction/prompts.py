@@ -21,6 +21,11 @@ CLASSIFY_POLICY_PROMPT = """
     DOMINANCE RULE:
     - Classify based on the PRIMARY policy form, not endorsements.
     - If multiple coverage types exist, choose the base policy (e.g., Commercial Auto + Cargo endorsement -> commercial_auto).
+    
+    PACKAGE CONFIRMATION:
+    - If you choose 'commercial_package', you MUST confirm that it contains AT LEAST TWO of: General Liability, Property, or Auto.
+    - If it only has Auto + Cargo, classify as 'commercial_auto' (dominance rule).
+    - List the detected coverage families used to justify this decision in the 'signals' array.
     """
 
 LOCATE_SECTIONS_PROMPT = """
@@ -104,14 +109,15 @@ EXTRACT_DECLARATIONS_PROMPT = """
     - Financial Responsibility Name (Registered name for filings, e.g., on Form E or MCS-90)
     - Premium Amount (Documents can have different type of payments and amounts mentioned on them, we want to pick the amount that the customer will pay, actually total premium of the policy)
 
-    NEGATIVE CONSTRAINTS:
-    - Do NOT extract a value if it is associated with a specific coverage (e.g., "Uninsured Motorist: $77").
+    NEGATIVE CONSTRAINTS - THE FEE TRAP:
+    - Do NOT extract "Total Amount Due" if it includes installment fees, finance charges, or "Total Pay Plan".
     - Do NOT extract "Policy Coverage Amount" if it is just a subsection sum.
-    - We want the GRAND TOTAL for the policy term.
+    - We want the GRAND TOTAL for the policy term (Premium for the Policy Period).
 
     PREMIUM SELECTION RULE:
     - Multiple premium amounts may exist across the document.
     - Use only the amount that represents the FINAL total premium for the full policy term.
+    - TIME RULE: Prefer totals stated BEFORE payment schedules or installment tables.
     - If multiple candidates remain ambiguous, choose NONE and leave blank.
 
     For each extracted field, identify its location in the document.
@@ -129,7 +135,16 @@ EXTRACT_VEHICLES_PROMPT = """
     - vin
     - gvw
     - type
+    - chassis (The base platform, e.g. "Pickup", "Cab Chassis", "Tractor", "Van")
+    - body (The attachment, e.g. "Dump", "Box", "Flatbed", "Service Body")
 
+    CHASSIS PRECEDENCE RULE:
+    - Chassis equals the legal/underwriting platform.
+    - Body equals the operational attachment.
+    - Chassis determines base classification. Body style may refine, but may NOT override chassis.
+    - Example: Chassis 'Pickup' + Body 'Utility Box' -> Type 'Pickup' (not box truck).
+    - Example: Chassis 'Cab Chassis' + Body 'Box' -> Type 'Box Truck'.
+    
     VEHICLE TYPE RULES (STRICT):
     - Cargo Van examples: Ram ProMaster, Ford Transit, Mercedes Sprinter -> "cargo_van"
     - Box Truck / Straight Truck (14ft-26ft) -> "box_truck"
@@ -153,9 +168,12 @@ EXTRACT_DRIVERS_PROMPT = """
     - is_excluded (true ONLY if explicitly stated as excluded)
 
     Rules:
+    - HIDDEN EXCLUSIONS: Check for symbols (*, †) or column codes (EXC, X) next to names. 
+    - CROSS-PAGE REFERENCES: If a footnote or symbol references another page for the exclusion explanation, assume it is excluded.
+    - If a driver is listed in a section titled "Excluded Drivers" or "Drivers Not Covered", set is_excluded = true.
     - If a driver is marked "Excluded", set is_excluded = true.
     - If no drivers are listed, return an empty array.
-    - Do NOT infer exclusions.
+    - Do NOT infer exclusions without evidence.
     - Do NOT treat underwriting questions or questionnaires as driver lists.
     """
 
@@ -180,7 +198,8 @@ def get_coverages_prompt(registry_text, policy_type):
     - Motor Truck Cargo MUST use family "cargo".
     - Auto Liability MUST use family "auto_liability".
     - Do NOT invent coverages not explicitly shown.
-    - If a coverage limit is unclear, OMIT it.
+    - "SILENT ZERO": If a limit is blank, dashes "---", or "Excluded", RETURN NULL. Do not return 0.
+    - COLUMN BLEED: Do NOT infer limits from neighboring rows or columns (e.g. don't copy Med Pay limit to Towing).
     - Never create duplicate Auto Liability entries.
     - SAMPLE TABLE EXCLUSION: If a limit appears in an example, legend, or explanatory section, OMIT it.
 

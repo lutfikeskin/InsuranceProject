@@ -71,8 +71,8 @@ def get_cached_registry_json(policy_type: str) -> str:
     return json.dumps(filtered_registry, indent=2)
 
 # --- CONFIGURATION ---
-ROUTING_MODEL = "gemini-2.5-flash"
-EXTRACTION_MODEL = "gemini-2.5-flash"
+ROUTING_MODEL = "gemini-2.0-flash"
+EXTRACTION_MODEL = "gemini-2.0-flash"
 CACHE_VERSION = "v8" # Fixed UM/UIM shorthand and Vehicle assembly
 
 MAX_PAGES = {
@@ -533,11 +533,15 @@ class GeminiExtractionPipeline:
                 make=v.get('make'),
                 model=v.get('model'),
                 vin=v.get('vin'),
-                extracted_type=v.get('type')
+                extracted_type=v.get('type'),
+                extracted_chassis=v.get('chassis'),
+                extracted_body=v.get('body')
             )
             v['type'] = refined['final_type']
             v['make'] = refined['make']
             v['model'] = refined['model']
+            v['chassis'] = refined.get('chassis') or v.get('chassis')
+            v['body'] = refined.get('body') or v.get('body')
             final["vehicles"].append(v)
         
         # 2. Validate Coverages
