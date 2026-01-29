@@ -42,8 +42,8 @@ graph TD
 - **`app.py`**: The entry point. Handles main sidebar navigation, session state (API keys, DB engine), and routing to specialized views.
 - **`views/`**: Contains the logic for individual pages:
   - `dashboard.py`: Shows high-level metrics (total policies, premium totals).
-  - `process_policies.py`: The "Extraction" interface. Handles file uploads and orchestrates the extraction pipeline.
-  - `database_page.py`: Management interface for stored policies. Includes search and deletion.
+  - `process_policies.py`: The "Extraction" interface. Handles file uploads, orchestrates the extraction pipeline, and features an **editable Coverage Data Editor**.
+  - `database_page.py`: Management interface for stored policies. **Enhanced UX** with popover column controls, status icons, and dynamic row actions.
   - `edit_dialog.py`: A specialized component for manually correcting AI-extracted data before/after saving.
   - `create_coi.py`: Interface for selecting a policy and holder to generate a COI.
 
@@ -55,8 +55,8 @@ graph TD
   - `Driver`: Name, License, Excluded status.
   - `Coverage`: Linked to an ontology code, family, and structured limits.
 - **`services.py`**: The "Glue" layer.
-  - `PolicyService`: Handles saving, updating, and normalizing data. It includes the "Ask Your Data" logic which uses Gemini to convert natural language to SQL.
-  - `COIService`: Prepares the data structure needed for COI generation (merging drivers/vehicles into description strings).
+  - `PolicyService`: Handles saving, updating, and normalizing data. Now features `create_policy_from_dict`, a centralized factory for transient policy object construction.
+  - `COIService`: Prepares the data structure needed for COI generation.
 - **`coverage_ontology.py`**: The single source of truth for insurance products.
   - `COVERAGE_REGISTRY`: A dictionary mapping codes (e.g., `AUTO_LIAB_BI`) to families, lines of business, and limit structures.
   - `validate_coverage()`: Ensures extracted data matches the registry rules.
@@ -78,9 +78,10 @@ This is the most complex component, utilizing a multi-phase, parallelized pipeli
 
 ### 3.4 Utilities (`utils/`)
 
-- **`naic_utils.py`**: A helper for looking up NAIC codes based on Carrier Names if the AI misses them or they are absent from the document.
-- **`vehicle_utils.py`**: Contains deterministic logic (`refine_vehicle_type`) to enrich vehicle data based on GVW (Gross Vehicle Weight) and keywords, helping classify them as "Tractors", "Trailers", or "Straight Trucks".
-- **`exporter.py`**: Handles generating Excel reports from the policy database using `pandas`.
+- **`naic_utils.py`**: Helper for NAIC codes if the AI misses them.
+- **`text_utils.py`**: [NEW] Centralized logic for `parse_currency()` and `normalize_string()`.
+- **`vehicle_utils.py`**: Deterministic logic (`refine_vehicle_type`) to enrich vehicle data based on GVW.
+- **`exporter.py`**: Handles generating Excel reports from the policy database.
 
 ### 3.5 COI Module (`modules/coi/`)
 

@@ -23,6 +23,20 @@ CLASSIFY_POLICY_PROMPT = """
     - If multiple coverage types exist, choose the base policy (e.g., Commercial Auto + Cargo endorsement -> commercial_auto).
     """
 
+LOCATE_SECTIONS_PROMPT = """
+    Analyze the PDF and identify page numbers for the following sections.
+
+    Sections:
+    - declarations (Policy info, dates, insured, Policy Premium Amount, Rating Worksheet, Invoice, Payment Schedule, Premium Summary)
+    - coverages (Limits, deductibles)
+    - vehicles (Schedule of all vehicles)
+    - drivers (List of all drivers)
+
+    Rules:
+    - Use EMPTY ARRAY [] if a section is missing.
+    - Do NOT return objects, ranges, or single integers.
+    """
+
 UNIVERSAL_SCOUT_PROMPT = """
     You are a document intelligence system analyzing an insurance policy PDF.
 

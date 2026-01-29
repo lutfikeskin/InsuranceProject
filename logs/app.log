@@ -86,3 +86,103 @@
 2026-01-28 18:53:11 | INFO     | modules.extraction.pipeline:_assemble_result:554 - Premium Audit: MATCHES_TOTAL_SIGNAL
 2026-01-28 18:53:11 | DEBUG    | modules.extraction.pipeline:save:150 - CACHE SAVED: v6_afccefc7335d11122e3994134a62da1dadbf18ddc11c9fc953d12719c9a0283d
 2026-01-28 19:52:32 | INFO     | modules.extraction.pipeline:_apply_auto_liability_rules:568 - Refactor: Pruning Split limits in favor of CSL.
+2026-01-28 19:58:56 | INFO     | modules.extraction.pipeline:run:184 - Uploading to Gemini File API...
+2026-01-28 19:58:58 | INFO     | modules.extraction.pipeline:run:188 - File uploaded: files/4nvoa94f8fuj
+2026-01-28 19:59:02 | INFO     | modules.extraction.pipeline:run:196 - Policy Type: personal_auto (high)
+2026-01-28 19:59:02 | INFO     | modules.extraction.pipeline:_run_universal_scout:338 - Running Universal Scout (Full PDF)...
+2026-01-28 19:59:10 | INFO     | modules.extraction.pipeline:run:239 - Smart Slices (Scout Driven): {"declarations": [], "vehicles": [1, 2, 3, 4, 5, 6, 7], "drivers": [], "coverages": [1, 2, 3, 4, 5, 6, 7]}
+2026-01-28 19:59:12 | DEBUG    | modules.extraction.pipeline:run:249 - Deleted remote file: files/4nvoa94f8fuj
+2026-01-28 19:59:12 | WARNING  | modules.extraction.pipeline:_get_pages_for_section:453 - Capping vehicles from 7 to 6 pages.
+2026-01-28 19:59:29 | DEBUG    | modules.extraction.pipeline:save:150 - CACHE SAVED: v6_0d3a82865e6f522349091d47a8476d8ed62c0a42b6433ccb384d982192b3c8ce
+2026-01-28 20:02:49 | INFO     | modules.extraction.pipeline:run:184 - Uploading to Gemini File API...
+2026-01-28 20:02:50 | INFO     | modules.extraction.pipeline:run:188 - File uploaded: files/nxrudr2mqml4
+2026-01-28 20:02:53 | INFO     | modules.extraction.pipeline:run:196 - Policy Type: commercial_auto (high)
+2026-01-28 20:02:53 | INFO     | modules.extraction.pipeline:_run_universal_scout:338 - Running Universal Scout (Full PDF)...
+2026-01-28 20:03:01 | INFO     | modules.extraction.pipeline:run:239 - Smart Slices (Scout Driven): {"declarations": [1, 2, 3], "vehicles": [1, 2, 3], "drivers": [1, 2, 3], "coverages": [1, 2, 3]}
+2026-01-28 20:03:02 | DEBUG    | modules.extraction.pipeline:run:249 - Deleted remote file: files/nxrudr2mqml4
+2026-01-28 20:03:22 | INFO     | modules.extraction.pipeline:_assemble_result:554 - Premium Audit: MATCHES_TOTAL_SIGNAL
+2026-01-28 20:03:22 | DEBUG    | modules.extraction.pipeline:save:150 - CACHE SAVED: v6_5cc4c030e8c72d4338c303e91e343dffefd5666d35b4a625842e4dd6abfe5818
+2026-01-28 20:03:22 | INFO     | modules.extraction.pipeline:run:184 - Uploading to Gemini File API...
+2026-01-28 20:03:24 | INFO     | modules.extraction.pipeline:run:188 - File uploaded: files/znaapsj2avis
+2026-01-28 20:03:27 | INFO     | modules.extraction.pipeline:run:196 - Policy Type: personal_auto (high)
+2026-01-28 20:03:27 | INFO     | modules.extraction.pipeline:_run_universal_scout:338 - Running Universal Scout (Full PDF)...
+2026-01-28 20:03:38 | INFO     | modules.extraction.pipeline:run:239 - Smart Slices (Scout Driven): {"declarations": [1, 2, 3, 4], "vehicles": [1, 2], "drivers": [1, 2, 3, 4], "coverages": [1, 2, 4, 5, 6]}
+2026-01-28 20:03:39 | DEBUG    | modules.extraction.pipeline:run:249 - Deleted remote file: files/znaapsj2avis
+2026-01-28 20:04:04 | INFO     | modules.extraction.pipeline:_assemble_result:554 - Premium Audit: MATCHES_TOTAL_SIGNAL
+2026-01-28 20:04:04 | DEBUG    | modules.extraction.pipeline:save:150 - CACHE SAVED: v6_afccefc7335d11122e3994134a62da1dadbf18ddc11c9fc953d12719c9a0283d
+2026-01-28 20:04:04 | INFO     | modules.extraction.pipeline:run:184 - Uploading to Gemini File API...
+2026-01-28 20:04:06 | INFO     | modules.extraction.pipeline:run:188 - File uploaded: files/k46y1m6fm81j
+2026-01-28 20:04:10 | INFO     | modules.extraction.pipeline:run:196 - Policy Type: commercial_auto (high)
+2026-01-28 20:04:10 | INFO     | modules.extraction.pipeline:_run_universal_scout:338 - Running Universal Scout (Full PDF)...
+2026-01-28 20:04:14 | INFO     | modules.extraction.pipeline:run:239 - Smart Slices (Scout Driven): {"declarations": [], "vehicles": [1], "drivers": [1], "coverages": [1]}
+2026-01-28 20:04:16 | DEBUG    | modules.extraction.pipeline:run:249 - Deleted remote file: files/k46y1m6fm81j
+2026-01-28 20:04:27 | DEBUG    | modules.extraction.pipeline:save:150 - CACHE SAVED: v6_88e35eb32a78b584a2228f095debc8b08ff725ff675a8b9cf90397c1860b1046
+2026-01-28 20:04:27 | INFO     | modules.extraction.pipeline:run:184 - Uploading to Gemini File API...
+2026-01-28 20:04:28 | INFO     | modules.extraction.pipeline:run:188 - File uploaded: files/qjsekhzwa1p9
+2026-01-28 20:04:41 | INFO     | modules.extraction.pipeline:run:196 - Policy Type: commercial_auto (high)
+2026-01-28 20:04:41 | INFO     | modules.extraction.pipeline:_run_universal_scout:338 - Running Universal Scout (Full PDF)...
+2026-01-28 20:04:59 | INFO     | modules.extraction.pipeline:run:239 - Smart Slices (Scout Driven): {"declarations": [1, 2, 3, 4, 5, 6, 40, 41, 42], "vehicles": [5, 6, 7], "drivers": [], "coverages": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 74, 75, 76, 77]}
+2026-01-28 20:05:00 | DEBUG    | modules.extraction.pipeline:run:249 - Deleted remote file: files/qjsekhzwa1p9
+2026-01-28 20:05:00 | WARNING  | modules.extraction.pipeline:_get_pages_for_section:453 - Capping declarations from 9 to 8 pages.
+2026-01-28 20:05:00 | WARNING  | modules.extraction.pipeline:_get_pages_for_section:453 - Capping coverages from 43 to 8 pages.
+2026-01-28 20:05:19 | INFO     | modules.extraction.pipeline:_assemble_result:554 - Premium Audit: MATCHES_TOTAL_SIGNAL
+2026-01-28 20:05:19 | DEBUG    | modules.extraction.pipeline:save:150 - CACHE SAVED: v6_42244ed5add16d05820198334e273e62115034f91b9a0ae51161977d6cde3f0b
+2026-01-28 20:05:19 | INFO     | modules.extraction.pipeline:run:184 - Uploading to Gemini File API...
+2026-01-28 20:05:21 | INFO     | modules.extraction.pipeline:run:188 - File uploaded: files/s6fmdszl0vel
+2026-01-28 20:05:25 | INFO     | modules.extraction.pipeline:run:196 - Policy Type: commercial_auto (high)
+2026-01-28 20:05:25 | INFO     | modules.extraction.pipeline:_run_universal_scout:338 - Running Universal Scout (Full PDF)...
+2026-01-28 20:05:34 | INFO     | modules.extraction.pipeline:run:239 - Smart Slices (Scout Driven): {"declarations": [1, 2, 3], "vehicles": [1, 2, 3], "drivers": [], "coverages": [1, 2, 3]}
+2026-01-28 20:05:35 | DEBUG    | modules.extraction.pipeline:run:249 - Deleted remote file: files/s6fmdszl0vel
+2026-01-28 20:05:46 | INFO     | modules.extraction.pipeline:_assemble_result:554 - Premium Audit: MATCHES_TOTAL_SIGNAL
+2026-01-28 20:05:46 | DEBUG    | modules.extraction.pipeline:save:150 - CACHE SAVED: v6_f4bafa8e9f8482a15caf489b21a59288b802be0351e86acaf5156d3b1e719845
+2026-01-28 20:05:46 | INFO     | modules.extraction.pipeline:run:184 - Uploading to Gemini File API...
+2026-01-28 20:05:48 | INFO     | modules.extraction.pipeline:run:188 - File uploaded: files/1hkg23u1sv50
+2026-01-28 20:05:51 | INFO     | modules.extraction.pipeline:run:196 - Policy Type: personal_auto (high)
+2026-01-28 20:05:51 | INFO     | modules.extraction.pipeline:_run_universal_scout:338 - Running Universal Scout (Full PDF)...
+2026-01-28 20:06:00 | INFO     | modules.extraction.pipeline:run:239 - Smart Slices (Scout Driven): {"declarations": [1, 2, 3, 4, 5], "vehicles": [1, 2, 3, 4, 5], "drivers": [1, 2], "coverages": [1, 2, 3, 4, 5]}
+2026-01-28 20:06:02 | DEBUG    | modules.extraction.pipeline:run:249 - Deleted remote file: files/1hkg23u1sv50
+2026-01-28 20:06:28 | INFO     | modules.extraction.pipeline:_assemble_result:554 - Premium Audit: MATCHES_TOTAL_SIGNAL
+2026-01-28 20:06:28 | DEBUG    | modules.extraction.pipeline:save:150 - CACHE SAVED: v6_45fe714ecf17b106b4ce1cf9369e3d73d1812a1debe3df9a2740d6bdfb3470b2
+2026-01-28 20:06:28 | INFO     | modules.extraction.pipeline:get:138 - CACHE HIT: v6_0d3a82865e6f522349091d47a8476d8ed62c0a42b6433ccb384d982192b3c8ce
+2026-01-28 20:06:28 | INFO     | modules.extraction.pipeline:run:184 - Uploading to Gemini File API...
+2026-01-28 20:06:29 | INFO     | modules.extraction.pipeline:run:188 - File uploaded: files/ineo8sjiuonx
+2026-01-28 20:06:34 | INFO     | modules.extraction.pipeline:run:196 - Policy Type: commercial_auto (high)
+2026-01-28 20:06:34 | INFO     | modules.extraction.pipeline:_run_universal_scout:338 - Running Universal Scout (Full PDF)...
+2026-01-28 20:06:44 | INFO     | modules.extraction.pipeline:run:239 - Smart Slices (Scout Driven): {"declarations": [1, 2], "vehicles": [1, 2], "drivers": [], "coverages": [1, 2]}
+2026-01-28 20:06:45 | DEBUG    | modules.extraction.pipeline:run:249 - Deleted remote file: files/ineo8sjiuonx
+2026-01-28 20:07:20 | INFO     | modules.extraction.pipeline:_assemble_result:554 - Premium Audit: MATCHES_TOTAL_SIGNAL
+2026-01-28 20:07:20 | DEBUG    | modules.extraction.pipeline:save:150 - CACHE SAVED: v6_d648a7964d389d13e9f1707cd48c8d42d095de69849f1f2c375fefba7ab45cf7
+2026-01-28 20:37:33 | INFO     | modules.extraction.pipeline:_apply_auto_liability_rules:576 - Refactor: Pruning Split limits in favor of CSL.
+2026-01-28 20:53:06 | INFO     | modules.extraction.pipeline:run:184 - Uploading to Gemini File API...
+2026-01-28 20:53:08 | INFO     | modules.extraction.pipeline:run:188 - File uploaded: files/31k15vlqx0ij
+2026-01-28 20:53:11 | INFO     | modules.extraction.pipeline:run:196 - Policy Type: personal_auto (high)
+2026-01-28 20:53:12 | DEBUG    | modules.extraction.pipeline:run:260 - Deleted remote file: files/31k15vlqx0ij
+2026-01-28 20:53:12 | INFO     | modules.extraction.pipeline:run:184 - Uploading to Gemini File API...
+2026-01-28 20:53:14 | INFO     | modules.extraction.pipeline:run:184 - Uploading to Gemini File API...
+2026-01-28 20:53:14 | INFO     | modules.extraction.pipeline:run:188 - File uploaded: files/855j996q64z5
+2026-01-28 20:53:15 | INFO     | modules.extraction.pipeline:run:188 - File uploaded: files/k0w0tn29io8o
+2026-01-28 20:53:16 | DEBUG    | modules.extraction.pipeline:run:260 - Deleted remote file: files/855j996q64z5
+2026-01-28 20:53:18 | INFO     | modules.extraction.pipeline:run:196 - Policy Type: personal_auto (high)
+2026-01-28 20:53:19 | DEBUG    | modules.extraction.pipeline:run:260 - Deleted remote file: files/k0w0tn29io8o
+2026-01-28 20:54:02 | INFO     | modules.extraction.pipeline:run:185 - Uploading to Gemini File API...
+2026-01-28 20:54:04 | INFO     | modules.extraction.pipeline:run:189 - File uploaded: files/7n5f0pjcivqh
+2026-01-28 20:54:06 | INFO     | modules.extraction.pipeline:run:197 - Policy Type: personal_auto (high)
+2026-01-28 20:54:11 | INFO     | modules.extraction.pipeline:run:204 - Broad Slices (Locator): {"declarations": [2, 4, 6], "coverages": [2, 4, 6], "vehicles": [2, 4, 6], "drivers": []}
+2026-01-28 20:54:11 | INFO     | modules.extraction.pipeline:_run_universal_scout:350 - Running Universal Scout (Full PDF)...
+2026-01-28 20:54:17 | INFO     | modules.extraction.pipeline:run:251 - Smart Slices (Merged): {"declarations": [1, 2, 4, 6], "vehicles": [1, 2, 3, 4, 5, 6, 7], "drivers": [], "coverages": [1, 2, 3, 4, 5, 6, 7]}
+2026-01-28 20:54:18 | DEBUG    | modules.extraction.pipeline:run:261 - Deleted remote file: files/7n5f0pjcivqh
+2026-01-28 20:54:18 | WARNING  | modules.extraction.pipeline:_get_pages_for_section:465 - Capping vehicles from 7 to 6 pages.
+2026-01-28 20:54:31 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v7_0d3a82865e6f522349091d47a8476d8ed62c0a42b6433ccb384d982192b3c8ce
+2026-01-28 21:03:56 | INFO     | modules.extraction.pipeline:run:186 - Uploading to Gemini File API...
+2026-01-28 21:03:58 | INFO     | modules.extraction.pipeline:run:190 - File uploaded: files/sc65wvgnkzma
+2026-01-28 21:04:02 | INFO     | modules.extraction.pipeline:run:198 - Policy Type: personal_auto (high)
+2026-01-28 21:04:11 | INFO     | modules.extraction.pipeline:run:205 - Broad Slices (Locator): {"declarations": [2, 4, 6], "coverages": [2, 4, 6], "vehicles": [2, 4, 6], "drivers": []}
+2026-01-28 21:04:11 | INFO     | modules.extraction.pipeline:_run_universal_scout:351 - Running Universal Scout (Full PDF)...
+2026-01-28 21:04:16 | INFO     | modules.extraction.pipeline:run:252 - Smart Slices (Merged): {"declarations": [1, 2, 4, 6], "vehicles": [1, 2, 3, 4, 5, 6, 7], "drivers": [], "coverages": [1, 2, 3, 4, 5, 6, 7]}
+2026-01-28 21:04:17 | DEBUG    | modules.extraction.pipeline:run:262 - Deleted remote file: files/sc65wvgnkzma
+2026-01-28 21:04:17 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing declarations -> Pages [0, 1, 3, 5]
+2026-01-28 21:04:17 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing coverages -> Pages [0, 1, 2, 3, 4, 5, 6]
+2026-01-28 21:04:17 | WARNING  | modules.extraction.pipeline:_get_pages_for_section:467 - Capping vehicles from 7 to 6 pages.
+2026-01-28 21:04:17 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing vehicles -> Pages [0, 1, 2, 3, 4, 5]
+2026-01-28 21:04:17 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing drivers -> Pages []
+2026-01-28 21:04:37 | DEBUG    | modules.extraction.pipeline:save:152 - CACHE SAVED: v8_0d3a82865e6f522349091d47a8476d8ed62c0a42b6433ccb384d982192b3c8ce

@@ -108,7 +108,8 @@ The `validate_coverage()` function ensures adherence to the registry:
 ### 4.1 `PolicyService` (Core Service)
 
 - `save_policy_from_extraction(result)`: Maps raw AI JSON to SQLAlchemy relationships.
-- `ask_your_data(query)`: Translates NL to SQL, executes against SQLite, and returns results.
+- `create_policy_from_dict(data)`: **[NEW]** Centralized factory method for constructing `Policy` objects from dictionary payloads (Manual entry or Extraction). Handles nested object creation and date parsing.
+- `ask_your_data(query)`: Translates NL to SQL, executes against SQLite, and returns results. **Enhanced** with whitelisted default views and state persistence.
 
 ### 4.2 `GeminiExtractionPipeline` (Extraction Module)
 
@@ -172,10 +173,10 @@ The system uses a specialized prompt that provides the **full schema** to Gemini
 The frontend is built with **Streamlit** and located in the `views/` directory.
 
 - **`dashboard.py`**: High-level business intelligence. Displays total policies, vehicle counts, and aggregate premiums using metrics cards and charts.
-- **`process_policies.py`**: The extraction engine's primary interface. Handles PDF uploads, progress tracking, and intermediate review before database commit.
-- **`database_page.py`**: CRUD interface for existing policies. Supports filtering by carrier, searching by policy number, and bulk deletion.
-- **`edit_dialog.py`**: A modal component that allows users to manually correct AI-extracted values (e.g., typos in names or slightly off limit values) before finalizing the record.
-- **`create_coi.py`**: The certificate generation workflow. Allows selection of a policy and holder, then triggers the COI generator.
+- **`process_policies.py`**: The extraction engine's primary interface. Handles PDF uploads, progress tracking, and intermediate review. **Enhanced** with an editable **Coverage Data Editor**.
+- **`database_page.py`**: CRUD interface. **Enhanced UX** featuring compact popover column controls, status icons, and row-selected action buttons.
+- **`edit_dialog.py`**: A modal component that allows users to manually correct policy records.
+- **`create_coi.py`**: The certificate generation workflow.
 
 ---
 
@@ -183,9 +184,10 @@ The frontend is built with **Streamlit** and located in the `views/` directory.
 
 Located in `utils/`, these modules provide deterministic enhancements to AI output.
 
-- **`vehicle_utils.py` (`refine_vehicle_type`)**: Enhances vehicle classification. If the AI provides a VIN and GVW, this utility uses weight-based logic (e.g., GVW > 26,000 lbs = "Tractor") to standardize vehicle types.
-- **`naic_utils.py`**: Contains a dictionary of common insurance carriers and their NAIC numbers. Used as a fallback if the AI fails to find the NAIC code on the PDF.
-- **`exporter.py`**: Uses `pandas` and `openpyxl` to generate formatted Excel reports from the SQLite policy table.
+- **`vehicle_utils.py` (`refine_vehicle_type`)**: Enhances vehicle classification using weight-based logic (e.g., GVW > 26k = "Tractor").
+- **`text_utils.py`**: **[NEW]** Centralized logic for `parse_currency()` and `normalize_string()`, used throughout the service and history layers.
+- **`naic_utils.py`**: Fallback dictionary for looking up NAIC codes by Carrier Name.
+- **`exporter.py`**: Generates formatted Excel reports from the SQLite policy table.
 
 ---
 
@@ -241,8 +243,10 @@ The `scripts/` directory contains tools for debugging and maintenance:
 │   └── coi/              # PDF COI Generation
 ├── views/                # Streamlit Page modules
 ├── data/                 # SQLite DB, PDF Templates, Mappings
-├── utils/                # Vehicle/NAIC/Export Helpers
-├── assets/               # CSS & Styling
+├── utils/                # Vehicle/NAIC/Text & Export Helpers
+│   ├── text_utils.py     # Normalized parsing
+│   ├── vehicle_utils.py  # Classification enrichment
+│   └── naic_utils.py     # Carrier registry
 └── .cache/               # Extraction PDF Cache
 ```
 

@@ -105,12 +105,13 @@ The raw, validated data is condensed into high-level summary strings for the dat
 
 ### 5.1 The Review UI
 
-- The normalized data is presented in the Streamlit "Process Policies" form.
 - **Interactive**: The user can override any value (e.g., fix a typo in the VIN or adjust a limit).
+- **Coverage Data Editor**: [NEW] A hands-on table allows manual adjustment of every extracted coverage's limits and deductibles before the final commit.
 
 ### 5.2 Saving (`PolicyService`)
 
 - **Action**: User clicks "Save to Database".
+- **Factory Construction**: The system uses `PolicyService.create_policy_from_dict()` to deterministically build the policy object and its nested collections (vehicles, drivers, etc.) from the potentially edited review data.
 - **Logic**:
   1.  **Check Existence**: Does `policy_number` already exist?
   2.  **If New**: Inserts a new row in `policies` and child rows in `vehicles`, `assignments`, etc.

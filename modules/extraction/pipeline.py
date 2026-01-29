@@ -13,6 +13,7 @@ from functools import lru_cache
 # Internal Modules
 from core.logger import logger
 from .pdf_ops import PdfProcessor
+from utils.vehicle_utils import refine_vehicle_type
 from modules.resolution.premium_resolver import audit_premium_extraction
 from core.coverage_ontology import (
     COVERAGE_REGISTRY, 
@@ -44,6 +45,7 @@ from .schemas import (
 
 from .prompts import (
     CLASSIFY_POLICY_PROMPT,
+    LOCATE_SECTIONS_PROMPT,
     EXTRACT_DECLARATIONS_PROMPT,
     EXTRACT_VEHICLES_PROMPT,
     EXTRACT_DRIVERS_PROMPT,
@@ -71,7 +73,7 @@ def get_cached_registry_json(policy_type: str) -> str:
 # --- CONFIGURATION ---
 ROUTING_MODEL = "gemini-2.5-flash"
 EXTRACTION_MODEL = "gemini-2.5-flash"
-CACHE_VERSION = "v6" # Incremented for new coverage fields
+CACHE_VERSION = "v8" # Fixed UM/UIM shorthand and Vehicle assembly
 
 MAX_PAGES = {
   "declarations": 8,
@@ -198,15 +200,25 @@ class GeminiExtractionPipeline:
             if ctx.policy_type == "unknown":
                 return None, None, "Unknown Policy Type"
 
-            # 3.5. Universal Scout (Architecture Update)
+            # 3.1. Locate Sections (Broad Boundaries)
+            ctx.section_map = self._locate_sections(uploaded_file)
+            logger.info(f"Broad Slices (Locator): {json.dumps(ctx.section_map)}")
+
+            # 3.5. Universal Scout (Specific Signals)
             if status_callback: status_callback(" 🔍 Running Universal Scout...")
             ctx.scout_map = self._run_universal_scout(uploaded_file)
             
-            # --- INTELLIGENT SLICING (SCOUT ONLY) ---
+            # --- INTELLIGENT MERGING ---
             total_pages = processor.get_page_count()
 
-            def map_scout_pages(signal_key, signal_is_object_list=False):
-                """Helper to extract pages from scout signals + context."""
+            def merge_pages(section_key, signal_key, signal_is_object_list=False):
+                """Fuses broad section pages with discrete scout signals + context."""
+                # Start with Locator findings
+                current_pages = set(ctx.section_map.get(section_key, []))
+                if section_key == "declarations" and total_pages > 0:
+                    current_pages.add(1) # SAFETY FALLBACK: Always include Page 1 for Decs.
+                
+                # Extract pages from Scout
                 scout_data = ctx.scout_map.get(signal_key, [])
                 scout_pages = set()
                 
@@ -225,18 +237,19 @@ class GeminiExtractionPipeline:
                     expanded_scout.add(p - 1)
                     expanded_scout.add(p + 1)
                 
-                # Validate range
-                return sorted([p for p in expanded_scout if 1 <= p <= total_pages])
+                # Union and Validate range
+                final_set = current_pages.union(expanded_scout)
+                return sorted([p for p in final_set if 1 <= p <= total_pages])
 
-            # Map Scout Signals to Section Map
+            # Apply Merging Rules
             ctx.section_map = {
-                "declarations": map_scout_pages("premium_signals", signal_is_object_list=True),
-                "vehicles": map_scout_pages("vehicle_schedule_signals"),
-                "drivers": map_scout_pages("driver_schedule_signals"),
-                "coverages": map_scout_pages("coverage_schedule_signals")
+                "declarations": merge_pages("declarations", "premium_signals", signal_is_object_list=True),
+                "vehicles": merge_pages("vehicles", "vehicle_schedule_signals"),
+                "drivers": merge_pages("drivers", "driver_schedule_signals"),
+                "coverages": merge_pages("coverages", "coverage_schedule_signals")
             }
 
-            logger.info(f"Smart Slices (Scout Driven): {json.dumps(ctx.section_map)}")
+            logger.info(f"Smart Slices (Merged): {json.dumps(ctx.section_map)}")
 
         except Exception as e:
             return None, None, f"Initialization Error: {str(e)}"
@@ -380,6 +393,7 @@ class GeminiExtractionPipeline:
         
         for section in sections:
             pages = self._get_pages_for_section(ctx.section_map, section, processor.get_page_count())
+            logger.info(f"PIPELINE: Slicing {section} -> Pages {pages}")
             pdf_bytes = processor.create_slice(pages)
             slices[section] = types.Part.from_bytes(data=pdf_bytes, mime_type='application/pdf')
 
@@ -505,11 +519,26 @@ class GeminiExtractionPipeline:
         final = {
             "policy": ctx.extracted_data.get("policy", {}),
             "coverages": [],
-            "vehicles": ctx.extracted_data.get("vehicles", {}).get("vehicles", []),
+            "vehicles": [], # Will be populated by 1a
             "drivers": ctx.extracted_data.get("drivers", {}).get("drivers", []),
             "classification": ctx.classification,
             "page_dimensions": processor.get_dimensions()
         }
+
+        # 1a. Refine Vehicles (The "Great System")
+        raw_vehs = ctx.extracted_data.get("vehicles", {}).get("vehicles", [])
+        for v in raw_vehs:
+            refined = refine_vehicle_type(
+                year=v.get('year'),
+                make=v.get('make'),
+                model=v.get('model'),
+                vin=v.get('vin'),
+                extracted_type=v.get('type')
+            )
+            v['type'] = refined['final_type']
+            v['make'] = refined['make']
+            v['model'] = refined['model']
+            final["vehicles"].append(v)
         
         # 2. Validate Coverages
         raw_covs = ctx.extracted_data.get("coverages", {}).get("coverages", [])

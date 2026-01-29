@@ -11,6 +11,9 @@ For a deep dive into the architecture, extraction pipeline, and ontology rules, 
 - **AI Extraction**: Upload PDF policies to extract key data (Limits, Dates, Coverages, Drivers, Vehicles) using Google Gemini 2.5 Flash.
   - **High-Precision Scouting**: Uses a multi-phase "Universal Scout" + "Smart Slicing" architecture to find signals before extraction.
 - **Data Management**: View, filter, edit, and delete extracted policies from a local SQLite database.
+  - **Modern Grid UX**: Compactpopover column controls, status indicators (✅ Active, ⚠️ Issue), and dynamic row-based actions.
+- **AI Chat with Data**: Communicate with an AI-powered agent to query your database in natural language.
+  - **Enhanced Visibility**: Whitelisted default views for clean results, preserved session state, and transparent SQL debugging.
 - **COI Generation**: Select a policy, pick a certificate holder, and generate a pre-filled PDF Certificate of Insurance.
   - **Auto-Logic**: Automatically hides/shows "General Liability", "Auto", and "Cargo" sections based on coverage presence.
   - **Smart Formatting**: Pre-fills the "Description of Operations" with vehicle/driver lists and required clauses.
@@ -73,6 +76,7 @@ For a deep dive into the architecture, extraction pipeline, and ontology rules, 
 - **`coi_generator.py`**: Handles filling the `COI Example.pdf` template with data.
 - **`coi_mapping.json`**: Maps internal database fields to the PDF form field names.
 - **`naic_utils.py`**: Helper dictionary for looking up NAIC codes by Carrier Name.
+- **`text_utils.py`**: Centralized string normalization and currency parsing logic.
 - **`coi_utils.py`**: Utility for loading company data (Certificate Holders) from Excel.
 
 ## Customization

@@ -389,10 +389,15 @@ def summarize_um_uim(coverages):
         elif cov.get("limit_structure") == "split":
             pp = limits.get("per_person")
             pa = limits.get("per_accident")
-            if pp and pa:
-                return f"{pp//1000}/{pa//1000}" 
-            elif pp:
-                return f"{pp//1000} (BI)"
+            
+            # Shorthand fix: If limits are small (e.g. 250), assume they are in thousands
+            if pp is not None and pa is not None:
+                fmt_pp = pp if pp < 1000 else pp // 1000
+                fmt_pa = pa if pa < 1000 else pa // 1000
+                return f"{fmt_pp}/{fmt_pa}"
+            elif pp is not None:
+                fmt_pp = pp if pp < 1000 else pp // 1000
+                return f"{fmt_pp} (BI)"
         return None
 
     # Priority: CSL > Split
