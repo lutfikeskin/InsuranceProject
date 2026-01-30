@@ -61,7 +61,7 @@ def edit_policy_dialog(policy, service: PolicyService):
             st.markdown("<br>", unsafe_allow_html=True)
             st.warning("⚠️ **Warning**: Saving details only updates the fields above. Vehicles/Drivers are not affected.")
             
-            submitted_details = st.form_submit_button("💾 Save Details", use_container_width=True, type="primary")
+            submitted_details = st.form_submit_button("💾 Save Details", width='stretch', type="primary")
             
             if submitted_details:
                 updated_data = {
@@ -116,7 +116,7 @@ def edit_policy_dialog(policy, service: PolicyService):
              edited_v = st.data_editor(
                  v_df, 
                  num_rows="dynamic", 
-                 use_container_width=True, 
+                 width='stretch', 
                  key="fleet_editor",
                  column_config={
                      "year": st.column_config.NumberColumn("Year", min_value=1900, max_value=2030, format="%d"),
@@ -163,7 +163,7 @@ def edit_policy_dialog(policy, service: PolicyService):
              edited_d = st.data_editor(
                  d_df, 
                  num_rows="dynamic", 
-                 use_container_width=True, 
+                 width='stretch', 
                  key="driver_editor",
                  column_config={
                      "full_name": st.column_config.TextColumn("Driver Name", required=True),
@@ -202,7 +202,7 @@ def edit_policy_dialog(policy, service: PolicyService):
              edited_ai = st.data_editor(
                  ai_df, 
                  num_rows="dynamic", 
-                 use_container_width=True, 
+                 width='stretch', 
                  key="ai_editor",
                  column_config={
                      "name": st.column_config.TextColumn("Entity Name", required=True),

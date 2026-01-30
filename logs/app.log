@@ -342,3 +342,67 @@
 2026-01-30 15:10:50 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing vehicles -> Pages [0]
 2026-01-30 15:10:50 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing drivers -> Pages [0]
 2026-01-30 15:11:02 | DEBUG    | modules.extraction.pipeline:save:152 - CACHE SAVED: v8_37abce84c308d9535bdba8da66aa213ba0c31292f743bf4d9b15fff866982c1f
+2026-01-30 15:35:05 | INFO     | modules.extraction.pipeline:run:200 - Uploading to Gemini File API...
+2026-01-30 15:35:07 | INFO     | modules.extraction.pipeline:run:204 - File uploaded: files/d8j5zfkojcg7
+2026-01-30 15:35:13 | INFO     | modules.extraction.pipeline:run:212 - Policy Type: commercial_package (high)
+2026-01-30 15:35:17 | INFO     | modules.extraction.pipeline:run:219 - Broad Slices (Locator): {"declarations": [1], "coverages": [1], "vehicles": [1], "drivers": [1]}
+2026-01-30 15:35:17 | INFO     | modules.extraction.pipeline:_run_universal_scout:380 - Running Universal Scout (Full PDF)...
+2026-01-30 15:35:21 | INFO     | modules.extraction.pipeline:run:266 - Smart Slices (Merged): {"declarations": [1], "vehicles": [1], "drivers": [1], "coverages": [1]}
+2026-01-30 15:35:22 | DEBUG    | modules.extraction.pipeline:run:276 - Deleted remote file: files/d8j5zfkojcg7
+2026-01-30 15:35:22 | INFO     | modules.extraction.pipeline:_perform_extraction:431 - SHORT DOC STRATEGY: Bypassing slicing for 1 page(s). Using full doc.
+2026-01-30 15:35:38 | DEBUG    | modules.extraction.pipeline:save:152 - CACHE SAVED: v9_37abce84c308d9535bdba8da66aa213ba0c31292f743bf4d9b15fff866982c1f
+2026-01-30 15:36:42 | INFO     | modules.extraction.pipeline:run:200 - Uploading to Gemini File API...
+2026-01-30 15:36:43 | INFO     | modules.extraction.pipeline:run:204 - File uploaded: files/1954h29y3aig
+2026-01-30 15:36:48 | INFO     | modules.extraction.pipeline:run:212 - Policy Type: commercial_package (high)
+2026-01-30 15:36:51 | INFO     | modules.extraction.pipeline:run:219 - Broad Slices (Locator): {"declarations": [1], "coverages": [1], "vehicles": [1], "drivers": [1]}
+2026-01-30 15:36:51 | INFO     | modules.extraction.pipeline:_run_universal_scout:380 - Running Universal Scout (Full PDF)...
+2026-01-30 15:36:54 | INFO     | modules.extraction.pipeline:run:266 - Smart Slices (Merged): {"declarations": [1], "vehicles": [1], "drivers": [1], "coverages": [1]}
+2026-01-30 15:36:56 | DEBUG    | modules.extraction.pipeline:run:276 - Deleted remote file: files/1954h29y3aig
+2026-01-30 15:36:56 | INFO     | modules.extraction.pipeline:_perform_extraction:431 - SHORT DOC STRATEGY: Bypassing slicing for 1 page(s). Using full doc.
+2026-01-30 15:37:09 | DEBUG    | modules.extraction.pipeline:save:152 - CACHE SAVED: v9_2d92f551691456be01c6add9fd4930f18f49e7dffc0e7726f1f2efbc9ed8bf1a
+2026-01-30 15:38:12 | INFO     | modules.extraction.pipeline:get:140 - CACHE HIT: v9_37abce84c308d9535bdba8da66aa213ba0c31292f743bf4d9b15fff866982c1f
+2026-01-30 15:38:12 | INFO     | modules.extraction.pipeline:run:200 - Uploading to Gemini File API...
+2026-01-30 15:38:14 | INFO     | modules.extraction.pipeline:run:204 - File uploaded: files/5bgpep6icf45
+2026-01-30 15:38:15 | DEBUG    | modules.extraction.pipeline:run:276 - Deleted remote file: files/5bgpep6icf45
+2026-01-30 15:40:08 | INFO     | modules.extraction.pipeline:get:140 - CACHE HIT: v9_37abce84c308d9535bdba8da66aa213ba0c31292f743bf4d9b15fff866982c1f
+2026-01-30 15:40:08 | INFO     | modules.extraction.pipeline:run:200 - Uploading to Gemini File API...
+2026-01-30 15:40:10 | INFO     | modules.extraction.pipeline:run:204 - File uploaded: files/szw5yaon7r5s
+2026-01-30 15:40:19 | INFO     | modules.extraction.pipeline:run:212 - Policy Type: commercial_package (high)
+2026-01-30 15:40:22 | INFO     | modules.extraction.pipeline:run:219 - Broad Slices (Locator): {"declarations": [1], "coverages": [1], "vehicles": [1], "drivers": [1]}
+2026-01-30 15:40:22 | INFO     | modules.extraction.pipeline:_run_universal_scout:380 - Running Universal Scout (Full PDF)...
+2026-01-30 15:40:26 | INFO     | modules.extraction.pipeline:run:266 - Smart Slices (Merged): {"declarations": [1], "vehicles": [1], "drivers": [1], "coverages": [1]}
+2026-01-30 15:40:28 | DEBUG    | modules.extraction.pipeline:run:276 - Deleted remote file: files/szw5yaon7r5s
+2026-01-30 15:40:28 | INFO     | modules.extraction.pipeline:_perform_extraction:431 - SHORT DOC STRATEGY: Bypassing slicing for 1 page(s). Using full doc.
+2026-01-30 15:40:43 | DEBUG    | modules.extraction.pipeline:save:152 - CACHE SAVED: v9_37abce84c308d9535bdba8da66aa213ba0c31292f743bf4d9b15fff866982c1f
+2026-01-30 15:41:41 | INFO     | modules.extraction.pipeline:get:140 - CACHE HIT: v9_37abce84c308d9535bdba8da66aa213ba0c31292f743bf4d9b15fff866982c1f
+2026-01-30 15:41:41 | INFO     | modules.extraction.pipeline:run:200 - Uploading to Gemini File API...
+2026-01-30 15:41:43 | INFO     | modules.extraction.pipeline:run:204 - File uploaded: files/01lvcyqh8jjv
+2026-01-30 15:41:49 | INFO     | modules.extraction.pipeline:run:212 - Policy Type: commercial_package (high)
+2026-01-30 15:41:53 | INFO     | modules.extraction.pipeline:run:219 - Broad Slices (Locator): {"declarations": [1], "coverages": [1], "vehicles": [1], "drivers": [1]}
+2026-01-30 15:41:53 | INFO     | modules.extraction.pipeline:_run_universal_scout:380 - Running Universal Scout (Full PDF)...
+2026-01-30 15:41:57 | INFO     | modules.extraction.pipeline:run:266 - Smart Slices (Merged): {"declarations": [1], "vehicles": [1], "drivers": [1], "coverages": [1]}
+2026-01-30 15:41:59 | DEBUG    | modules.extraction.pipeline:run:276 - Deleted remote file: files/01lvcyqh8jjv
+2026-01-30 15:41:59 | INFO     | modules.extraction.pipeline:_perform_extraction:431 - SHORT DOC STRATEGY: Bypassing slicing for 1 page(s). Using full doc.
+2026-01-30 15:42:15 | DEBUG    | modules.extraction.pipeline:save:152 - CACHE SAVED: v9_37abce84c308d9535bdba8da66aa213ba0c31292f743bf4d9b15fff866982c1f
+2026-01-30 15:45:54 | INFO     | modules.extraction.pipeline:get:140 - CACHE HIT: v9_37abce84c308d9535bdba8da66aa213ba0c31292f743bf4d9b15fff866982c1f
+2026-01-30 15:46:19 | INFO     | modules.extraction.pipeline:run:200 - Uploading to Gemini File API...
+2026-01-30 15:46:21 | INFO     | modules.extraction.pipeline:run:204 - File uploaded: files/spt9edmamp2k
+2026-01-30 15:46:28 | INFO     | modules.extraction.pipeline:run:212 - Policy Type: commercial_package (high)
+2026-01-30 15:46:32 | INFO     | modules.extraction.pipeline:run:219 - Broad Slices (Locator): {"declarations": [1], "coverages": [1], "vehicles": [1], "drivers": [1]}
+2026-01-30 15:46:32 | INFO     | modules.extraction.pipeline:_run_universal_scout:385 - Running Universal Scout (Full PDF)...
+2026-01-30 15:46:35 | INFO     | modules.extraction.pipeline:run:266 - Smart Slices (Merged): {"declarations": [1], "vehicles": [1], "drivers": [1], "coverages": [1]}
+2026-01-30 15:46:37 | DEBUG    | modules.extraction.pipeline:run:276 - Deleted remote file: files/spt9edmamp2k
+2026-01-30 15:46:37 | INFO     | modules.extraction.pipeline:_perform_extraction:436 - SHORT DOC STRATEGY: Bypassing slicing for 1 page(s). Using full doc.
+2026-01-30 15:46:54 | DEBUG    | modules.extraction.pipeline:save:152 - CACHE SAVED: v9_37abce84c308d9535bdba8da66aa213ba0c31292f743bf4d9b15fff866982c1f
+2026-01-30 16:08:06 | INFO     | modules.extraction.pipeline:run:200 - Uploading to Gemini File API...
+2026-01-30 16:08:06 | INFO     | modules.extraction.pipeline:run:204 - File uploaded: <MagicMock name='mock_file.name' id='622074384'>
+2026-01-30 16:08:06 | INFO     | modules.extraction.pipeline:run:212 - Policy Type: commercial_auto (high)
+2026-01-30 16:08:06 | INFO     | modules.extraction.pipeline:run:219 - Broad Slices (Locator): {"declarations": [1], "vehicles": [50], "drivers": [50], "coverages": [10]}
+2026-01-30 16:08:06 | INFO     | modules.extraction.pipeline:_run_universal_scout:385 - Running Universal Scout (Full PDF)...
+2026-01-30 16:08:06 | INFO     | modules.extraction.pipeline:run:266 - Smart Slices (Merged): {"declarations": [1], "vehicles": [50], "drivers": [50], "coverages": [10]}
+2026-01-30 16:08:06 | DEBUG    | modules.extraction.pipeline:run:276 - Deleted remote file: <MagicMock name='mock_file.name' id='622074384'>
+2026-01-30 16:08:06 | INFO     | modules.extraction.pipeline:_perform_extraction:444 - PIPELINE: Slicing declarations -> Pages [0]
+2026-01-30 16:08:06 | INFO     | modules.extraction.pipeline:_perform_extraction:444 - PIPELINE: Slicing coverages -> Pages [9]
+2026-01-30 16:08:06 | INFO     | modules.extraction.pipeline:_perform_extraction:444 - PIPELINE: Slicing vehicles -> Pages [49]
+2026-01-30 16:08:06 | INFO     | modules.extraction.pipeline:_perform_extraction:444 - PIPELINE: Slicing drivers -> Pages [49]
+2026-01-30 16:08:06 | DEBUG    | modules.extraction.pipeline:save:152 - CACHE SAVED: v9_dummy_hash

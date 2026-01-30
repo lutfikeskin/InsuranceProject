@@ -2,148 +2,128 @@
   "policy": {
     "carrier_name": "GEICO Marine Insurance Company",
     "naic_number": "37923",
-    "policy_number": "930008951",
+    "policy_number": "9300089751",
     "effective_date": "11/26/2025",
     "expiration_date": "11/26/2026",
-    "account_type": "NULL",
+    "account_type": "null",
     "insured_name": "ABC EXPRESS LLC",
     "insured_address": "673 CUPPS BRIDGE RD",
     "insured_city": "FRANKFORT",
     "insured_state_code": "OH",
     "insured_zip": "45628",
     "business_name": "ABC EXPRESS LLC",
-    "premium": "NULL",
-    "financial_responsibility_name": "NULL",
-    "state": "NULL",
+    "premium": "null",
+    "financial_responsibility_name": "null",
+    "state": "null",
     "field_locations": [
       {
         "field": "carrier_name",
         "page_number": 1,
         "bbox": [
-          206,
-          552,
-          222,
-          735
+          200,
+          550,
+          210,
+          720
         ]
       },
       {
         "field": "naic_number",
         "page_number": 1,
         "bbox": [
-          207,
-          783,
-          223,
-          824
+          200,
+          920,
+          210,
+          950
         ]
       },
       {
         "field": "policy_number",
         "page_number": 1,
         "bbox": [
-          374,
-          404,
-          388,
-          482
+          520,
+          400,
+          530,
+          470
         ]
       },
       {
         "field": "effective_date",
         "page_number": 1,
         "bbox": [
-          518,
-          547,
-          532,
-          613
-        ]
-      },
-      {
-        "field": "effective_date",
-        "page_number": 1,
-        "bbox": [
-          680,
-          547,
-          694,
-          613
+          520,
+          540,
+          530,
+          600
         ]
       },
       {
         "field": "expiration_date",
         "page_number": 1,
         "bbox": [
-          518,
-          629,
-          532,
-          686
-        ]
-      },
-      {
-        "field": "expiration_date",
-        "page_number": 1,
-        "bbox": [
-          680,
-          629,
-          694,
-          686
+          520,
+          620,
+          530,
+          680
         ]
       },
       {
         "field": "insured_name",
         "page_number": 1,
         "bbox": [
-          245,
-          118,
-          259,
-          237
+          240,
+          120,
+          250,
+          240
         ]
       },
       {
         "field": "insured_address",
         "page_number": 1,
         "bbox": [
-          262,
-          117,
-          276,
-          278
+          250,
+          120,
+          260,
+          270
         ]
       },
       {
         "field": "insured_city",
         "page_number": 1,
         "bbox": [
-          278,
-          117,
-          292,
-          193
+          260,
+          120,
+          270,
+          190
         ]
       },
       {
         "field": "insured_state_code",
         "page_number": 1,
         "bbox": [
-          278,
-          201,
-          292,
-          223
+          260,
+          200,
+          270,
+          220
         ]
       },
       {
         "field": "insured_zip",
         "page_number": 1,
         "bbox": [
-          278,
-          228,
-          292,
-          277
+          260,
+          230,
+          270,
+          270
         ]
       },
       {
         "field": "business_name",
         "page_number": 1,
         "bbox": [
-          245,
-          118,
-          259,
-          237
+          240,
+          120,
+          250,
+          240
         ]
       }
     ],
@@ -154,13 +134,67 @@
     "med_pay_limit": null,
     "pip_limit": null,
     "has_auto_liability": true,
-    "has_general_liability": false,
+    "has_general_liability": true,
     "has_full_collision": false
   },
   "coverages": [
     {
+      "coverage_code": "GL_OCCURRENCE",
+      "display_name": "General Liability - Per Occurrence",
+      "family": "general_liability",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 0
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          400,
+          699,
+          410,
+          950
+        ]
+      }
+    },
+    {
+      "coverage_code": "GL_AGGREGATE",
+      "display_name": "General Liability - Aggregate",
+      "family": "general_liability",
+      "limit_structure": "aggregate",
+      "limits": {
+        "aggregate": 0
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          440,
+          699,
+          450,
+          950
+        ]
+      }
+    },
+    {
+      "coverage_code": "GL_PRODUCTS_COMP_OPS",
+      "display_name": "Products/Completed Operations Aggregate",
+      "family": "general_liability",
+      "limit_structure": "aggregate",
+      "limits": {
+        "aggregate": 0
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          460,
+          699,
+          470,
+          950
+        ]
+      }
+    },
+    {
       "coverage_code": "AUTO_LIAB_CSL",
-      "display_name": "Combined Single Limit - Automobile Liability",
+      "display_name": "Auto Liability - Combined Single Limit - Automobile Liability",
       "family": "auto_liability",
       "limit_structure": "csl",
       "limits": {
@@ -169,10 +203,10 @@
       "location": {
         "page_number": 1,
         "bbox": [
-          486,
-          755,
-          502,
-          915
+          490,
+          699,
+          510,
+          950
         ]
       }
     },
@@ -188,10 +222,10 @@
       "location": {
         "page_number": 1,
         "bbox": [
-          676,
-          699,
-          706,
-          843
+          670,
+          37,
+          690,
+          790
         ]
       }
     }
@@ -202,26 +236,27 @@
       "make": "CHEVROLET",
       "model": "EXPRESS",
       "vin": "1GBHG31KX91155554",
-      "gvw": 8600,
+      "gvw": 0,
       "type": "Straight Truck",
       "chassis": "Cab Chassis",
-      "body": "Cargo Van"
+      "body": "Van"
     }
   ],
   "drivers": [
     {
       "full_name": "DMITRIY PAVLOV",
-      "license_number": "N/A",
+      "license_number": "null",
       "is_excluded": false
     }
   ],
   "classification": {
-    "policy_type": "commercial_auto",
+    "policy_type": "commercial_package",
     "confidence": "high",
     "signals": [
-      "GEICO COMMERCIAL AUTO (Producer Contact Name)",
-      "AUTOMOBILE LIABILITY (with active limits)",
-      "Motor Truck Cargo (as additional coverage)"
+      "COMMERCIAL GENERAL LIABILITY",
+      "AUTOMOBILE LIABILITY",
+      "Motor Truck Cargo",
+      "GEICO COMMERCIAL AUTO"
     ]
   },
   "page_dimensions": [

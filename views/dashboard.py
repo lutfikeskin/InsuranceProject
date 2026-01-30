@@ -72,7 +72,7 @@ def page_dashboard():
                 
                 if selected_p_key:
                     st.success(f"Found: {selected_p_key}")
-                    if st.button("Edit Policy", type="primary", use_container_width=True):
+                    if st.button("Edit Policy", type="primary", width='stretch'):
                         edit_policy_dialog(policy_map[selected_p_key], service)
             else:
                 st.info("Add a policy to enable lookup.")

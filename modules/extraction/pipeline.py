@@ -161,17 +161,17 @@ class GeminiExtractionPipeline:
         self.session = get_session(self.engine)
         self.usage_service = UsageService(self.session)
 
-    def _validate_extraction_completeness(self, final_result, extracted_text_signal):
-        """Phase 4: Sanity Check - Detect Silent Failures."""
+    def _validate_extraction_completeness(self, final_result, ctx):
+        """Phase 4: Sanity Check - Detect Silent Failures using Scout Signals."""
         policy_type = final_result.get("classification", {}).get("policy_type")
         
         # Only check Auto-like policies
-        if policy_type in ["personal_auto", "commercial_auto", "motor_truck_cargo"]:
+        if policy_type in ["personal_auto", "commercial_auto", "motor_truck_cargo", "commercial_package"]: # Added commercial_package
              has_vehs = len(final_result.get("vehicles", [])) > 0
-             text_implies_vehs = "VIN" in extracted_text_signal or "Vehicle" in extracted_text_signal
+             scout_has_vehs = len(ctx.scout_map.get("vehicle_schedule_signals", [])) > 0
              
-             if text_implies_vehs and not has_vehs:
-                 return False, "Silent Failure: Text contains 'VIN/Vehicle' but 0 vehicles extracted."
+             if scout_has_vehs and not has_vehs:
+                 return False, "Silent Failure: Scout detected vehicles but extraction returned 0."
                  
         return True, "Passed"
 
@@ -297,8 +297,13 @@ class GeminiExtractionPipeline:
         # (Naive text signal assumption: checking raw text from first page as proxy for entire doc signal is costly here
         # so we will trust the extracted result internal logic for now, or just use Scout map)
         # Using Scout Map as "Text Signal" proxy
-        scout_has_veh = len(ctx.scout_map.get("vehicle_schedule_signals", [])) > 0
-        is_valid, sanity_msg = self._validate_extraction_completeness(final_result, "Vehicle" if scout_has_veh else "")
+        # 6b. Phase 4: Sanity Check
+        # (Naive text signal assumption: checking raw text from first page as proxy for entire doc signal is costly here
+        # so we will trust the extracted result internal logic for now, or just use Scout map)
+        # Using Scout Map as "Text Signal" proxy
+        is_valid, sanity_msg = self._validate_extraction_completeness(final_result, ctx)
+        if not is_valid:
+            ctx.usage_metadata["sanity_failure"] = sanity_msg  # Log metadata
         
         if not is_valid:
             logger.warning(f"SANITY CHECK FAILED: {sanity_msg}")
@@ -449,10 +454,11 @@ class GeminiExtractionPipeline:
             future_drv = None
             
             # Conditional Tasks
-            if ctx.policy_type in ["personal_auto", "commercial_auto", "motor_truck_cargo", "umbrella"]:
+            # FIX: Allow 'commercial_package' (COIs often have GL+Auto)
+            if ctx.policy_type in ["personal_auto", "commercial_auto", "motor_truck_cargo", "umbrella", "commercial_package"]:
                  future_veh = executor.submit(self._extract_vehicles, slices["vehicles"], ctx)
             
-            if ctx.policy_type in ["personal_auto", "commercial_auto"]:
+            if ctx.policy_type in ["personal_auto", "commercial_auto", "commercial_package"]:
                  future_drv = executor.submit(self._extract_drivers, slices["drivers"], ctx)
                  
             # Wait & Store (Tuples from now on could be supported, but ctx passed is simpler for mutation)
@@ -472,37 +478,34 @@ class GeminiExtractionPipeline:
         info = section_map.get(section_name, [])
         
         # GUARD: Empty slice optimization
+        # GUARD: Empty slice optimization
         if info in (None, {}, []):
-            return []
+            # FIX: Fail Open for Safety
+            # If we have NO info on where the section is, scanning the whole doc is safer 
+            # than returning an empty PDF (which guarantees 0 results).
+            return list(range(total_pages))
             
         selected_pages = []
 
-        # Case A: List of Integers (e.g., [1, 2, 6]) - The Preferred Format
-        if isinstance(info, list) and info and isinstance(info[0], int):
-            selected_pages = [p - 1 for p in info if isinstance(p, int) and 1 <= p <= total_pages]
-            
-        # Case B: List of Dicts (Legacy fallback)
-        elif isinstance(info, list) and info and isinstance(info[0], dict):
-            # Take union of all ranges in the list
-            possible_pages = set()
+        # Case A: List of Integers (Standardized)
+        if isinstance(info, list) and info:
+            # Flatten mixed list of ints/dicts just in case (e.g. from legacy cache)
             for item in info:
-                s = item.get("start_page", 1)
-                e = item.get("end_page", total_pages)
-                possible_pages.update(range(s - 1, min(e, total_pages)))
-            selected_pages = sorted(list(possible_pages))
+                if isinstance(item, int):
+                    if 1 <= item <= total_pages:
+                        selected_pages.append(item - 1)
+                elif isinstance(item, dict):
+                    # Handle legacy dict inside list if it somehow persists
+                    s = item.get("start_page", 1)
+                    e = item.get("end_page", total_pages)
+                    # Convert range to pages
+                    for p in range(max(1, s), min(e, total_pages) + 1):
+                         selected_pages.append(p - 1)
             
-        # Case C: Single Integer (Legacy)
-        elif isinstance(info, int):
-            val = max(0, min(info - 1, total_pages - 1))
-            selected_pages = [val]
+            # Dedupe and Sort
+            selected_pages = sorted(list(set(selected_pages)))
             
-        # Case D: Single Dict (Legacy)
-        elif isinstance(info, dict):
-            s = info.get("start_page", 1)
-            e = info.get("end_page", total_pages)
-            start_idx = max(0, s - 1)
-            end_idx = min(e, total_pages)
-            selected_pages = list(range(start_idx, end_idx))
+        # Legacy Cases B, C, D (Dict, Int, etc.) are REMOVED as Schema enforces List[Int]
             
         # Apply MAX_PAGES Cap (Take first N pages)
         max_p = MAX_PAGES.get(section_name, 10)
@@ -537,18 +540,41 @@ class GeminiExtractionPipeline:
         return self._parse_json_response(res.text, ctx)
 
     def _extract_vehicles(self, part, ctx):
+        scout_pages = ctx.scout_map.get("vehicle_schedule_signals", [])
+        scout_hint = ""
+        if scout_pages:
+            # Flatten mixed list of ints/dicts just in case, though usually ints here
+            cleaned_pages = []
+            for p in scout_pages:
+                 if isinstance(p, int): cleaned_pages.append(p)
+                 elif isinstance(p, dict): cleaned_pages.append(p.get("page", 0))
+            if cleaned_pages:
+                 scout_hint = f"\nKNOWN VEHICLE SIGNAL PAGES: {sorted(list(set(cleaned_pages)))}\n"
+
+        prompt = scout_hint + EXTRACT_VEHICLES_PROMPT
         res = self._call_gemini(
             model=EXTRACTION_MODEL, 
-            contents=[part, EXTRACT_VEHICLES_PROMPT],
+            contents=[part, prompt],
             config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=VEHICLE_SCHEMA),
             request_type="extraction_vehicles"
         )
         return self._parse_json_response(res.text, ctx)
 
     def _extract_drivers(self, part, ctx):
+        scout_pages = ctx.scout_map.get("driver_schedule_signals", [])
+        scout_hint = ""
+        if scout_pages:
+            cleaned_pages = []
+            for p in scout_pages:
+                 if isinstance(p, int): cleaned_pages.append(p)
+                 elif isinstance(p, dict): cleaned_pages.append(p.get("page", 0))
+            if cleaned_pages:
+                 scout_hint = f"\nKNOWN DRIVER SIGNAL PAGES: {sorted(list(set(cleaned_pages)))}\n"
+
+        prompt = scout_hint + EXTRACT_DRIVERS_PROMPT
         res = self._call_gemini(
             model=EXTRACTION_MODEL, 
-            contents=[part, EXTRACT_DRIVERS_PROMPT],
+            contents=[part, prompt],
             config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=DRIVER_SCHEMA),
             request_type="extraction_drivers"
         )

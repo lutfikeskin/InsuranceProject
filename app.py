@@ -50,7 +50,7 @@ def settings_modal():
     current_key = st.session_state.get("GEMINI_API_KEY", "")
     new_key = st.text_input("Gemini API Key", value=current_key if current_key else "", type="password", help="Enter your Google Gemini API Key for policy extraction.")
     
-    if st.button("Save & Refresh", use_container_width=True, type="primary"):
+    if st.button("Save & Refresh", width='stretch', type="primary"):
         if new_key:
             st.session_state["GEMINI_API_KEY"] = new_key
             st.success("Settings saved successfully!")
@@ -96,7 +96,7 @@ with st.sidebar:
     st.markdown("<br>" * 10, unsafe_allow_html=True) 
     
     st.divider()
-    if st.button("⚙️ Settings", use_container_width=True):
+    if st.button("⚙️ Settings", width='stretch'):
         settings_modal()
     
     if api_key:

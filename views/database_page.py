@@ -33,7 +33,7 @@ def page_database(api_key):
             with c_chat_in:
                 user_question = st.text_input("Ask a question about your policies:", key="data_chat_input", label_visibility="collapsed", placeholder="e.g. Policies expiring next month...")
             with c_chat_btn:
-                ask_submitted = st.button("Ask AI", type="secondary", use_container_width=True)
+                ask_submitted = st.button("Ask AI", type="secondary", width='stretch')
 
             # Initialize session state for results if not present
             if "ai_search_results" not in st.session_state:
@@ -288,11 +288,11 @@ def page_database(api_key):
             
             with c_foot_1:
                  excel_all = create_excel_report(export_data)
-                 st.download_button("📥 Export Current View", data=excel_all, file_name="insurance_database.xlsx", use_container_width=True)
+                 st.download_button("📥 Export Current View", data=excel_all, file_name="insurance_database.xlsx", width='stretch')
             
             with c_foot_2:
                  with open("insurance_data.db", "rb") as f:
-                     st.download_button("💾 Backup Database", data=f.read(), file_name="insurance_data.db", use_container_width=True)
+                     st.download_button("💾 Backup Database", data=f.read(), file_name="insurance_data.db", width='stretch')
             
             with c_foot_3:
                 # Robust selection check
@@ -312,10 +312,10 @@ def page_database(api_key):
                     target_pol = next((p for p in policies if p.id == p_id), None)
                     
                     if target_pol:
-                        if st.button(f"✏️ Edit Policy #{target_pol.policy_number}", type="primary", use_container_width=True):
+                        if st.button(f"✏️ Edit Policy #{target_pol.policy_number}", type="primary", width='stretch'):
                             edit_policy_dialog(target_pol, service)
                 else:
-                    st.button("✏️ Select a policy above to edit", disabled=True, use_container_width=True)
+                    st.button("✏️ Select a policy above to edit", disabled=True, width='stretch')
 
         else:
             st.warning(f"No policies found matching '{search_query}'.")

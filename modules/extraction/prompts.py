@@ -1,5 +1,14 @@
 
-CLASSIFY_POLICY_PROMPT = """
+GLOBAL_EXTRACTION_PRINCIPLES = """
+    GLOBAL EXTRACTION PRINCIPLES:
+    - The document may be any insurance artifact (declaration, endorsement, jacket, memorandum, certificate, ID card).
+    - Information may appear in tables, key-value blocks, footnotes, or free-form paragraphs.
+    - NEVER assume a section header exists.
+    - Presence of information matters more than formatting.
+    - If information exists but is incomplete, extract it anyway.
+"""
+
+CLASSIFY_POLICY_PROMPT = GLOBAL_EXTRACTION_PRINCIPLES + """
     You are an insurance policy classification system.
     Determine the primary policy type of the provided PDF.
     
@@ -16,6 +25,7 @@ CLASSIFY_POLICY_PROMPT = """
     Rules:
     - Base decision on explicit wording and structure.
     - Prefer declarations and coverage titles.
+    - Ignore standalone endorsement pages unless they clearly state the base policy form.
     - If unsure, return "unknown".
     
     DOMINANCE RULE:
@@ -28,7 +38,7 @@ CLASSIFY_POLICY_PROMPT = """
     - List the detected coverage families used to justify this decision in the 'signals' array.
     """
 
-LOCATE_SECTIONS_PROMPT = """
+LOCATE_SECTIONS_PROMPT = GLOBAL_EXTRACTION_PRINCIPLES + """
     Analyze the PDF and identify page numbers for the following sections.
 
     Sections:
@@ -40,9 +50,11 @@ LOCATE_SECTIONS_PROMPT = """
     Rules:
     - Use EMPTY ARRAY [] if a section is missing.
     - Do NOT return objects, ranges, or single integers.
+    - A section may be embedded inside another page without a header.
+    - Return the page number if the content exists, even if no section title is present.
     """
 
-UNIVERSAL_SCOUT_PROMPT = """
+UNIVERSAL_SCOUT_PROMPT = GLOBAL_EXTRACTION_PRINCIPLES + """
     You are a document intelligence system analyzing an insurance policy PDF.
 
     Your task is NOT to extract values.
@@ -67,12 +79,14 @@ UNIVERSAL_SCOUT_PROMPT = """
          - Fleet Schedule
          - VIN Lists
          - Auto Schedule tables
+       - If a formal schedule is missing, still return pages where vehicle information is described in prose.
 
     3. DRIVER SCHEDULE SIGNALS
        - Pages containing:
          - Driver Schedules
          - Named Driver Lists
          - Excluded Driver Endorsements
+       - If a formal schedule is missing, still return pages where driver information is described in prose.
 
     4. COVERAGE SCHEDULE SIGNALS
        - Pages containing:
@@ -90,7 +104,7 @@ UNIVERSAL_SCOUT_PROMPT = """
     Return only valid JSON matching the provided schema.
 """
 
-EXTRACT_DECLARATIONS_PROMPT = """
+EXTRACT_DECLARATIONS_PROMPT = GLOBAL_EXTRACTION_PRINCIPLES + """
     Extract core policy declarations information.
     
     CRITICAL - CARRIER NAME VS AGENCY:
@@ -125,70 +139,130 @@ EXTRACT_DECLARATIONS_PROMPT = """
     bbox format: [ymin, xmin, ymax, xmax] (0-1000 scale).
     """
 
-EXTRACT_VEHICLES_PROMPT = """
-    Extract the schedule of covered vehicles.
+EXTRACT_VEHICLES_PROMPT = GLOBAL_EXTRACTION_PRINCIPLES + """
+    Extract ALL covered vehicles mentioned anywhere in the document.
 
-    For each vehicle include:
+    GLOBAL RULE:
+    Before deciding "no vehicles exist", you MUST perform a semantic scan of the entire document
+    for vehicle-related language, even if no table or schedule exists.
+
+    VEHICLE EXISTENCE SIGNALS (ANY is sufficient):
+    - VIN
+    - Year / Make / Model
+    - Unit #
+    - Plate #
+    - GVW
+    - References such as:
+      "any owned autos", "scheduled autos", "covered vehicles", "listed vehicles",
+      "tractor", "trailer", "truck", "van", "auto"
+
+    STRUCTURE RULE:
+    - Vehicles may appear in tables OR embedded in paragraphs OR footnotes.
+    - Multiple vehicles described in one paragraph MUST be split into separate records.
+    - If a vehicle is referenced generically (e.g., "1 Tractor"), extract a record with description filled.
+
+    FIELDS PER VEHICLE:
     - year
     - make
     - model
     - vin
     - gvw
     - type
-    - chassis (The base platform, e.g. "Pickup", "Cab Chassis", "Tractor", "Van")
-    - body (The attachment, e.g. "Dump", "Box", "Flatbed", "Service Body")
+    - chassis
+    - body
 
-    CHASSIS PRECEDENCE RULE:
-    - Chassis equals the legal/underwriting platform.
-    - Body equals the operational attachment.
-    - Chassis determines base classification. Body style may refine, but may NOT override chassis.
-    - Example: Chassis 'Pickup' + Body 'Utility Box' -> Type 'Pickup' (not box truck).
-    - Example: Chassis 'Cab Chassis' + Body 'Box' -> Type 'Box Truck'.
-    
+    CHASSIS PRECEDENCE RULE (STRICT):
+    - Chassis = underwriting platform
+    - Body = attached structure
+    - Chassis determines classification
+
     VEHICLE TYPE RULES (STRICT):
-    - Cargo Van examples: Ram ProMaster, Ford Transit, Mercedes Sprinter -> "cargo_van"
-    - Box Truck / Straight Truck (14ft-26ft) -> "box_truck"
-    - Semi / Tractor -> "tractor"
-    - Pickup (F-150, Silverado, RAM 1500) -> "pickup"
-    - Passenger vehicles -> "passenger_auto"
+    - Cargo Van (Transit, ProMaster, Sprinter) → cargo_van
+    - Box / Straight Truck (14–26 ft) → box_truck
+    - Tractor / Semi → tractor
+    - Pickup (F-150, RAM 1500, Silverado) → pickup
+    - Passenger autos → passenger_auto
 
-    Rules:
-    - Do NOT default to "auto".
-    - If unsure, infer type from model name and GVW.
-    - Never leave type empty.
-    - CONTINUITY RULE: If a table spans multiple pages, treat it as a single vehicle schedule.
-    
-    PROSE SCANNING (CRITICAL for COIs):
-    - Vehicles are not always in tables.
-    - Scan "Description of Operations", "Remarks", "Notes", and "Forms" sections.
-    - If a vehicle year/make/model matches a VIN in a text block, extract it.
-    - EXTRACT from plain text paragraphs (e.g. "Covered Auto: 2020 Ford F-150 VIN...").
+    INFERENCE RULES:
+    - Type may be inferred from model name or GVW.
+    - Never infer VINs or plates.
+    - Never merge vehicles.
+
+    FAILURE RULE:
+    - If NO vehicles are explicitly or implicitly referenced, return:
+      { "vehicles": [] }
+
+    OUTPUT FORMAT (STRICT JSON):
+    {
+      "vehicles": [
+        {
+          "year": string | null,
+          "make": string | null,
+          "model": string | null,
+          "vin": string | null,
+          "gvw": string | null,
+          "type": string,
+          "chassis": string | null,
+          "body": string | null,
+          "description": string | null
+        }
+      ]
+    }
     """
 
-EXTRACT_DRIVERS_PROMPT = """
-    Extract the list of drivers.
+EXTRACT_DRIVERS_PROMPT = GLOBAL_EXTRACTION_PRINCIPLES + """
+    Extract ALL drivers referenced anywhere in the document.
 
-    For each driver:
+    GLOBAL RULE:
+    Before deciding "no drivers exist", perform a semantic scan for driver-related language.
+
+    DRIVER EXISTENCE SIGNALS (ANY is sufficient):
+    - Person names labeled as drivers
+    - "Driver", "Operator", "Named Driver"
+    - "Excluded Driver"
+    - Statements like:
+      "All drivers are licensed"
+      "Approved drivers include"
+      "Coverage applies to listed drivers"
+
+    STRUCTURE RULE:
+    - Drivers may appear in tables, lists, prose, footnotes, or endorsements.
+    - Do NOT treat underwriting questionnaires as driver lists.
+
+    FIELDS PER DRIVER:
     - full_name
-    - license_number (if shown)
-    - is_excluded (true ONLY if explicitly stated as excluded)
+    - license_number
+    - is_excluded
 
-    Rules:
-    - HIDDEN EXCLUSIONS: Check for symbols (*, †) or column codes (EXC, X) next to names. 
-    - CROSS-PAGE REFERENCES: If a footnote or symbol references another page for the exclusion explanation, assume it is excluded.
-    - If a driver is listed in a section titled "Excluded Drivers" or "Drivers Not Covered", set is_excluded = true.
-    - If a driver is marked "Excluded", set is_excluded = true.
-    - If no drivers are listed, return an empty array [].
-    - Do NOT infer exclusions without evidence.
-    - Do NOT treat underwriting questions or questionnaires as driver lists.
+    EXCLUSION RULES (STRICT):
+    - is_excluded = true ONLY if explicitly stated
+    - Symbols (*, †, EXC, X) count as explicit exclusion
+    - If listed under a section titled "Excluded Drivers", mark excluded
+    - Cross-page exclusion references must be respected
 
-    PROSE SCANNING (CRITICAL for COIs):
-    - Scan "Description of Operations" and "Remarks" for named drivers.
-    - Look for text like "Driver [Name] is excluded" or "Includes driver [Name]".
+    NON-INFERENCE RULES:
+    - Do NOT invent driver names
+    - Do NOT infer number of drivers
+    - Do NOT assume exclusions
+
+    FAILURE RULE:
+    - If no drivers are mentioned anywhere, return:
+      { "drivers": [] }
+
+    OUTPUT FORMAT (STRICT JSON):
+    {
+      "drivers": [
+        {
+          "full_name": string | null,
+          "license_number": string | null,
+          "is_excluded": boolean
+        }
+      ]
+    }
     """
 
 def get_coverages_prompt(registry_text, policy_type):
-    return f"""
+    return GLOBAL_EXTRACTION_PRINCIPLES + f"""
     Extract insurance coverages using the strict COVERAGE ONTOLOGY.
     
     REGISTRY:

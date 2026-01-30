@@ -110,12 +110,12 @@ def page_process_policies(api_key):
             
             d_col1, d_col2 = st.columns(2)
             
-            if d_col1.button("🔍 Review Individually (Side-by-Side)", use_container_width=True):
+            if d_col1.button("🔍 Review Individually (Side-by-Side)", width='stretch'):
                 st.session_state["review_queue"].extend(st.session_state["temp_extracted"])
                 st.session_state["temp_extracted"] = []
                 st.rerun()
                 
-            if d_col2.button("💾 Save All to Database (Skip Review)", type="primary", use_container_width=True):
+            if d_col2.button("💾 Save All to Database (Skip Review)", type="primary", width='stretch'):
                 processed_count = 0
                 session = get_session(st.session_state.db_engine)
                 service = PolicyService(session)
@@ -185,7 +185,7 @@ def page_process_policies(api_key):
             m_coll = f3.checkbox("Has Full Collision", value=False)
             
             st.markdown("*Required Fields")
-            submitted_manual = st.form_submit_button("💾 Save Manual Policy", type="primary", use_container_width=True)
+            submitted_manual = st.form_submit_button("💾 Save Manual Policy", type="primary", width='stretch')
             
             if submitted_manual:
                 if not m_pol_num or not m_ins_name:
@@ -355,7 +355,7 @@ def page_process_policies(api_key):
                             "type": st.column_config.SelectboxColumn("Type", options=VEHICLE_TYPES),
                             "gvw": st.column_config.NumberColumn("GVW", format="%d")
                         },
-                        use_container_width=True,
+                        width='stretch',
                         key=f"edt_v_{fname}"
                     )
 
@@ -373,7 +373,7 @@ def page_process_policies(api_key):
                             "license_number": st.column_config.TextColumn("License #"),
                             "is_excluded": st.column_config.CheckboxColumn("Excluded?", default=False)
                         },
-                        use_container_width=True,
+                        width='stretch',
                         key=f"edt_d_{fname}"
                     )
                 
@@ -407,7 +407,7 @@ def page_process_policies(api_key):
                             "combined_single_limit": st.column_config.NumberColumn("CSL", format="$%d"),
                             "deductible": st.column_config.NumberColumn("Ded", format="$%d"),
                         },
-                        use_container_width=True,
+                        width='stretch',
                         key=f"edt_c_{fname}"
                     )
 
@@ -428,7 +428,7 @@ def page_process_policies(api_key):
                                 options=INTEREST_TYPES
                             )
                         },
-                        use_container_width=True,
+                        width='stretch',
                         key=f"edt_ai_{fname}"
                     )
 
