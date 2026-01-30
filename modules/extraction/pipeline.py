@@ -73,7 +73,7 @@ def get_cached_registry_json(policy_type: str) -> str:
 # --- CONFIGURATION ---
 ROUTING_MODEL = "gemini-2.5-flash"
 EXTRACTION_MODEL = "gemini-2.5-flash"
-CACHE_VERSION = "v8" # Fixed UM/UIM shorthand and Vehicle assembly
+CACHE_VERSION = "v9" # Determinism fix + Short Doc Strategy
 
 MAX_PAGES = {
   "declarations": 8,
@@ -160,6 +160,20 @@ class GeminiExtractionPipeline:
         self.engine = create_engine("sqlite:///insurance_data.db")
         self.session = get_session(self.engine)
         self.usage_service = UsageService(self.session)
+
+    def _validate_extraction_completeness(self, final_result, extracted_text_signal):
+        """Phase 4: Sanity Check - Detect Silent Failures."""
+        policy_type = final_result.get("classification", {}).get("policy_type")
+        
+        # Only check Auto-like policies
+        if policy_type in ["personal_auto", "commercial_auto", "motor_truck_cargo"]:
+             has_vehs = len(final_result.get("vehicles", [])) > 0
+             text_implies_vehs = "VIN" in extracted_text_signal or "Vehicle" in extracted_text_signal
+             
+             if text_implies_vehs and not has_vehs:
+                 return False, "Silent Failure: Text contains 'VIN/Vehicle' but 0 vehicles extracted."
+                 
+        return True, "Passed"
 
     def run(self, file_bytes: bytes, status_callback=None, force_refresh=False) -> tuple[dict, dict, str]:
         """
@@ -279,7 +293,19 @@ class GeminiExtractionPipeline:
         # 6. Normalize & Validate
         final_result = self._assemble_result(ctx, processor)
         
-        # 7. Cache Save
+        # 6b. Phase 4: Sanity Check
+        # (Naive text signal assumption: checking raw text from first page as proxy for entire doc signal is costly here
+        # so we will trust the extracted result internal logic for now, or just use Scout map)
+        # Using Scout Map as "Text Signal" proxy
+        scout_has_veh = len(ctx.scout_map.get("vehicle_schedule_signals", [])) > 0
+        is_valid, sanity_msg = self._validate_extraction_completeness(final_result, "Vehicle" if scout_has_veh else "")
+        
+        if not is_valid:
+            logger.warning(f"SANITY CHECK FAILED: {sanity_msg}")
+            # We do NOT return error to user, but we do NOT cache this result.
+            return final_result, ctx.usage_metadata, None # Return data, but don't cache
+
+        # 7. Cache Save (Phase 5: Cache Guard)
         try:
             cache_system.save(ctx.file_hash, final_result)
         except Exception as e:
@@ -303,6 +329,9 @@ class GeminiExtractionPipeline:
         if self.usage_service.is_over_budget(daily_limit=2.5):
              # Hard stop for safety
              raise Exception("STOPS: API Daily Quota Exceeded ($2.50). Processing halted to prevent billing.")
+        
+        # FORCE DETERMINISM: Temperature 0.0
+        config.temperature = 0.0
         
         response = self.client.models.generate_content(
             model=model,
@@ -391,11 +420,25 @@ class GeminiExtractionPipeline:
         sections = ["declarations", "coverages", "vehicles", "drivers"]
         slices = {}
         
+        # SHORT DOCUMENT STRATEGY:
+        # If total pages <= 3, assume all info is dense/scatted.
+        # Bypass slicing to prevent "slicing out" data if locator fails.
+        total_pages = processor.get_page_count()
+        is_short_doc = total_pages <= 3
+        
+        full_doc_bytes = None
+        if is_short_doc:
+             logger.info(f"SHORT DOC STRATEGY: Bypassing slicing for {total_pages} page(s). Using full doc.")
+             full_doc_bytes = types.Part.from_bytes(data=ctx.file_bytes, mime_type='application/pdf')
+        
         for section in sections:
-            pages = self._get_pages_for_section(ctx.section_map, section, processor.get_page_count())
-            logger.info(f"PIPELINE: Slicing {section} -> Pages {pages}")
-            pdf_bytes = processor.create_slice(pages)
-            slices[section] = types.Part.from_bytes(data=pdf_bytes, mime_type='application/pdf')
+            if is_short_doc:
+                 slices[section] = full_doc_bytes
+            else:
+                pages = self._get_pages_for_section(ctx.section_map, section, processor.get_page_count())
+                logger.info(f"PIPELINE: Slicing {section} -> Pages {pages}")
+                pdf_bytes = processor.create_slice(pages)
+                slices[section] = types.Part.from_bytes(data=pdf_bytes, mime_type='application/pdf')
 
         # Parallel Execution (Max Workers = 4)
         with ThreadPoolExecutor(max_workers=4) as executor:

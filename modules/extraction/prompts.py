@@ -157,6 +157,12 @@ EXTRACT_VEHICLES_PROMPT = """
     - If unsure, infer type from model name and GVW.
     - Never leave type empty.
     - CONTINUITY RULE: If a table spans multiple pages, treat it as a single vehicle schedule.
+    
+    PROSE SCANNING (CRITICAL for COIs):
+    - Vehicles are not always in tables.
+    - Scan "Description of Operations", "Remarks", "Notes", and "Forms" sections.
+    - If a vehicle year/make/model matches a VIN in a text block, extract it.
+    - EXTRACT from plain text paragraphs (e.g. "Covered Auto: 2020 Ford F-150 VIN...").
     """
 
 EXTRACT_DRIVERS_PROMPT = """
@@ -172,9 +178,13 @@ EXTRACT_DRIVERS_PROMPT = """
     - CROSS-PAGE REFERENCES: If a footnote or symbol references another page for the exclusion explanation, assume it is excluded.
     - If a driver is listed in a section titled "Excluded Drivers" or "Drivers Not Covered", set is_excluded = true.
     - If a driver is marked "Excluded", set is_excluded = true.
-    - If no drivers are listed, return an empty array.
+    - If no drivers are listed, return an empty array [].
     - Do NOT infer exclusions without evidence.
     - Do NOT treat underwriting questions or questionnaires as driver lists.
+
+    PROSE SCANNING (CRITICAL for COIs):
+    - Scan "Description of Operations" and "Remarks" for named drivers.
+    - Look for text like "Driver [Name] is excluded" or "Includes driver [Name]".
     """
 
 def get_coverages_prompt(registry_text, policy_type):
