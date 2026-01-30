@@ -71,8 +71,8 @@ def get_cached_registry_json(policy_type: str) -> str:
     return json.dumps(filtered_registry, indent=2)
 
 # --- CONFIGURATION ---
-ROUTING_MODEL = "gemini-2.0-flash"
-EXTRACTION_MODEL = "gemini-2.0-flash"
+ROUTING_MODEL = "gemini-2.5-flash"
+EXTRACTION_MODEL = "gemini-2.5-flash"
 CACHE_VERSION = "v8" # Fixed UM/UIM shorthand and Vehicle assembly
 
 MAX_PAGES = {

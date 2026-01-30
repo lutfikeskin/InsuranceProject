@@ -31,3 +31,6 @@ INTEREST_TYPES = [
 
 # Validation Patterns
 VIN_REGEX = "^[A-HJ-NPR-Z0-9]{17}$"
+
+# Application Settings
+DEFAULT_DAILY_BUDGET = 2.5

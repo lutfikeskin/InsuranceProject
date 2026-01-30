@@ -212,3 +212,28 @@
 2026-01-29 11:17:01 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing coverages -> Pages [0, 1, 2, 3, 4]
 2026-01-29 11:17:01 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing vehicles -> Pages [0, 1, 2, 3, 4]
 2026-01-29 11:17:01 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing drivers -> Pages [0, 1]
+2026-01-30 12:25:58 | INFO     | modules.extraction.pipeline:run:186 - Uploading to Gemini File API...
+2026-01-30 12:26:00 | INFO     | modules.extraction.pipeline:run:190 - File uploaded: files/7zebjxyudxjx
+2026-01-30 12:26:03 | INFO     | modules.extraction.pipeline:run:198 - Policy Type: commercial_auto (high)
+2026-01-30 12:26:05 | INFO     | modules.extraction.pipeline:run:205 - Broad Slices (Locator): {"declarations": [1], "coverages": [1], "vehicles": [1], "drivers": [1]}
+2026-01-30 12:26:05 | INFO     | modules.extraction.pipeline:_run_universal_scout:351 - Running Universal Scout (Full PDF)...
+2026-01-30 12:26:07 | INFO     | modules.extraction.pipeline:run:252 - Smart Slices (Merged): {"declarations": [1], "vehicles": [1], "drivers": [1], "coverages": [1]}
+2026-01-30 12:26:08 | DEBUG    | modules.extraction.pipeline:run:262 - Deleted remote file: files/7zebjxyudxjx
+2026-01-30 12:26:08 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing declarations -> Pages [0]
+2026-01-30 12:26:08 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing coverages -> Pages [0]
+2026-01-30 12:26:08 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing vehicles -> Pages [0]
+2026-01-30 12:26:08 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing drivers -> Pages [0]
+2026-01-30 12:26:14 | DEBUG    | modules.extraction.pipeline:save:152 - CACHE SAVED: v8_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-01-30 12:38:01 | INFO     | modules.extraction.pipeline:run:186 - Uploading to Gemini File API...
+2026-01-30 12:38:03 | INFO     | modules.extraction.pipeline:run:190 - File uploaded: files/yt6mky11bfw9
+2026-01-30 12:38:06 | INFO     | modules.extraction.pipeline:run:198 - Policy Type: commercial_auto (high)
+2026-01-30 12:38:08 | INFO     | modules.extraction.pipeline:run:205 - Broad Slices (Locator): {"declarations": [1], "coverages": [1, 2], "vehicles": [2], "drivers": []}
+2026-01-30 12:38:08 | INFO     | modules.extraction.pipeline:_run_universal_scout:351 - Running Universal Scout (Full PDF)...
+2026-01-30 12:38:11 | INFO     | modules.extraction.pipeline:run:252 - Smart Slices (Merged): {"declarations": [1, 2, 3], "vehicles": [1, 2, 3], "drivers": [], "coverages": [1, 2, 3]}
+2026-01-30 12:38:12 | DEBUG    | modules.extraction.pipeline:run:262 - Deleted remote file: files/yt6mky11bfw9
+2026-01-30 12:38:12 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing declarations -> Pages [0, 1, 2]
+2026-01-30 12:38:12 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing coverages -> Pages [0, 1, 2]
+2026-01-30 12:38:12 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing vehicles -> Pages [0, 1, 2]
+2026-01-30 12:38:12 | INFO     | modules.extraction.pipeline:_perform_extraction:396 - PIPELINE: Slicing drivers -> Pages []
+2026-01-30 12:38:18 | INFO     | modules.extraction.pipeline:_assemble_result:587 - Premium Audit: MATCHES_TOTAL_SIGNAL
+2026-01-30 12:38:18 | DEBUG    | modules.extraction.pipeline:save:152 - CACHE SAVED: v8_f4bafa8e9f8482a15caf489b21a59288b802be0351e86acaf5156d3b1e719845

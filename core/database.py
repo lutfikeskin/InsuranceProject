@@ -63,6 +63,7 @@ class Policy(Base):
     coll_deductible = Column(String)
 
     status = Column(String, default='Active') # New Status Field
+    created_at = Column(DateTime, default=datetime.utcnow) # New Timestamp Field
 
     # Relationships
     vehicles = relationship("Vehicle", back_populates="policy", cascade="all, delete-orphan")

@@ -4,6 +4,7 @@ from core.database import init_db, get_session
 import core.history_model # Ensure model is registered
 from core.services import UsageService
 from streamlit_option_menu import option_menu
+from core.constants import DEFAULT_DAILY_BUDGET
 
 # Import Views
 from views.dashboard import page_dashboard
@@ -106,7 +107,7 @@ with st.sidebar:
             from core.services import UsageService
             usage_service = UsageService(get_session(st.session_state.db_engine))
             daily_spend = usage_service.get_daily_usage()
-            budget_limit = 2.5
+            budget_limit = DEFAULT_DAILY_BUDGET
             
             progress = min(daily_spend / budget_limit, 1.0)
             
