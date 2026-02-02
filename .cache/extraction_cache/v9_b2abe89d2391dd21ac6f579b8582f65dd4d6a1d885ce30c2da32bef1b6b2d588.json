@@ -1,0 +1,308 @@
+{
+  "policy": {
+    "carrier_name": "GEICO",
+    "naic_number": "",
+    "policy_number": "C24J25L930076",
+    "effective_date": "2024-10-26",
+    "expiration_date": "2025-10-26",
+    "account_type": "",
+    "insured_name": "BORIS ALEXANDER NOWATZKI",
+    "insured_address": "3050 BECK BOULEVARD",
+    "insured_city": "NAPLES",
+    "insured_state_code": "FL",
+    "insured_zip": "34114",
+    "business_name": "",
+    "premium": "8991",
+    "financial_responsibility_name": "",
+    "state": "",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          36,
+          429,
+          59,
+          506
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          94,
+          120,
+          106,
+          262
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          110,
+          429,
+          122,
+          506
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          110,
+          520,
+          122,
+          597
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          153,
+          98,
+          165,
+          349
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          180,
+          98,
+          192,
+          290
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          194,
+          98,
+          206,
+          150
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          194,
+          154,
+          206,
+          174
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          194,
+          178,
+          206,
+          220
+        ]
+      },
+      {
+        "field": "premium",
+        "page_number": 2,
+        "bbox": [
+          284,
+          890,
+          296,
+          929
+        ]
+      }
+    ],
+    "liability_limit": "1,000,000 CSL",
+    "cargo_limit": "$100,000",
+    "cargo_deductible": "1000",
+    "um_uim_limit": "UMOnly: 100,000 CSL",
+    "med_pay_limit": null,
+    "pip_limit": "10,000",
+    "comp_deductible": "1000",
+    "coll_deductible": "1000",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true,
+    "premium_audit": {
+      "confidence": "high",
+      "flag": "MATCHES_TOTAL_SIGNAL"
+    }
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "display_name": "Bodily Injury or Combined Single Limit Liability",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          540,
+          456,
+          552,
+          709
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_CSL",
+      "display_name": "Uninsured Motorist Bodily Injury (includes Underinsured)",
+      "family": "uninsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 100000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          566,
+          456,
+          578,
+          680
+        ]
+      }
+    },
+    {
+      "coverage_code": "PIP",
+      "display_name": "Basic Personal Injury Protection",
+      "family": "pip",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 10000
+      },
+      "deductible": 0,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          607,
+          456,
+          619,
+          629
+        ]
+      }
+    },
+    {
+      "coverage_code": "CARGO_LEGAL_LIAB",
+      "display_name": "Motor Truck Cargo",
+      "family": "cargo",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 100000
+      },
+      "deductible": 1000,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          662,
+          456,
+          674,
+          649
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "display_name": "Collision",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          799,
+          456,
+          811,
+          590
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "display_name": "Comprehensive",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          820,
+          456,
+          832,
+          590
+        ]
+      }
+    },
+    {
+      "coverage_code": "RENTAL",
+      "display_name": "Rental Reimbursement (RR)",
+      "family": "physical_damage",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 1500
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          85,
+          456,
+          97,
+          649
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2019,
+      "make": "FREIGHTLINER",
+      "model": "SPRINTER",
+      "vin": "null",
+      "gvw": 0,
+      "type": "Cargo Van",
+      "chassis": "Cargo Van",
+      "body": "null"
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "Boris Alexander Nowatzki",
+      "license_number": "null",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Silke Kerstin Nickel",
+      "license_number": "null",
+      "is_excluded": false
+    }
+  ],
+  "classification": {
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "Commercial Auto Quote",
+      "Motor Truck Cargo"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}

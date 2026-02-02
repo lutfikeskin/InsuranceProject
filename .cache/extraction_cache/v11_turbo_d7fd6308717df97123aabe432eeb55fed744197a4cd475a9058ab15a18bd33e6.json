@@ -1,0 +1,255 @@
+{
+  "policy": {
+    "carrier_name": "GEICO Marine Insurance Company",
+    "naic_number": "",
+    "policy_number": "9300132543",
+    "effective_date": "03/29/2025",
+    "expiration_date": "03/29/2026",
+    "account_type": "Commercial",
+    "insured_name": "GREG VILLALPANDO LLC",
+    "insured_address": "2872 RED SKY CT",
+    "insured_city": "NEW SMYRNA BEACH",
+    "insured_state_code": "FL",
+    "insured_zip": "32168",
+    "business_name": "GREG VILLALPANDO LLC",
+    "premium": "",
+    "financial_responsibility_name": "",
+    "state": "FL",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          91,
+          65,
+          104,
+          290
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          75,
+          109,
+          88,
+          220
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          75,
+          480,
+          88,
+          589
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          75,
+          790,
+          88,
+          899
+        ]
+      },
+      {
+        "field": "account_type",
+        "page_number": 1,
+        "bbox": [
+          275,
+          350,
+          288,
+          649
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          91,
+          480,
+          104,
+          659
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          106,
+          480,
+          119,
+          610
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          121,
+          480,
+          134,
+          629
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          121,
+          632,
+          134,
+          654
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          121,
+          657,
+          134,
+          704
+        ]
+      },
+      {
+        "field": "business_name",
+        "page_number": 1,
+        "bbox": [
+          91,
+          480,
+          104,
+          659
+        ]
+      },
+      {
+        "field": "state",
+        "page_number": 1,
+        "bbox": [
+          121,
+          632,
+          134,
+          654
+        ]
+      }
+    ],
+    "liability_limit": "1,000,000 CSL",
+    "um_uim_limit": "UMOnly: 100,000 CSL",
+    "med_pay_limit": null,
+    "pip_limit": null,
+    "comp_deductible": "1000",
+    "coll_deductible": "1000",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "display_name": "Auto Liability - Combined Single Limit - Automobile Liability",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          339,
+          59,
+          366,
+          140
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_CSL",
+      "display_name": "Uninsured Motorist CSL",
+      "family": "uninsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 100000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          480,
+          59,
+          507,
+          140
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "display_name": "Comprehensive / OTC",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          702,
+          533,
+          718,
+          799
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "display_name": "Collision",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          720,
+          533,
+          736,
+          799
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2024,
+      "make": "RAM",
+      "model": "PROMASTER 2500",
+      "vin": "3C6LRVDG0RE118763",
+      "gvw": 0,
+      "type": "Cargo Van",
+      "chassis": "Cargo Van",
+      "body": ""
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "Gregory Raymond Villalpando",
+      "license_number": "null",
+      "is_excluded": false
+    }
+  ],
+  "classification": {
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "COMMERCIAL AUTOMOBILE LIABILITY",
+      "COMMERCIAL AUTOMOBILE OTHER COVERAGES",
+      "Non Trucking Liability",
+      "ACTIVE VEHICLES"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}

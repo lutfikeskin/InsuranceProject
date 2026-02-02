@@ -17,6 +17,41 @@ CLASSIFICATION_SCHEMA = {
     "required": ["policy_type", "confidence"]
 }
 
+# MERGED SCHEMA: The Cartographer
+# Combines broad section location + specific signal scouting
+CARTOGRAPHER_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        # Broad Sections (Locator)
+        "declarations": {"type": "ARRAY", "items": {"type": "INTEGER"}}, # Page numbers
+        "coverages": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+        "vehicles": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+        "drivers": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+
+        # Specific Signals (Scout)
+        "premium_signals": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "label": {"type": "STRING"},
+                    "page": {"type": "INTEGER"},
+                    "type": {"type": "STRING", "enum": ["gross", "net", "total", "installment", "fee", "unknown"]},
+                    "period": {"type": "STRING", "enum": ["annual", "6-month", "monthly", "unknown"]}
+                },
+                "required": ["label", "page"]
+            }
+        },
+        "vehicle_schedule_signals": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+        "driver_schedule_signals": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+        "coverage_schedule_signals": {"type": "ARRAY", "items": {"type": "INTEGER"}}
+    },
+    "required": [
+        "declarations", "coverages",
+        "premium_signals", "vehicle_schedule_signals"
+    ]
+}
+
 SECTION_LOCATOR_SCHEMA = {
     "type": "OBJECT",
     "properties": {

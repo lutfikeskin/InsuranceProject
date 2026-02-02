@@ -1,0 +1,303 @@
+{
+  "policy": {
+    "carrier_name": "Progressive Northern Insurance Co",
+    "naic_number": "",
+    "policy_number": "865919581",
+    "effective_date": "2025-12-13",
+    "expiration_date": "2026-06-13",
+    "account_type": "",
+    "insured_name": "HAYATULLAH PARWANI MARYAM PARWANI",
+    "insured_address": "300 PALMETTO PARK BLVD",
+    "insured_city": "LEXINGTON",
+    "insured_state_code": "SC",
+    "insured_zip": "29072",
+    "business_name": "",
+    "premium": "308.00",
+    "financial_responsibility_name": "",
+    "state": "SC",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          127,
+          694,
+          140,
+          889
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          99,
+          770,
+          112,
+          848
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          393,
+          309,
+          406,
+          424
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          406,
+          230,
+          419,
+          306
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          140,
+          78,
+          163,
+          220
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          164,
+          78,
+          176,
+          222
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          176,
+          78,
+          189,
+          140
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          176,
+          143,
+          189,
+          162
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          176,
+          165,
+          189,
+          203
+        ]
+      },
+      {
+        "field": "premium",
+        "page_number": 2,
+        "bbox": [
+          449,
+          867,
+          462,
+          920
+        ]
+      },
+      {
+        "field": "state",
+        "page_number": 1,
+        "bbox": [
+          444,
+          383,
+          457,
+          402
+        ]
+      }
+    ],
+    "liability_limit": "25/50/25",
+    "um_uim_limit": "25/50",
+    "med_pay_limit": "1,000",
+    "pip_limit": null,
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": false,
+    "premium_audit": {
+      "confidence": "low",
+      "flag": "UNSCOUTED_LOCATION"
+    }
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_BI",
+      "display_name": "Bodily Injury Liability",
+      "family": "auto_liability",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 25000,
+        "per_accident": 50000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          260,
+          177,
+          270,
+          729
+        ]
+      }
+    },
+    {
+      "coverage_code": "AUTO_LIAB_PD",
+      "display_name": "Property Damage Liability",
+      "family": "auto_liability",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 25000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          274,
+          177,
+          284,
+          649
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_BI",
+      "display_name": "Uninsured Motorist Bodily Injury",
+      "family": "uninsured_motorist",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 25000,
+        "per_accident": 50000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          308,
+          177,
+          318,
+          729
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_PD",
+      "display_name": "Uninsured Motorist Property Damage",
+      "family": "uninsured_motorist",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 25000
+      },
+      "deductible": 200,
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          322,
+          177,
+          332,
+          804
+        ]
+      }
+    },
+    {
+      "coverage_code": "UIM_BI",
+      "display_name": "Underinsured Motorist Bodily Injury",
+      "family": "underinsured_motorist",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 25000,
+        "per_accident": 50000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          356,
+          177,
+          366,
+          729
+        ]
+      }
+    },
+    {
+      "coverage_code": "MED_PAY",
+      "display_name": "Medical Payments",
+      "family": "medical_payments",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 1000
+      },
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          384,
+          177,
+          394,
+          610
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2014,
+      "make": "TOYOTA",
+      "model": "HIGHLANDER",
+      "vin": "5TDJKRFH1ES050653",
+      "gvw": 0,
+      "type": "Trailer",
+      "chassis": "Trailer",
+      "body": "null"
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "Hayatullah Parwani",
+      "license_number": "null",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Maryam Parwani",
+      "license_number": "null",
+      "is_excluded": false
+    }
+  ],
+  "classification": {
+    "policy_type": "personal_auto",
+    "confidence": "high",
+    "signals": [
+      "Auto Insurance Coverage Summary",
+      "2014 TOYOTA HIGHLANDER 4 DOOR WAGON",
+      "Primary use of the vehicle: Pleasure/Personal",
+      "Liability To Others",
+      "Uninsured Motorist",
+      "Underinsured Motorist",
+      "Medical Payments"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}

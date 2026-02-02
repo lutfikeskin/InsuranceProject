@@ -1,0 +1,293 @@
+{
+  "policy": {
+    "carrier_name": "GEICO Marine Insurance Company",
+    "naic_number": "",
+    "policy_number": "9300275899",
+    "effective_date": "01/30/2026",
+    "expiration_date": "01/30/2027",
+    "account_type": "",
+    "insured_name": "FINNEDY TRANSPORT LLC DBA Finnedy Innocent",
+    "insured_address": "9533 SW LIBERTAS WAY",
+    "insured_city": "PORT SAINT LUCIE",
+    "insured_state_code": "FL",
+    "insured_zip": "34987",
+    "business_name": "FINNEDY TRANSPORT LLC DBA Finnedy Innocent",
+    "premium": "",
+    "financial_responsibility_name": "FINNEDY TRANSPORT LLC DBA Finnedy Innocent",
+    "state": "FL",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          99,
+          63,
+          112,
+          299
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          73,
+          166,
+          86,
+          300
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          73,
+          480,
+          86,
+          590
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          73,
+          720,
+          86,
+          830
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          99,
+          480,
+          112,
+          820
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          114,
+          480,
+          127,
+          650
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          129,
+          480,
+          142,
+          590
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          129,
+          590,
+          142,
+          610
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          129,
+          610,
+          142,
+          660
+        ]
+      },
+      {
+        "field": "business_name",
+        "page_number": 1,
+        "bbox": [
+          99,
+          480,
+          112,
+          820
+        ]
+      },
+      {
+        "field": "financial_responsibility_name",
+        "page_number": 1,
+        "bbox": [
+          99,
+          480,
+          112,
+          820
+        ]
+      },
+      {
+        "field": "state",
+        "page_number": 1,
+        "bbox": [
+          129,
+          590,
+          142,
+          610
+        ]
+      }
+    ],
+    "liability_limit": "1,000,000 CSL",
+    "cargo_limit": "$100,000",
+    "cargo_deductible": "1000",
+    "um_uim_limit": "100,000 CSL",
+    "med_pay_limit": null,
+    "pip_limit": null,
+    "comp_deductible": "1000",
+    "coll_deductible": "1000",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "display_name": "Auto Liability - Combined Single Limit - Automobile Liability",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          340,
+          170,
+          353,
+          240
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_CSL",
+      "display_name": "Uninsured Motorist CSL",
+      "family": "uninsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 100000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          479,
+          59,
+          493,
+          160
+        ]
+      }
+    },
+    {
+      "coverage_code": "UIM_CSL",
+      "display_name": "Underinsured Motorist CSL",
+      "family": "underinsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 100000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          530,
+          59,
+          543,
+          160
+        ]
+      }
+    },
+    {
+      "coverage_code": "CARGO_LEGAL_LIAB",
+      "display_name": "Motor Truck Cargo",
+      "family": "cargo",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 100000
+      },
+      "deductible": 1000,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          669,
+          429,
+          682,
+          600
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "display_name": "Comprehensive / OTC",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          739,
+          579,
+          752,
+          770
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "display_name": "Collision",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          755,
+          579,
+          768,
+          770
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2023,
+      "make": "RAM",
+      "model": "PROMASTER 2500",
+      "vin": "3C6LRVDG4PE603193",
+      "gvw": 0,
+      "type": "Cargo Van",
+      "chassis": "Cargo Van",
+      "body": "null"
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "Finnedy Innocent",
+      "license_number": "null",
+      "is_excluded": false
+    }
+  ],
+  "classification": {
+    "policy_type": "commercial_package",
+    "confidence": "high",
+    "signals": [
+      "Commercial Auto",
+      "General Liability",
+      "Motor Truck Cargo"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}

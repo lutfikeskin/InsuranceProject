@@ -104,6 +104,45 @@ UNIVERSAL_SCOUT_PROMPT = GLOBAL_EXTRACTION_PRINCIPLES + """
     Return only valid JSON matching the provided schema.
 """
 
+# MERGED PROMPT: The Cartographer
+CARTOGRAPHER_PROMPT = GLOBAL_EXTRACTION_PRINCIPLES + """
+    You are 'The Cartographer', a document intelligence system.
+    Your job is to Map the Document.
+
+    Perform TWO tasks simultaneously:
+    
+    TASK 1: LOCATE BROAD SECTIONS (Page Ranges)
+    Identify page numbers for:
+    - declarations (Policy info, dates, insured, Premium Summary)
+    - coverages (Limits, deductibles)
+    - vehicles (Schedule of all vehicles)
+    - drivers (List of all drivers)
+
+    TASK 2: SCOUT SPECIFIC SIGNALS (Precise Locations)
+    Scan for specific signals to aid extraction:
+    
+    1. PREMIUM SIGNALS
+       - Any page containing Total Policy Premium, Amount Due, or Net Premium.
+       - Ignore line-item fees.
+       - CLASSIFY: "gross", "net", "total", "installment".
+       - PERIOD: "annual", "6-month", "monthly".
+
+    2. VEHICLE SCHEDULE SIGNALS
+       - Pages with explicit Vehicle Schedules, Fleet Lists, or VIN Tables.
+
+    3. DRIVER SCHEDULE SIGNALS
+       - Pages with Driver Lists or Excluded Driver endorsements.
+
+    4. COVERAGE SCHEDULE SIGNALS
+       - Pages with Coverage Schedules or specific Endorsement forms.
+
+    Rules:
+    - Use 1-based page numbering.
+    - Do NOT extract dollar values or names at this stage, only finding the PAGES.
+    - If a section is missing, use empty array [].
+    - Return a single JSON object matching the CARTOGRAPHER_SCHEMA.
+"""
+
 EXTRACT_DECLARATIONS_PROMPT = GLOBAL_EXTRACTION_PRINCIPLES + """
     Extract core policy declarations information.
     

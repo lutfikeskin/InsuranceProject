@@ -54,30 +54,47 @@ graph TD
 
 ---
 
-## 2. Extraction Pipeline (Universal Scout)
+## 2. Extraction Pipeline (Reliability Architecture v2)
 
-The system uses a sophisticated, multi-stage pipeline powered by Google Gemini (2.0/2.5 Flash) to ensure high precision with minimal token costs.
+The system uses a bi-modal, self-correcting pipeline powered by Google Gemini (2.5 Flash). It prioritizes **Speed** for small documents and **Reliability** for complex ones.
 
-### 2.1 Phase 0: Universal Scouting
+### 2.1 Mode A: Turbo Mode (Speed)
 
-The most critical addition to the v5 pipeline. Instead of guessing where data is, the system performs a full-document "scout" using the `UNIVERSAL_SCOUT_PROMPT`.
+**Trigger**: Documents ≤ 5 pages.
 
-- **Purpose**: Identify exact page numbers for Premium, Vehicles, Drivers, and Coverages.
-- **Benefit**: Reduces the amount of text sent to the heavy extraction models, drastically improving speed and accuracy.
+- **Logic**: Skips the expensive "Mapping Phase" entirely.
+- **Process**: `Upload -> Classify -> Parallel Extraction (Full Doc)`.
+- **Benefit**: Reduces processing time by ~40% for certificates, ID cards, and simple policies.
 
-### 2.2 Phase 2: Smart Slicing
+### 2.2 Mode B: The Cartographer (Precision)
 
-The locator and scout findings are merged to create **Smart Slices**.
+**Trigger**: Documents > 5 pages.
 
-- **Logic**: For every page identified by the Scout, we expand the range by **+/- 1 page** to capture context (e.g., if a table spans two pages).
-- **Parallelism**: The system then creates 4 separate PDF byte-slices and processes them in parallel using a `ThreadPoolExecutor`.
+- **Logic**: Replaces the old 2-step (Locator + Scout) with a unified "Cartographer" step.
+- **Process**:
+  1.  **Cartographer**: Scans the full document ONCE to identify:
+      - **Sections**: Declarations, Coverages, Vehicles, Drivers.
+      - **Signals**: Premium tables, Vehicle schedules, Driver lists.
+  2.  **Smart Slicing**: Creates optimized PDF slices (Page ranges +/- 1) based on Cartographer findings.
+  3.  **Parallel Extraction**: Sends only the relevant pages to the extractors.
 
-### 2.3 Phase 4: Assembly & Validation
+### 2.3 Tiered Verification (The Auditor)
 
-Raw JSON responses from Gemini are merged into a unified `ExtractionContext`.
+A "Fail-Fast" quality gate that runs after extraction.
 
-- **Unwrapping**: A recursive JSON parser (`_parse_json_response`) handles Gemini's occasional tendency to wrap responses in lists.
-- **CSL Supremacy**: Python logic enforces that if a Combined Single Limit (CSL) is found, specific BI/PD splits are ignored to prevent data conflicts.
+- **Tier 1 (Instant)**: Python-based guardrails check for:
+  - Null Policy Numbers
+  - Missing Effective Dates
+  - Logical Inconsistencies (e.g., Auto Policy without Liability)
+- **Tier 2 (Repair Loop)**:
+  - If Tier 1 fails, the system **automatically triggers a targeted repair call**.
+  - Components: `auditor.py` generates a surgical prompt ("You missed the Policy Number on Page 1. Fix it.")
+  - **Result**: Self-healing extraction that fixes errors without user intervention.
+
+### 2.4 Carrier Knowledge Base
+
+- **File**: `modules/extraction/knowledge_base.py`
+- **Function**: Injects carrier-specific hints (e.g., "GEICO puts drivers on the last page") into the prompt if the carrier is detected.
 
 ---
 

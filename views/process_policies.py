@@ -256,8 +256,34 @@ def page_process_policies(api_key):
         
         with c_pdf:
             st.markdown(f"**Viewing:** `{fname}`")
-            # Highlights disabled for performance
-            pdf_viewer(input=current_item['pdf_bytes'], width=600, height=800)
+            # Highlights Toggle
+            show_highlights = st.toggle("✨ Show Field Locations", value=False, help="Highlight extracted fields on the PDF. May affect performance.")
+            
+            annotations = []
+            if show_highlights:
+                locs = p.get('field_locations', [])
+                for loc in locs:
+                    page = loc.get('page_number', 1)
+                    bbox = loc.get('bbox') # [ymin, xmin, ymax, xmax] 0-1000 scale
+                    
+                    if bbox and len(bbox) == 4:
+                        # Streamlit PDF Viewer expects [x, y, width, height] in some versions or direct PDF coords?
+                        # The standard format for many PDF tools is [x, y, width, height].
+                        # Gemini returns [ymin, xmin, ymax, xmax] on 1000x1000 scale.
+                        # We need to map this. For now, we will try a simple red rectangle wrapper.
+                        # Note: st_pdf_viewer annotations support might differ. 
+                        # Assuming simple rectangular highlight support:
+                        annotations.append({
+                            "page": page,
+                            "x": bbox[1], # xmin
+                            "y": bbox[0], # ymin
+                            "width": bbox[3] - bbox[1], # xmax - xmin
+                            "height": bbox[2] - bbox[0], # ymax - ymin
+                            "color": "rgba(255, 0, 0, 0.3)",
+                            "type": "rect"
+                        })
+
+            pdf_viewer(input=current_item['pdf_bytes'], width=600, height=800, annotations=annotations if show_highlights else [])
             
         with c_form:
             st.markdown("#### Verify Extracted Data")
@@ -433,11 +459,12 @@ def page_process_policies(api_key):
                     )
 
                 st.markdown("---")
-                b_col1, b_col2 = st.columns(2)
-                saved = b_col1.form_submit_button("✅ Save to Database", type="primary")
-                discarded = b_col2.form_submit_button("🗑️ Discard")
+                b_col1, b_col2, b_col3 = st.columns([1, 1, 1])
+                saved = b_col1.form_submit_button("💾 Save", type="secondary")
+                save_next = b_col2.form_submit_button("💾⏩ Save & Next", type="primary")
+                discarded = b_col3.form_submit_button("🗑️ Discard")
                 
-                if saved:
+                if saved or save_next:
                     session = get_session(st.session_state.db_engine)
                     service = PolicyService(session)
                     try:
@@ -487,14 +514,16 @@ def page_process_policies(api_key):
                         success, msg = service.save_policy_object(policy)
                         
                         if success:
-                            st.success(f"Saved {r_pol_num}!")
+                            st.toast(f"✅ Saved {r_pol_num}!")
                             st.session_state["review_queue"].pop(0)
                             st.rerun()
                         else:
-                            st.warning(f"Could not save: {msg}")
+                            st.toast(f"⚠️ Could not save: {msg}", icon="⚠️")
+                            # If individual save (not next), maybe we show error persistent? 
+                            # Toast is fine for now as it doesn't block flow.
                         
                     except Exception as e:
-                        st.error(f"Save failed: {e}")
+                        st.toast(f"❌ Save failed: {e}", icon="❌")
                     finally:
                         session.close()
                 

@@ -31,6 +31,8 @@ from core.coverage_ontology import (
 )
 from core.database import get_session, create_engine
 from core.services import UsageService
+from .auditor import Auditor
+from .knowledge_base import CarrierKnowledgeBase
 
 # Import schemas and prompts
 from .schemas import (
@@ -40,7 +42,10 @@ from .schemas import (
     COVERAGE_SCHEMA,
     VEHICLE_SCHEMA,
     DRIVER_SCHEMA,
-    UNIVERSAL_SCOUT_SCHEMA
+    VEHICLE_SCHEMA,
+    DRIVER_SCHEMA,
+    UNIVERSAL_SCOUT_SCHEMA,
+    CARTOGRAPHER_SCHEMA
 )
 
 from .prompts import (
@@ -50,7 +55,8 @@ from .prompts import (
     EXTRACT_VEHICLES_PROMPT,
     EXTRACT_DRIVERS_PROMPT,
     get_coverages_prompt,
-    UNIVERSAL_SCOUT_PROMPT
+    UNIVERSAL_SCOUT_PROMPT,
+    CARTOGRAPHER_PROMPT
 )
 
 # --- HELPERS ---
@@ -73,7 +79,7 @@ def get_cached_registry_json(policy_type: str) -> str:
 # --- CONFIGURATION ---
 ROUTING_MODEL = "gemini-2.5-flash"
 EXTRACTION_MODEL = "gemini-2.5-flash"
-CACHE_VERSION = "v9" # Determinism fix + Short Doc Strategy
+CACHE_VERSION = "v11_turbo" # Bumped for new Architecture + Short Doc Strategy
 
 MAX_PAGES = {
   "declarations": 8,
@@ -81,6 +87,8 @@ MAX_PAGES = {
   "vehicles": 6,
   "drivers": 4
 }
+
+TURBO_PAGE_LIMIT = 5  # Docs <= This size skip Locator/Scout
 
 # --- STATE MANAGEMENT ---
 
@@ -103,6 +111,7 @@ class ExtractionContext:
     
     usage_metadata: dict = field(default_factory=dict)
     errors: list = field(default_factory=list)
+    carrier_hints: str = ""
 
     @property
     def policy_type(self) -> str:
@@ -160,6 +169,8 @@ class GeminiExtractionPipeline:
         self.engine = create_engine("sqlite:///insurance_data.db")
         self.session = get_session(self.engine)
         self.usage_service = UsageService(self.session)
+        self.kb = CarrierKnowledgeBase()
+        self.auditor = Auditor()
 
     def _validate_extraction_completeness(self, final_result, ctx):
         """Phase 4: Sanity Check - Detect Silent Failures using Scout Signals."""
@@ -203,10 +214,9 @@ class GeminiExtractionPipeline:
             uploaded_file = self._upload_to_gemini(file_bytes)
             logger.info(f"File uploaded: {uploaded_file.name}")
             
-            # 3. Classify & Locate
-            if status_callback: status_callback(" Classifying & Locating Sections...")
-            
-            # TODO: Add Caching here based on ctx.file_hash if needed in future
+            # --- TURBO MODE CHECK ---
+            total_pages = processor.get_page_count()
+            is_turbo = total_pages <= TURBO_PAGE_LIMIT
             
             ctx.classification = self._classify_policy(uploaded_file)
             logger.info(f"Policy Type: {ctx.policy_type} ({ctx.confidence})")
@@ -214,56 +224,36 @@ class GeminiExtractionPipeline:
             if ctx.policy_type == "unknown":
                 return None, None, "Unknown Policy Type"
 
-            # 3.1. Locate Sections (Broad Boundaries)
-            ctx.section_map = self._locate_sections(uploaded_file)
-            logger.info(f"Broad Slices (Locator): {json.dumps(ctx.section_map)}")
-
-            # 3.5. Universal Scout (Specific Signals)
-            if status_callback: status_callback(" 🔍 Running Universal Scout...")
-            ctx.scout_map = self._run_universal_scout(uploaded_file)
-            
-            # --- INTELLIGENT MERGING ---
-            total_pages = processor.get_page_count()
-
-            def merge_pages(section_key, signal_key, signal_is_object_list=False):
-                """Fuses broad section pages with discrete scout signals + context."""
-                # Start with Locator findings
-                current_pages = set(ctx.section_map.get(section_key, []))
-                if section_key == "declarations" and total_pages > 0:
-                    current_pages.add(1) # SAFETY FALLBACK: Always include Page 1 for Decs.
+            if is_turbo:
+                logger.info(f"TURBO MODE ACTIVE: Skipping Locator & Scout for {total_pages} page(s).")
+                # Skip Locator/Scout -> Everything maps to page 1-N (handled by slice logic)
+                ctx.section_map = {} # Will fallback to full doc
+                ctx.scout_map = {}
+            else:
+                # 3.1. The Cartographer (Merged Locator + Scout)
+                if status_callback: status_callback(" 🗺️ Mapping Document (Cartographer)...")
+                cartography_data = self._run_cartographer(uploaded_file)
                 
-                # Extract pages from Scout
-                scout_data = ctx.scout_map.get(signal_key, [])
-                scout_pages = set()
+                # Split the unified response back into section_map and scout_map for compatibility
+                ctx.section_map = {
+                    "declarations": cartography_data.get("declarations", []),
+                    "coverages": cartography_data.get("coverages", []),
+                    "vehicles": cartography_data.get("vehicles", []),
+                    "drivers": cartography_data.get("drivers", [])
+                }
                 
-                for item in scout_data:
-                    if signal_is_object_list:
-                         if isinstance(item, dict):
-                            p = item.get("page")
-                            if isinstance(p, int): scout_pages.add(p)
-                    elif isinstance(item, int):
-                        scout_pages.add(item)
-
-                # Add context (+/- 1 page) to scout findings
-                expanded_scout = set()
-                for p in scout_pages:
-                    expanded_scout.add(p)
-                    expanded_scout.add(p - 1)
-                    expanded_scout.add(p + 1)
+                ctx.scout_map = {
+                    "premium_signals": cartography_data.get("premium_signals", []),
+                    "vehicle_schedule_signals": cartography_data.get("vehicle_schedule_signals", []),
+                    "driver_schedule_signals": cartography_data.get("driver_schedule_signals", []),
+                    "coverage_schedule_signals": cartography_data.get("coverage_schedule_signals", [])
+                }
                 
-                # Union and Validate range
-                final_set = current_pages.union(expanded_scout)
-                return sorted([p for p in final_set if 1 <= p <= total_pages])
+                logger.info(f"Cartographer Results: {json.dumps(ctx.section_map)}")
 
-            # Apply Merging Rules
-            ctx.section_map = {
-                "declarations": merge_pages("declarations", "premium_signals", signal_is_object_list=True),
-                "vehicles": merge_pages("vehicles", "vehicle_schedule_signals"),
-                "drivers": merge_pages("drivers", "driver_schedule_signals"),
-                "coverages": merge_pages("coverages", "coverage_schedule_signals")
-            }
-
-            logger.info(f"Smart Slices (Merged): {json.dumps(ctx.section_map)}")
+                # --- INTELLIGENT MERGING ---
+                ctx.section_map = self._merge_scout_signals(ctx, total_pages)
+                logger.info(f"Smart Slices (Merged): {json.dumps(ctx.section_map)}")
 
         except Exception as e:
             return None, None, f"Initialization Error: {str(e)}"
@@ -277,12 +267,6 @@ class GeminiExtractionPipeline:
                 except Exception as e:
                     logger.warning(f"Failed to delete file: {e}")
             
-            # AGREEMENT: Remote file is deleted immediately after section location.
-            # This is SAFE because:
-            # - All extraction steps use locally sliced PDF bytes
-            # - No downstream call references uploaded_file
-            # If future steps require Gemini visual grounding or page re-analysis, this deletion must be delayed.
-
         # 5. Extract (Parallel Sliced Execution)
         try:
             if status_callback: status_callback(" Starting Sliced Extraction...")
@@ -293,30 +277,84 @@ class GeminiExtractionPipeline:
         # 6. Normalize & Validate
         final_result = self._assemble_result(ctx, processor)
         
-        # 6b. Phase 4: Sanity Check
-        # (Naive text signal assumption: checking raw text from first page as proxy for entire doc signal is costly here
-        # so we will trust the extracted result internal logic for now, or just use Scout map)
-        # Using Scout Map as "Text Signal" proxy
-        # 6b. Phase 4: Sanity Check
-        # (Naive text signal assumption: checking raw text from first page as proxy for entire doc signal is costly here
-        # so we will trust the extracted result internal logic for now, or just use Scout map)
-        # Using Scout Map as "Text Signal" proxy
-        is_valid, sanity_msg = self._validate_extraction_completeness(final_result, ctx)
-        if not is_valid:
-            ctx.usage_metadata["sanity_failure"] = sanity_msg  # Log metadata
+        # --- TIER 1 VERIFICATION (AUDITOR) ---
+        is_valid, errors = self.auditor.quick_validate(final_result)
         
         if not is_valid:
-            logger.warning(f"SANITY CHECK FAILED: {sanity_msg}")
-            # We do NOT return error to user, but we do NOT cache this result.
-            return final_result, ctx.usage_metadata, None # Return data, but don't cache
+             logger.warning(f"Tier 1 Validation Failed: {errors}")
+             if status_callback: status_callback(f" ⚠️ Tier 1 Fail: {len(errors)} errors. Attempting Repair...")
+             
+             # --- TIER 2 REPAIR (Optional) ---
+             # We assume Declarations is the most critical part usually (Policy #, Insured)
+             # Reprocess Declarations with error context
+             repaired_data = self._repair_declarations(ctx, processor, errors, final_result["policy"])
+             if repaired_data:
+                  ctx.extracted_data["policy"] = repaired_data
+                  # Re-assemble
+                  final_result = self._assemble_result(ctx, processor)
+                  # Re-validate
+                  is_valid_2, errors_2 = self.auditor.quick_validate(final_result)
+                  if is_valid_2:
+                       logger.info("Tier 2 Repair SUCCESSFUL.")
+                  else:
+                       logger.warning(f"Tier 2 Repair Partial/Failed: {errors_2}")
+             else:
+                  logger.warning("Tier 2 Repair returned no data.")
 
-        # 7. Cache Save (Phase 5: Cache Guard)
+        # 6b. Sanity Check (Scout Consistency) - Only run if not turbo (since scout is skipped in turbo)
+        if not is_turbo:
+            is_scout_valid, sanity_msg = self._validate_extraction_completeness(final_result, ctx)
+            if not is_scout_valid:
+                ctx.usage_metadata["sanity_failure"] = sanity_msg  # Log metadata
+                logger.warning(f"SANITY CHECK FAILED: {sanity_msg}")
+        
+        # 7. Cache Save
+        # Only save if valid OR if we accept partials (user preference usually valid)
+        # We save anyway but log it.
         try:
             cache_system.save(ctx.file_hash, final_result)
         except Exception as e:
             logger.error(f"Failed to save cache: {e}")
 
         return final_result, ctx.usage_metadata, None
+
+    def _merge_scout_signals(self, ctx, total_pages):
+        """Fuses broad section pages with discrete scout signals + context."""
+        def merge_pages(section_key, signal_key, signal_is_object_list=False):
+            # Start with Locator findings
+            current_pages = set(ctx.section_map.get(section_key, []))
+            if section_key == "declarations" and total_pages > 0:
+                current_pages.add(1) # SAFETY FALLBACK: Always include Page 1 for Decs.
+            
+            # Extract pages from Scout
+            scout_data = ctx.scout_map.get(signal_key, [])
+            scout_pages = set()
+            
+            for item in scout_data:
+                if signal_is_object_list:
+                     if isinstance(item, dict):
+                        p = item.get("page")
+                        if isinstance(p, int): scout_pages.add(p)
+                elif isinstance(item, int):
+                    scout_pages.add(item)
+
+            # Add context (+/- 1 page) to scout findings
+            expanded_scout = set()
+            for p in scout_pages:
+                expanded_scout.add(p)
+                expanded_scout.add(p - 1)
+                expanded_scout.add(p + 1)
+            
+            # Union and Validate range
+            final_set = current_pages.union(expanded_scout)
+            return sorted([p for p in final_set if 1 <= p <= total_pages])
+
+        return {
+            "declarations": merge_pages("declarations", "premium_signals", signal_is_object_list=True),
+            "vehicles": merge_pages("vehicles", "vehicle_schedule_signals"),
+            "drivers": merge_pages("drivers", "driver_schedule_signals"),
+            "coverages": merge_pages("coverages", "coverage_schedule_signals")
+        }
 
     # --- INTERNAL STEPS ---
 
@@ -367,35 +405,23 @@ class GeminiExtractionPipeline:
         )
         return self._parse_json_response(response.text)
 
-    def _locate_sections(self, uploaded_file) -> dict:
-        response = self._call_gemini(
-            model=ROUTING_MODEL,
-            contents=[uploaded_file, LOCATE_SECTIONS_PROMPT],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=SECTION_LOCATOR_SCHEMA
-            ),
-            request_type="locator"
-        )
-        return self._parse_json_response(response.text)
-
-    def _run_universal_scout(self, uploaded_file) -> dict:
-        """Phase 1: Universal Scout - Scan full document for ALL key signals."""
+    def _run_cartographer(self, uploaded_file) -> dict:
+        """Phase 1: The Cartographer - Unified Mapping Step."""
         try:
-            logger.info("Running Universal Scout (Full PDF)...")
+            logger.info("Running Cartographer (Full PDF)...")
             response = self._call_gemini(
                 model=ROUTING_MODEL,
-                contents=[uploaded_file, UNIVERSAL_SCOUT_PROMPT],
+                contents=[uploaded_file, CARTOGRAPHER_PROMPT],
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
-                    response_schema=UNIVERSAL_SCOUT_SCHEMA
+                    response_schema=CARTOGRAPHER_SCHEMA
                 ),
-                request_type="scout"
+                request_type="cartographer"
             )
             return self._parse_json_response(response.text)
         except Exception as e:
-            logger.warning(f"Universal Scout failed: {e}")
-            if "STOPS" in str(e): raise e # Critical quota stop
+            logger.warning(f"Cartographer failed: {e}")
+            if "STOPS" in str(e): raise e
             return {}
 
     def _parse_json_response(self, text: str, ctx: Optional[ExtractionContext] = None) -> dict:
@@ -425,25 +451,25 @@ class GeminiExtractionPipeline:
         sections = ["declarations", "coverages", "vehicles", "drivers"]
         slices = {}
         
-        # SHORT DOCUMENT STRATEGY:
-        # If total pages <= 3, assume all info is dense/scatted.
-        # Bypass slicing to prevent "slicing out" data if locator fails.
         total_pages = processor.get_page_count()
-        is_short_doc = total_pages <= 3
+        # TURBO MODE LOGIC: If we skipped locator, slice map is empty, so we must rely on fallback (full doc)
         
         full_doc_bytes = None
-        if is_short_doc:
-             logger.info(f"SHORT DOC STRATEGY: Bypassing slicing for {total_pages} page(s). Using full doc.")
-             full_doc_bytes = types.Part.from_bytes(data=ctx.file_bytes, mime_type='application/pdf')
+        # Optimization: Only load full bytes if needed
         
         for section in sections:
-            if is_short_doc:
+            # Check map
+            pages = self._get_pages_for_section(ctx.section_map, section, total_pages)
+            
+            # If pages == all pages (fallback or turbo), use same object
+            if len(pages) == total_pages:
+                 if not full_doc_bytes:
+                      full_doc_bytes = types.Part.from_bytes(data=ctx.file_bytes, mime_type='application/pdf')
                  slices[section] = full_doc_bytes
             else:
-                pages = self._get_pages_for_section(ctx.section_map, section, processor.get_page_count())
-                logger.info(f"PIPELINE: Slicing {section} -> Pages {pages}")
-                pdf_bytes = processor.create_slice(pages)
-                slices[section] = types.Part.from_bytes(data=pdf_bytes, mime_type='application/pdf')
+                 logger.info(f"PIPELINE: Slicing {section} -> Pages {pages}")
+                 pdf_bytes = processor.create_slice(pages)
+                 slices[section] = types.Part.from_bytes(data=pdf_bytes, mime_type='application/pdf')
 
         # Parallel Execution (Max Workers = 4)
         with ThreadPoolExecutor(max_workers=4) as executor:
@@ -460,10 +486,6 @@ class GeminiExtractionPipeline:
             
             if ctx.policy_type in ["personal_auto", "commercial_auto", "commercial_package"]:
                  future_drv = executor.submit(self._extract_drivers, slices["drivers"], ctx)
-                 
-            # Wait & Store (Tuples from now on could be supported, but ctx passed is simpler for mutation)
-            # Note: _extract_* methods now mutate ctx.usage_metadata internally or we just rely on return?
-            # Keeping return simple for now, but passing ctx for JSON parser. 
             
             if future_decs: ctx.extracted_data["policy"] = future_decs.result()
             if future_cov: ctx.extracted_data["coverages"] = future_cov.result()
@@ -478,18 +500,14 @@ class GeminiExtractionPipeline:
         info = section_map.get(section_name, [])
         
         # GUARD: Empty slice optimization
-        # GUARD: Empty slice optimization
         if info in (None, {}, []):
-            # FIX: Fail Open for Safety
-            # If we have NO info on where the section is, scanning the whole doc is safer 
-            # than returning an empty PDF (which guarantees 0 results).
+            # Fail Open for Safety (Scanning whole doc is safer than missing data)
             return list(range(total_pages))
             
         selected_pages = []
 
         # Case A: List of Integers (Standardized)
         if isinstance(info, list) and info:
-            # Flatten mixed list of ints/dicts just in case (e.g. from legacy cache)
             for item in info:
                 if isinstance(item, int):
                     if 1 <= item <= total_pages:
@@ -498,14 +516,11 @@ class GeminiExtractionPipeline:
                     # Handle legacy dict inside list if it somehow persists
                     s = item.get("start_page", 1)
                     e = item.get("end_page", total_pages)
-                    # Convert range to pages
                     for p in range(max(1, s), min(e, total_pages) + 1):
                          selected_pages.append(p - 1)
             
             # Dedupe and Sort
             selected_pages = sorted(list(set(selected_pages)))
-            
-        # Legacy Cases B, C, D (Dict, Int, etc.) are REMOVED as Schema enforces List[Int]
             
         # Apply MAX_PAGES Cap (Take first N pages)
         max_p = MAX_PAGES.get(section_name, 10)
@@ -524,7 +539,20 @@ class GeminiExtractionPipeline:
             config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=DECLARATIONS_SCHEMA),
             request_type="extraction_declarations"
         )
-        return self._parse_json_response(res.text, ctx)
+        data = self._parse_json_response(res.text, ctx)
+        
+        # Inject Carrier Hints if available (Post-Processing or Pre? Pre is better but we need carrier name first)
+        # We can't do it Pre-Extraction because we don't know the carrier yet.
+        # This is where 2-Stage Repair loop shines.
+        
+        carrier = data.get("carrier_name")
+        if carrier:
+             hints = self.kb.get_hints(carrier)
+             if hints:
+                  logger.info(f"Loaded hints for {carrier}")
+                  ctx.carrier_hints = hints
+                  
+        return data
 
     def _extract_coverages(self, part, policy_type, ctx):
         # Use Cached Registry Helper
@@ -543,7 +571,6 @@ class GeminiExtractionPipeline:
         scout_pages = ctx.scout_map.get("vehicle_schedule_signals", [])
         scout_hint = ""
         if scout_pages:
-            # Flatten mixed list of ints/dicts just in case, though usually ints here
             cleaned_pages = []
             for p in scout_pages:
                  if isinstance(p, int): cleaned_pages.append(p)
@@ -579,6 +606,40 @@ class GeminiExtractionPipeline:
             request_type="extraction_drivers"
         )
         return self._parse_json_response(res.text, ctx)
+
+    def _repair_declarations(self, ctx, processor, errors, current_data):
+        """Tier 2: Targeted Retry for Declarations."""
+        logger.info(f"REPAIR: Taking action on {errors}")
+        
+        # Determine strict slice for repair
+        # Ideally we know WHICH page caused the issue, but for now we reuse the 'declarations' slice logic.
+        pages = self._get_pages_for_section(ctx.section_map, "declarations", processor.get_page_count())
+        
+        # If turbo mode, pages is all pages.
+        # Create fresh part
+        pdf_bytes = processor.create_slice(pages)
+        part = types.Part.from_bytes(data=pdf_bytes, mime_type='application/pdf')
+        
+        # Generate Surgical Prompt
+        prompt = self.auditor.generate_repair_prompt(errors, current_data)
+        
+        # Inject Knowledge Base hints if we know the carrier
+        if ctx.carrier_hints:
+             prompt += f"\n\n{ctx.carrier_hints}"
+             
+        # Call API
+        try:
+             res = self._call_gemini(
+                 model=EXTRACTION_MODEL,
+                 contents=[part, prompt],
+                 config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=DECLARATIONS_SCHEMA),
+                 request_type="repair_declarations"
+             )
+             return self._parse_json_response(res.text, ctx)
+        except Exception as e:
+             logger.error(f"Repair attempt failed: {str(e)}")
+             return None
+
 
     # --- NORMALIZATION ---
 

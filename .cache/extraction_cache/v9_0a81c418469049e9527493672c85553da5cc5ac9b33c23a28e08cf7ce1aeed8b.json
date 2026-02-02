@@ -1,0 +1,302 @@
+{
+  "policy": {
+    "carrier_name": "GEICO Marine Insurance Company",
+    "naic_number": "",
+    "policy_number": "9300093577",
+    "effective_date": "12/10/2024",
+    "expiration_date": "12/10/2025",
+    "account_type": "",
+    "insured_name": "TONEYS FREIGHT TRANSPORT LLC",
+    "insured_address": "143 AUSTEN LAKES DRIVE",
+    "insured_city": "YORK",
+    "insured_state_code": "SC",
+    "insured_zip": "29745",
+    "business_name": "TONEYS FREIGHT TRANSPORT LLC",
+    "premium": "",
+    "financial_responsibility_name": "",
+    "state": "SC",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          99,
+          64,
+          112,
+          322
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          77,
+          160,
+          89,
+          300
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          77,
+          540,
+          89,
+          655
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          77,
+          790,
+          89,
+          905
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          100,
+          490,
+          112,
+          765
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          114,
+          490,
+          126,
+          700
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          128,
+          490,
+          140,
+          530
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          128,
+          535,
+          140,
+          555
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          128,
+          560,
+          140,
+          610
+        ]
+      },
+      {
+        "field": "business_name",
+        "page_number": 1,
+        "bbox": [
+          100,
+          490,
+          112,
+          765
+        ]
+      },
+      {
+        "field": "state",
+        "page_number": 1,
+        "bbox": [
+          128,
+          535,
+          140,
+          555
+        ]
+      }
+    ],
+    "liability_limit": "1,000,000 CSL",
+    "cargo_limit": "$100,000",
+    "cargo_deductible": "1000",
+    "um_uim_limit": "100,000 CSL",
+    "med_pay_limit": "5,000",
+    "pip_limit": null,
+    "comp_deductible": "1000",
+    "coll_deductible": "1000",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "display_name": "Auto Liability - Combined Single Limit - Automobile Liability",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          339,
+          180,
+          350,
+          249
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_CSL",
+      "display_name": "Uninsured Motorist CSL",
+      "family": "uninsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 100000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          499,
+          180,
+          510,
+          239
+        ]
+      }
+    },
+    {
+      "coverage_code": "UIM_CSL",
+      "display_name": "Underinsured Motorist CSL",
+      "family": "underinsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 100000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          540,
+          180,
+          551,
+          239
+        ]
+      }
+    },
+    {
+      "coverage_code": "MED_PAY",
+      "display_name": "Medical Payments",
+      "family": "medical_payments",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 5000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          581,
+          180,
+          592,
+          217
+        ]
+      }
+    },
+    {
+      "coverage_code": "CARGO_LEGAL_LIAB",
+      "display_name": "Motor Truck Cargo",
+      "family": "cargo",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 100000
+      },
+      "deductible": 1000,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          660,
+          430,
+          671,
+          560
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "display_name": "Comprehensive / OTC",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          744,
+          690,
+          755,
+          779
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "display_name": "Collision",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          763,
+          690,
+          774,
+          779
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2021,
+      "make": "RAM",
+      "model": "PROMASTER 2500",
+      "vin": "3C6LRVDGXME542606",
+      "gvw": 0,
+      "type": "Cargo Van",
+      "chassis": "Cargo Van",
+      "body": ""
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "Jason Toney",
+      "license_number": "null",
+      "is_excluded": false
+    }
+  ],
+  "classification": {
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "COMMERCIAL AUTOMOBILE LIABILITY",
+      "COMMERCIAL AUTOMOBILE OTHER COVERAGES",
+      "Motor Truck Cargo Coverage",
+      "TONEYS FREIGHT TRANSPORT LLC"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}

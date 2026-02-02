@@ -9,7 +9,8 @@ For a deep dive into the architecture, extraction pipeline, and ontology rules, 
 ## Features
 
 - **AI Extraction**: Upload PDF policies to extract key data (Limits, Dates, Coverages, Drivers, Vehicles) using Google Gemini 2.5 Flash.
-  - **High-Precision Scouting**: Uses a multi-phase "Universal Scout" + "Smart Slicing" architecture to find signals before extraction.
+  - **Turbo Mode**: Instantly processes short documents (< 5 pages) by skipping complex mapping steps.
+  - **Self-Healing**: "The Auditor" automatically detects and fixes errors (missing policy #, dates) in real-time.
 - **Data Management**: View, filter, edit, and delete extracted policies from a local SQLite database.
   - **Modern Grid UX**: Compactpopover column controls, status indicators (✅ Active, ⚠️ Issue), and dynamic row-based actions.
 - **AI Chat with Data**: Communicate with an AI-powered agent to query your database in natural language.
