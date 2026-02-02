@@ -1,0 +1,284 @@
+{
+  "policy": {
+    "carrier_name": "GEICO Marine Insurance Company",
+    "policy_number": "9300132472",
+    "effective_date": "03/28/2025",
+    "expiration_date": "03/28/2026",
+    "account_type": "Commercial",
+    "insured_name": "DOCTOR MA LOGISTICS LLC",
+    "insured_address": "171 QUAIL FOREST CIR",
+    "insured_city": "TOCCOA",
+    "insured_state_code": "GA",
+    "insured_zip": "30577",
+    "business_name": "DOCTOR MA LOGISTICS LLC",
+    "state": "GA",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          100,
+          66,
+          112,
+          280
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          74,
+          149,
+          86,
+          307
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          74,
+          480,
+          86,
+          600
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          74,
+          720,
+          86,
+          840
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          100,
+          480,
+          112,
+          670
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          114,
+          480,
+          126,
+          650
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          128,
+          480,
+          140,
+          540
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          128,
+          545,
+          140,
+          565
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          128,
+          570,
+          140,
+          620
+        ]
+      },
+      {
+        "field": "business_name",
+        "page_number": 1,
+        "bbox": [
+          100,
+          480,
+          112,
+          670
+        ]
+      },
+      {
+        "field": "state",
+        "page_number": 1,
+        "bbox": [
+          128,
+          545,
+          140,
+          565
+        ]
+      }
+    ],
+    "liability_limit": "1,000,000 CSL",
+    "cargo_limit": "$100,000",
+    "cargo_deductible": "1000",
+    "um_uim_limit": "UMOnly: 100,000 CSL",
+    "med_pay_limit": "1,000",
+    "pip_limit": null,
+    "comp_deductible": "1000",
+    "coll_deductible": "1000",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "display_name": "Combined Single Limit",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "vehicle_vin": "1FDBF6ZG8PKB95155",
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          330,
+          58,
+          342,
+          150
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_CSL",
+      "display_name": "Uninsured Motorists Combined Single Limit",
+      "family": "uninsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 100000
+      },
+      "vehicle_vin": "1FDBF6ZG8PKB95155",
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          490,
+          58,
+          502,
+          130
+        ]
+      }
+    },
+    {
+      "coverage_code": "MED_PAY",
+      "display_name": "Medical Payments",
+      "family": "medical_payments",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 1000
+      },
+      "vehicle_vin": "1FDBF6ZG8PKB95155",
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          580,
+          180,
+          592,
+          230
+        ]
+      }
+    },
+    {
+      "coverage_code": "CARGO_LEGAL_LIAB",
+      "display_name": "Motor Truck Cargo Coverage",
+      "family": "cargo",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 100000
+      },
+      "deductible": 1000,
+      "vehicle_vin": "1FDBF6ZG8PKB95155",
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          640,
+          430,
+          652,
+          580
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "display_name": "Comprehensive",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "vehicle_vin": "1FDBF6ZG8PKB95155",
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          750,
+          390,
+          762,
+          500
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "display_name": "Collision",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "vehicle_vin": "1FDBF6ZG8PKB95155",
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          770,
+          390,
+          782,
+          500
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2023,
+      "make": "FORD",
+      "model": "TRANSIT",
+      "vin": "1FDBF6ZG8PKB95155",
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": null
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "Muharrem Akinci",
+      "is_excluded": false
+    }
+  ],
+  "classification": {
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "COMMERCIAL AUTOMOBILE LIABILITY",
+      "COMMERCIAL AUTOMOBILE OTHER COVERAGES",
+      "Motor Truck Cargo Coverage"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}

@@ -8,7 +8,7 @@ def edit_policy_dialog(policy, service: PolicyService):
     st.write(f"Editing Policy: **{policy.policy_number}**")
     
     # Define Tabs
-    tab_details, tab_vehs, tab_drvs, tab_ais, tab_history = st.tabs(["📝 Details", "🚙 Vehicles", "👤 Drivers", "🏢 Add'l Interests", "📜 History"])
+    tab_details, tab_covs, tab_vehs, tab_drvs, tab_ais, tab_history = st.tabs(["📝 Details", "🛡️ Coverages", "🚙 Vehicles", "👤 Drivers", "🏢 Add'l Interests", "📜 History"])
     
     # --- Tab 1: Details (Scalar Fields) ---
     with tab_details:
@@ -103,7 +103,59 @@ def edit_policy_dialog(policy, service: PolicyService):
                 else:
                     st.error(msg)
                     
-    # --- Tab 2: Vehicles ---
+                    st.error(msg)
+                    
+    # --- Tab 2: Coverages (New) ---
+    with tab_covs:
+        st.subheader("🛡️ Policy Coverages")
+        
+        # Split coverages
+        global_covs = [c for c in policy.coverages if not c.vehicle_id]
+        
+        st.markdown(f"**Global / Policy-Level ({len(global_covs)})**")
+        if global_covs:
+            c_data = []
+            for c in global_covs:
+                 # Construct display string for limit
+                 lim_disp = "N/A"
+                 if c.combined_single_limit: lim_disp = f"${c.combined_single_limit:,} CSL"
+                 elif c.per_occurrence: lim_disp = f"${c.per_occurrence:,} Per Occ"
+                 elif c.per_person and c.per_accident: lim_disp = f"${c.per_person:,}/${c.per_accident:,}"
+                 elif c.per_accident: lim_disp = f"${c.per_accident:,}"
+                 
+                 c_data.append({
+                     "Code": c.coverage_code,
+                     "Family": c.family,
+                     "Limit": lim_disp,
+                     "Deductible": c.deductible if c.deductible else "-"
+                 })
+            st.dataframe(pd.DataFrame(c_data), hide_index=True, use_container_width=True)
+        else:
+            st.caption("No global coverages found.")
+
+        st.divider()
+        st.subheader("🚙 Vehicle-Specific Coverages")
+        
+        # vehicle-level
+        has_veh_covs = False
+        for v in policy.vehicles:
+            if v.coverages:
+                has_veh_covs = True
+                with st.expander(f"{v.year} {v.make} {v.model} ({v.vin[-6:] if v.vin else 'NO VIN'})"):
+                    vc_data = []
+                    for c in v.coverages:
+                         lim_disp = "Included"
+                         if c.deductible: lim_disp = f"Ded: ${c.deductible}"
+                         elif c.per_occurrence: lim_disp = f"${c.per_occurrence:,}"
+                         
+                         vc_data.append({
+                             "Coverage": c.coverage_code or c.type,
+                             "Details": lim_disp
+                         })
+                    st.dataframe(pd.DataFrame(vc_data), hide_index=True, use_container_width=True)
+        
+        if not has_veh_covs:
+             st.info("No vehicle-specific coverages found (e.g. Comp/Coll might be global or missing).")
     with tab_vehs:
         st.subheader("Manage Vehicles")
         # Prepare Data

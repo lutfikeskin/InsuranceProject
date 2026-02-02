@@ -2,16 +2,16 @@
   "policy": {
     "carrier_name": "GEICO Marine Insurance Company",
     "naic_number": "",
-    "policy_number": "9300093577",
-    "effective_date": "12/10/2024",
-    "expiration_date": "12/10/2025",
-    "account_type": "",
-    "insured_name": "TONEYS FREIGHT TRANSPORT LLC",
-    "insured_address": "143 AUSTEN LAKES DRIVE",
-    "insured_city": "YORK",
+    "policy_number": "9300085344",
+    "effective_date": "11/11/2024",
+    "expiration_date": "11/11/2025",
+    "account_type": "Business",
+    "insured_name": "PATAGONIA EXPRESS LLC",
+    "insured_address": "9465 AVERY LILAC LANE",
+    "insured_city": "FORT MILL",
     "insured_state_code": "SC",
-    "insured_zip": "29745",
-    "business_name": "TONEYS FREIGHT TRANSPORT LLC",
+    "insured_zip": "29707",
+    "business_name": "PATAGONIA EXPRESS LLC",
     "premium": "",
     "financial_responsibility_name": "",
     "state": "SC",
@@ -20,118 +20,98 @@
         "field": "carrier_name",
         "page_number": 1,
         "bbox": [
-          99,
-          64,
-          112,
-          322
+          90,
+          62,
+          101,
+          269
         ]
       },
       {
         "field": "policy_number",
         "page_number": 1,
         "bbox": [
-          77,
-          160,
-          89,
-          300
+          73,
+          120,
+          84,
+          299
         ]
       },
       {
         "field": "effective_date",
         "page_number": 1,
         "bbox": [
-          77,
-          540,
-          89,
-          655
+          73,
+          480,
+          84,
+          649
         ]
       },
       {
         "field": "expiration_date",
         "page_number": 1,
         "bbox": [
-          77,
-          790,
-          89,
-          905
+          73,
+          760,
+          84,
+          909
         ]
       },
       {
         "field": "insured_name",
         "page_number": 1,
         "bbox": [
-          100,
-          490,
-          112,
-          765
+          105,
+          479,
+          116,
+          679
         ]
       },
       {
         "field": "insured_address",
         "page_number": 1,
         "bbox": [
-          114,
-          490,
-          126,
-          700
+          118,
+          479,
+          129,
+          679
         ]
       },
       {
         "field": "insured_city",
         "page_number": 1,
         "bbox": [
-          128,
-          490,
-          140,
-          530
+          131,
+          479,
+          142,
+          559
         ]
       },
       {
         "field": "insured_state_code",
         "page_number": 1,
         "bbox": [
-          128,
-          535,
-          140,
-          555
+          131,
+          562,
+          142,
+          589
         ]
       },
       {
         "field": "insured_zip",
         "page_number": 1,
         "bbox": [
-          128,
-          560,
-          140,
-          610
-        ]
-      },
-      {
-        "field": "business_name",
-        "page_number": 1,
-        "bbox": [
-          100,
-          490,
-          112,
-          765
-        ]
-      },
-      {
-        "field": "state",
-        "page_number": 1,
-        "bbox": [
-          128,
-          535,
-          140,
-          555
+          131,
+          592,
+          142,
+          649
         ]
       }
     ],
     "liability_limit": "1,000,000 CSL",
     "cargo_limit": "$100,000",
     "cargo_deductible": "1000",
-    "um_uim_limit": "100,000 CSL",
-    "med_pay_limit": "5,000",
+    "um_uim_limit": "1,000,000 CSL",
+    "med_pay_limit": "2,000",
     "pip_limit": null,
     "comp_deductible": "1000",
     "coll_deductible": "1000",
@@ -142,55 +122,61 @@
   "coverages": [
     {
       "coverage_code": "AUTO_LIAB_CSL",
-      "display_name": "Auto Liability - Combined Single Limit - Automobile Liability",
+      "display_name": "Combined Single Limit",
       "family": "auto_liability",
       "limit_structure": "csl",
       "limits": {
         "combined_single_limit": 1000000
       },
+      "deductible": 0,
+      "vehicle_vin": "3C6MRVJG1PE505392",
       "location": {
         "page_number": 1,
         "bbox": [
-          339,
-          180,
-          350,
-          249
+          320,
+          58,
+          331,
+          359
         ]
       }
     },
     {
       "coverage_code": "UM_CSL",
-      "display_name": "Uninsured Motorist CSL",
+      "display_name": "Uninsured Motorists Combined Single Limit",
       "family": "uninsured_motorist",
       "limit_structure": "csl",
       "limits": {
-        "combined_single_limit": 100000
+        "combined_single_limit": 1000000
       },
+      "deductible": 0,
+      "vehicle_vin": "3C6MRVJG1PE505392",
       "location": {
         "page_number": 1,
         "bbox": [
-          499,
-          180,
-          510,
-          239
+          487,
+          58,
+          498,
+          359
         ]
       }
     },
     {
       "coverage_code": "UIM_CSL",
-      "display_name": "Underinsured Motorist CSL",
+      "display_name": "Underinsured Motorists Combined Single Limit",
       "family": "underinsured_motorist",
       "limit_structure": "csl",
       "limits": {
-        "combined_single_limit": 100000
+        "combined_single_limit": 1000000
       },
+      "deductible": 0,
+      "vehicle_vin": "3C6MRVJG1PE505392",
       "location": {
         "page_number": 1,
         "bbox": [
-          540,
-          180,
-          551,
-          239
+          530,
+          58,
+          541,
+          359
         ]
       }
     },
@@ -200,50 +186,55 @@
       "family": "medical_payments",
       "limit_structure": "split",
       "limits": {
-        "per_person": 5000
+        "per_person": 2000
       },
+      "deductible": 0,
+      "vehicle_vin": "3C6MRVJG1PE505392",
       "location": {
         "page_number": 1,
         "bbox": [
-          581,
-          180,
-          592,
-          217
+          580,
+          58,
+          591,
+          269
         ]
       }
     },
     {
       "coverage_code": "CARGO_LEGAL_LIAB",
-      "display_name": "Motor Truck Cargo",
+      "display_name": "Motor Truck Cargo Coverage",
       "family": "cargo",
       "limit_structure": "per_occurrence",
       "limits": {
         "per_occurrence": 100000
       },
       "deductible": 1000,
+      "vehicle_vin": "",
       "location": {
         "page_number": 1,
         "bbox": [
-          660,
-          430,
-          671,
-          560
+          665,
+          58,
+          676,
+          309
         ]
       }
     },
     {
       "coverage_code": "COMP",
-      "display_name": "Comprehensive / OTC",
+      "display_name": "Comprehensive",
       "family": "physical_damage",
       "limit_structure": "deductible_only",
+      "limits": {},
       "deductible": 1000,
+      "vehicle_vin": "3C6MRVJG1PE505392",
       "location": {
         "page_number": 1,
         "bbox": [
           744,
-          690,
+          534,
           755,
-          779
+          839
         ]
       }
     },
@@ -252,24 +243,26 @@
       "display_name": "Collision",
       "family": "physical_damage",
       "limit_structure": "deductible_only",
+      "limits": {},
       "deductible": 1000,
+      "vehicle_vin": "3C6MRVJG1PE505392",
       "location": {
         "page_number": 1,
         "bbox": [
-          763,
-          690,
-          774,
-          779
+          760,
+          534,
+          771,
+          839
         ]
       }
     }
   ],
   "vehicles": [
     {
-      "year": 2021,
+      "year": 2023,
       "make": "RAM",
-      "model": "PROMASTER 2500",
-      "vin": "3C6LRVDGXME542606",
+      "model": "PROMASTER 3500",
+      "vin": "3C6MRVJG1PE505392",
       "gvw": 0,
       "type": "Cargo Van",
       "chassis": "Cargo Van",
@@ -278,8 +271,8 @@
   ],
   "drivers": [
     {
-      "full_name": "Jason Toney",
-      "license_number": "null",
+      "full_name": "Pablo Daniel Nanterne",
+      "license_number": "",
       "is_excluded": false
     }
   ],
@@ -290,7 +283,7 @@
       "COMMERCIAL AUTOMOBILE LIABILITY",
       "COMMERCIAL AUTOMOBILE OTHER COVERAGES",
       "Motor Truck Cargo Coverage",
-      "TONEYS FREIGHT TRANSPORT LLC"
+      "Schedule of Commercial General Liability"
     ]
   },
   "page_dimensions": [

@@ -17,51 +17,7 @@ CLASSIFICATION_SCHEMA = {
     "required": ["policy_type", "confidence"]
 }
 
-# MERGED SCHEMA: The Cartographer
-# Combines broad section location + specific signal scouting
-CARTOGRAPHER_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        # Broad Sections (Locator)
-        "declarations": {"type": "ARRAY", "items": {"type": "INTEGER"}}, # Page numbers
-        "coverages": {"type": "ARRAY", "items": {"type": "INTEGER"}},
-        "vehicles": {"type": "ARRAY", "items": {"type": "INTEGER"}},
-        "drivers": {"type": "ARRAY", "items": {"type": "INTEGER"}},
 
-        # Specific Signals (Scout)
-        "premium_signals": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "label": {"type": "STRING"},
-                    "page": {"type": "INTEGER"},
-                    "type": {"type": "STRING", "enum": ["gross", "net", "total", "installment", "fee", "unknown"]},
-                    "period": {"type": "STRING", "enum": ["annual", "6-month", "monthly", "unknown"]}
-                },
-                "required": ["label", "page"]
-            }
-        },
-        "vehicle_schedule_signals": {"type": "ARRAY", "items": {"type": "INTEGER"}},
-        "driver_schedule_signals": {"type": "ARRAY", "items": {"type": "INTEGER"}},
-        "coverage_schedule_signals": {"type": "ARRAY", "items": {"type": "INTEGER"}}
-    },
-    "required": [
-        "declarations", "coverages",
-        "premium_signals", "vehicle_schedule_signals"
-    ]
-}
-
-SECTION_LOCATOR_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "declarations": {"type": "ARRAY", "items": {"type": "INTEGER"}}, # Page numbers
-        "coverages": {"type": "ARRAY", "items": {"type": "INTEGER"}},
-        "vehicles": {"type": "ARRAY", "items": {"type": "INTEGER"}},
-        "drivers": {"type": "ARRAY", "items": {"type": "INTEGER"}}
-    },
-    "required": ["declarations", "coverages"]
-}
 
 DECLARATIONS_SCHEMA = {
     "type": "OBJECT",
@@ -136,6 +92,10 @@ COVERAGE_SCHEMA = {
                         }
                     },
                     "deductible": {"type": "INTEGER"},
+                    "vehicle_vin": {
+                        "type": "STRING",
+                        "description": "If coverage applies to a specific vehicle/unit, provide the VIN here. Otherwise null."
+                    },
                     "location": {
                         "type": "OBJECT",
                         "properties": {
@@ -189,45 +149,16 @@ DRIVER_SCHEMA = {
 }
 
 
-UNIVERSAL_SCOUT_SCHEMA = {
+
+
+COMPLETE_POLICY_SCHEMA = {
     "type": "OBJECT",
     "properties": {
-        "premium_signals": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "label": {"type": "STRING"},
-                    "page": {"type": "INTEGER"},
-                    "type": {"type": "STRING", "enum": ["gross", "net", "total", "installment", "fee", "unknown"]},
-                    "period": {"type": "STRING", "enum": ["annual", "6-month", "monthly", "unknown"]}
-                },
-                "required": ["label", "page"]
-            }
-        },
-        "vehicle_schedule_signals": {
-            "type": "ARRAY",
-            "items": {
-                "type": "INTEGER"
-            }
-        },
-        "driver_schedule_signals": {
-            "type": "ARRAY",
-            "items": {
-                "type": "INTEGER"
-            }
-        },
-        "coverage_schedule_signals": {
-            "type": "ARRAY",
-            "items": {
-                "type": "INTEGER"
-            }
-        }
+        "classification": CLASSIFICATION_SCHEMA,
+        "policy": DECLARATIONS_SCHEMA,
+        "coverages": COVERAGE_SCHEMA["properties"]["coverages"],
+        "vehicles": VEHICLE_SCHEMA["properties"]["vehicles"],
+        "drivers": DRIVER_SCHEMA["properties"]["drivers"]
     },
-    "required": [
-        "premium_signals",
-        "vehicle_schedule_signals",
-        "driver_schedule_signals",
-        "coverage_schedule_signals"
-    ]
+    "required": ["classification", "policy", "coverages", "vehicles", "drivers"]
 }

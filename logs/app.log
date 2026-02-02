@@ -461,3 +461,215 @@
 2026-02-01 18:57:58 | DEBUG    | modules.extraction.pipeline:run:266 - Deleted remote file: files/dhuy1nl1gu0q
 2026-02-01 18:58:16 | WARNING  | modules.extraction.pipeline:_assemble_result:715 - Premium Audit Warning: UNSCOUTED_LOCATION on page 1
 2026-02-01 18:58:16 | DEBUG    | modules.extraction.pipeline:save:161 - CACHE SAVED: v11_turbo_d648a7964d389d13e9f1707cd48c8d42d095de69849f1f2c375fefba7ab45cf7
+2026-02-02 04:30:19 | INFO     | modules.extraction.pipeline:run:211 - Uploading to Gemini File API...
+2026-02-02 04:30:21 | INFO     | modules.extraction.pipeline:run:215 - File uploaded: files/rat5zw8cbwq8
+2026-02-02 04:30:27 | INFO     | modules.extraction.pipeline:run:222 - Policy Type: personal_auto (high)
+2026-02-02 04:30:27 | INFO     | modules.extraction.pipeline:run:228 - TURBO MODE ACTIVE: Skipping Locator & Scout for 6 page(s).
+2026-02-02 04:30:29 | DEBUG    | modules.extraction.pipeline:run:266 - Deleted remote file: files/rat5zw8cbwq8
+2026-02-02 04:30:55 | WARNING  | modules.extraction.pipeline:_assemble_result:748 - Premium Audit Warning: UNSCOUTED_LOCATION on page 1
+2026-02-02 04:30:55 | DEBUG    | modules.extraction.pipeline:save:161 - CACHE SAVED: v11_turbo_afccefc7335d11122e3994134a62da1dadbf18ddc11c9fc953d12719c9a0283d
+2026-02-02 04:45:29 | INFO     | modules.extraction.pipeline:run:211 - Uploading to Gemini File API...
+2026-02-02 04:45:31 | INFO     | modules.extraction.pipeline:run:215 - File uploaded: files/fjoknqpizv91
+2026-02-02 04:45:40 | INFO     | modules.extraction.pipeline:run:222 - Policy Type: commercial_package (high)
+2026-02-02 04:45:40 | INFO     | modules.extraction.pipeline:run:228 - TURBO MODE ACTIVE: Skipping Locator & Scout for 1 page(s).
+2026-02-02 04:45:41 | DEBUG    | modules.extraction.pipeline:run:266 - Deleted remote file: files/fjoknqpizv91
+2026-02-02 04:45:50 | INFO     | modules.extraction.pipeline:_extract_declarations:570 - Loaded hints for GEICO Marine Insurance Company
+2026-02-02 04:45:50 | INFO     | modules.extraction.pipeline:_extract_declarations:570 - Loaded hints for GEICO Marine Insurance Company
+2026-02-02 04:46:01 | DEBUG    | modules.extraction.pipeline:save:161 - CACHE SAVED: v11_turbo_909e9b16ee6a9b679e5687fce1bf11fbd7c601e813c61a50109b0305556fe58a
+2026-02-02 05:02:19 | INFO     | modules.extraction.pipeline:_extract_declarations:561 - TEXT MODE: Using raw text for declarations (saving tokens).
+2026-02-02 05:04:06 | INFO     | modules.extraction.pipeline:run:211 - Uploading to Gemini File API...
+2026-02-02 05:04:08 | INFO     | modules.extraction.pipeline:run:215 - File uploaded: files/0c9t6spl4gf2
+2026-02-02 05:04:13 | INFO     | modules.extraction.pipeline:run:222 - Policy Type: commercial_auto (high)
+2026-02-02 05:04:13 | INFO     | modules.extraction.pipeline:run:228 - TURBO MODE ACTIVE: Skipping Locator & Scout for 1 page(s).
+2026-02-02 05:04:15 | DEBUG    | modules.extraction.pipeline:run:266 - Deleted remote file: files/0c9t6spl4gf2
+2026-02-02 05:04:15 | INFO     | modules.extraction.pipeline:_extract_declarations:561 - TEXT MODE: Using raw text for declarations (saving tokens).
+2026-02-02 05:04:15 | INFO     | modules.extraction.pipeline:_extract_vehicles:627 - TEXT MODE: Using raw text for vehicles.
+2026-02-02 05:04:15 | INFO     | modules.extraction.pipeline:_extract_drivers:653 - TEXT MODE: Using raw text for drivers.
+2026-02-02 05:04:19 | INFO     | modules.extraction.pipeline:_extract_coverages:600 - TEXT MODE: Using raw text for coverages.
+2026-02-02 05:04:23 | INFO     | modules.extraction.pipeline:_extract_declarations:582 - Loaded hints for GEICO Marine Insurance Company
+2026-02-02 05:04:46 | DEBUG    | modules.extraction.pipeline:save:161 - CACHE SAVED: v11_turbo_f09750a448298bc200f2f2f6f57818886bc40348ef0cacdf403b1fc780d011dc
+2026-02-02 05:34:44 | INFO     | modules.extraction.pipeline:run:211 - Uploading to Gemini File API...
+2026-02-02 05:34:46 | INFO     | modules.extraction.pipeline:run:215 - File uploaded: files/w65v2yglctoq
+2026-02-02 05:34:51 | INFO     | modules.extraction.pipeline:run:222 - Policy Type: commercial_package (high)
+2026-02-02 05:34:51 | INFO     | modules.extraction.pipeline:run:228 - TURBO MODE ACTIVE: Skipping Locator & Scout for 1 page(s).
+2026-02-02 05:34:51 | DEBUG    | modules.extraction.pipeline:run:266 - Deleted remote file: files/w65v2yglctoq
+2026-02-02 05:34:52 | INFO     | modules.extraction.pipeline:_extract_declarations:561 - TEXT MODE: Using raw text for declarations (saving tokens).
+2026-02-02 05:34:52 | INFO     | modules.extraction.pipeline:_extract_vehicles:627 - TEXT MODE: Using raw text for vehicles.
+2026-02-02 05:34:52 | INFO     | modules.extraction.pipeline:_extract_drivers:653 - TEXT MODE: Using raw text for drivers.
+2026-02-02 05:34:54 | INFO     | modules.extraction.pipeline:_extract_coverages:600 - TEXT MODE: Using raw text for coverages.
+2026-02-02 05:34:59 | INFO     | modules.extraction.pipeline:_extract_declarations:582 - Loaded hints for GEICO Marine Insurance Company
+2026-02-02 05:35:06 | DEBUG    | modules.extraction.pipeline:save:161 - CACHE SAVED: v11_turbo_96f0f74b2fb6c6181b5a91c7129721ea067ee8745932bcc88c36611dd7fdf960
+2026-02-02 05:44:54 | INFO     | modules.extraction.pipeline:run:211 - Uploading to Gemini File API...
+2026-02-02 05:44:55 | INFO     | modules.extraction.pipeline:run:215 - File uploaded: files/ub5drsi54hgs
+2026-02-02 05:44:56 | DEBUG    | modules.extraction.pipeline:run:266 - Deleted remote file: files/ub5drsi54hgs
+2026-02-02 05:44:56 | INFO     | modules.extraction.pipeline:run:211 - Uploading to Gemini File API...
+2026-02-02 05:44:58 | INFO     | modules.extraction.pipeline:run:215 - File uploaded: files/uajvofi9fdb4
+2026-02-02 05:44:59 | DEBUG    | modules.extraction.pipeline:run:266 - Deleted remote file: files/uajvofi9fdb4
+2026-02-02 05:45:25 | INFO     | modules.extraction.pipeline:run:211 - Uploading to Gemini File API...
+2026-02-02 05:45:27 | INFO     | modules.extraction.pipeline:run:215 - File uploaded: files/2b4i5j85zzs8
+2026-02-02 05:45:28 | DEBUG    | modules.extraction.pipeline:run:266 - Deleted remote file: files/2b4i5j85zzs8
+2026-02-02 05:45:28 | INFO     | modules.extraction.pipeline:run:211 - Uploading to Gemini File API...
+2026-02-02 05:45:29 | INFO     | modules.extraction.pipeline:run:215 - File uploaded: files/2pqckqc90tip
+2026-02-02 05:45:30 | DEBUG    | modules.extraction.pipeline:run:266 - Deleted remote file: files/2pqckqc90tip
+2026-02-02 05:45:49 | INFO     | modules.extraction.pipeline:run:211 - Uploading to Gemini File API...
+2026-02-02 05:45:50 | INFO     | modules.extraction.pipeline:run:215 - File uploaded: files/5valfz1l2u3n
+2026-02-02 05:45:51 | DEBUG    | modules.extraction.pipeline:run:266 - Deleted remote file: files/5valfz1l2u3n
+2026-02-02 05:45:51 | INFO     | modules.extraction.pipeline:run:211 - Uploading to Gemini File API...
+2026-02-02 05:45:53 | INFO     | modules.extraction.pipeline:run:215 - File uploaded: files/mrwo0e3pxxt6
+2026-02-02 05:45:54 | DEBUG    | modules.extraction.pipeline:run:266 - Deleted remote file: files/mrwo0e3pxxt6
+2026-02-02 05:46:44 | INFO     | modules.extraction.pipeline:run:211 - Uploading to Gemini File API...
+2026-02-02 05:46:46 | INFO     | modules.extraction.pipeline:run:215 - File uploaded: files/4kw69z7uqpt9
+2026-02-02 05:46:47 | DEBUG    | modules.extraction.pipeline:run:266 - Deleted remote file: files/4kw69z7uqpt9
+2026-02-02 05:46:47 | INFO     | modules.extraction.pipeline:run:211 - Uploading to Gemini File API...
+2026-02-02 05:46:49 | INFO     | modules.extraction.pipeline:run:215 - File uploaded: files/cfyj6lqu563m
+2026-02-02 05:46:50 | DEBUG    | modules.extraction.pipeline:run:266 - Deleted remote file: files/cfyj6lqu563m
+2026-02-02 05:47:07 | INFO     | modules.extraction.pipeline:run:211 - Uploading to Gemini File API...
+2026-02-02 05:47:10 | INFO     | modules.extraction.pipeline:run:215 - File uploaded: files/n3ohf6y3hrwf
+2026-02-02 05:47:11 | DEBUG    | modules.extraction.pipeline:run:266 - Deleted remote file: files/n3ohf6y3hrwf
+2026-02-02 05:47:11 | INFO     | modules.extraction.pipeline:run:211 - Uploading to Gemini File API...
+2026-02-02 05:47:13 | INFO     | modules.extraction.pipeline:run:215 - File uploaded: files/o1nlhnbdss4i
+2026-02-02 05:47:14 | DEBUG    | modules.extraction.pipeline:run:266 - Deleted remote file: files/o1nlhnbdss4i
+2026-02-02 05:53:44 | INFO     | modules.extraction.pipeline:run:222 - Uploading to Gemini File API...
+2026-02-02 05:53:45 | INFO     | modules.extraction.pipeline:run:226 - File uploaded: files/c8vnaz55ol2g
+2026-02-02 05:53:46 | DEBUG    | modules.extraction.pipeline:run:277 - Deleted remote file: files/c8vnaz55ol2g
+2026-02-02 05:54:04 | INFO     | modules.extraction.pipeline:run:222 - Uploading to Gemini File API...
+2026-02-02 05:54:06 | INFO     | modules.extraction.pipeline:run:226 - File uploaded: files/t5ac043s9ht6
+2026-02-02 05:54:08 | DEBUG    | modules.extraction.pipeline:run:277 - Deleted remote file: files/t5ac043s9ht6
+2026-02-02 05:54:26 | INFO     | modules.extraction.pipeline:run:222 - Uploading to Gemini File API...
+2026-02-02 05:54:27 | INFO     | modules.extraction.pipeline:run:226 - File uploaded: files/q45wh24mli7o
+2026-02-02 05:54:29 | INFO     | modules.extraction.pipeline:run:233 - Policy Type: commercial_package (high)
+2026-02-02 05:54:29 | INFO     | modules.extraction.pipeline:run:239 - TURBO MODE ACTIVE: Skipping Locator & Scout for 1 page(s).
+2026-02-02 05:54:31 | DEBUG    | modules.extraction.pipeline:run:277 - Deleted remote file: files/q45wh24mli7o
+2026-02-02 05:54:31 | INFO     | modules.extraction.pipeline:_extract_declarations:572 - TEXT MODE: Using raw text for declarations (saving tokens).
+2026-02-02 05:54:31 | INFO     | modules.extraction.pipeline:_extract_vehicles:638 - TEXT MODE: Using raw text for vehicles.
+2026-02-02 05:54:31 | INFO     | modules.extraction.pipeline:_extract_drivers:664 - TEXT MODE: Using raw text for drivers.
+2026-02-02 05:54:33 | INFO     | modules.extraction.pipeline:_extract_coverages:611 - TEXT MODE: Using raw text for coverages.
+2026-02-02 05:54:34 | INFO     | modules.extraction.pipeline:_extract_declarations:593 - Loaded hints for GEICO Marine Insurance Company
+2026-02-02 05:54:50 | DEBUG    | modules.extraction.pipeline:save:172 - CACHE SAVED: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 05:55:40 | INFO     | modules.extraction.pipeline:get:160 - CACHE HIT: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 05:55:40 | INFO     | modules.extraction.pipeline:run:222 - Uploading to Gemini File API...
+2026-02-02 05:55:42 | INFO     | modules.extraction.pipeline:run:226 - File uploaded: files/o872pki1qjhb
+2026-02-02 05:55:44 | INFO     | modules.extraction.pipeline:run:233 - Policy Type: commercial_package (high)
+2026-02-02 05:55:44 | INFO     | modules.extraction.pipeline:run:239 - TURBO MODE ACTIVE: Skipping Locator & Scout for 1 page(s).
+2026-02-02 05:55:45 | DEBUG    | modules.extraction.pipeline:run:277 - Deleted remote file: files/o872pki1qjhb
+2026-02-02 05:55:45 | INFO     | modules.extraction.pipeline:_extract_declarations:572 - TEXT MODE: Using raw text for declarations (saving tokens).
+2026-02-02 05:55:45 | INFO     | modules.extraction.pipeline:_extract_vehicles:638 - TEXT MODE: Using raw text for vehicles.
+2026-02-02 05:55:45 | INFO     | modules.extraction.pipeline:_extract_drivers:664 - TEXT MODE: Using raw text for drivers.
+2026-02-02 05:55:48 | INFO     | modules.extraction.pipeline:_extract_coverages:611 - TEXT MODE: Using raw text for coverages.
+2026-02-02 05:55:48 | INFO     | modules.extraction.pipeline:_extract_declarations:593 - Loaded hints for GEICO Marine Insurance Company
+2026-02-02 05:56:05 | DEBUG    | modules.extraction.pipeline:save:172 - CACHE SAVED: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 05:56:19 | INFO     | modules.extraction.pipeline:get:160 - CACHE HIT: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 05:56:19 | INFO     | modules.extraction.pipeline:run:222 - Uploading to Gemini File API...
+2026-02-02 05:56:21 | INFO     | modules.extraction.pipeline:run:226 - File uploaded: files/ygcmmzqvawet
+2026-02-02 05:56:23 | INFO     | modules.extraction.pipeline:run:233 - Policy Type: commercial_package (high)
+2026-02-02 05:56:23 | INFO     | modules.extraction.pipeline:run:239 - TURBO MODE ACTIVE: Skipping Locator & Scout for 1 page(s).
+2026-02-02 05:56:24 | DEBUG    | modules.extraction.pipeline:run:277 - Deleted remote file: files/ygcmmzqvawet
+2026-02-02 05:56:24 | INFO     | modules.extraction.pipeline:_extract_declarations:572 - TEXT MODE: Using raw text for declarations (saving tokens).
+2026-02-02 05:56:24 | INFO     | modules.extraction.pipeline:_extract_vehicles:638 - TEXT MODE: Using raw text for vehicles.
+2026-02-02 05:56:24 | INFO     | modules.extraction.pipeline:_extract_drivers:664 - TEXT MODE: Using raw text for drivers.
+2026-02-02 05:56:26 | INFO     | modules.extraction.pipeline:_extract_coverages:611 - TEXT MODE: Using raw text for coverages.
+2026-02-02 05:56:28 | INFO     | modules.extraction.pipeline:_extract_declarations:593 - Loaded hints for GEICO Marine Insurance Company
+2026-02-02 05:56:45 | DEBUG    | modules.extraction.pipeline:save:172 - CACHE SAVED: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 06:18:24 | INFO     | modules.extraction.pipeline:get:160 - CACHE HIT: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 06:18:24 | INFO     | modules.extraction.pipeline:run:222 - Uploading to Gemini File API...
+2026-02-02 06:18:27 | INFO     | modules.extraction.pipeline:run:226 - File uploaded: files/z0dttrv1kmry
+2026-02-02 06:18:59 | INFO     | modules.extraction.pipeline:get:160 - CACHE HIT: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 06:18:59 | INFO     | modules.extraction.pipeline:run:222 - Uploading to Gemini File API...
+2026-02-02 06:19:01 | INFO     | modules.extraction.pipeline:run:226 - File uploaded: files/4wt8x7yvdfdt
+2026-02-02 06:19:03 | INFO     | modules.extraction.pipeline:run:233 - Policy Type: commercial_package (high)
+2026-02-02 06:19:03 | INFO     | modules.extraction.pipeline:run:239 - TURBO MODE ACTIVE: Skipping Locator & Scout for 1 page(s).
+2026-02-02 06:19:04 | WARNING  | modules.extraction.pipeline:_create_cache:427 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-02 06:19:05 | INFO     | modules.extraction.pipeline:_extract_declarations:661 - TEXT MODE: Using raw text for declarations (saving tokens).
+2026-02-02 06:19:05 | INFO     | modules.extraction.pipeline:_extract_vehicles:741 - TEXT MODE: Using raw text for vehicles.
+2026-02-02 06:19:05 | INFO     | modules.extraction.pipeline:_extract_drivers:774 - TEXT MODE: Using raw text for drivers.
+2026-02-02 06:19:07 | INFO     | modules.extraction.pipeline:_extract_coverages:707 - TEXT MODE: Using raw text for coverages.
+2026-02-02 06:19:09 | INFO     | modules.extraction.pipeline:_extract_declarations:686 - Loaded hints for GEICO Marine Insurance Company
+2026-02-02 06:19:25 | DEBUG    | modules.extraction.pipeline:save:172 - CACHE SAVED: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 06:35:29 | INFO     | modules.extraction.pipeline:get:162 - CACHE HIT: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 06:35:29 | INFO     | modules.extraction.pipeline:run:224 - Uploading to Gemini File API...
+2026-02-02 06:35:31 | INFO     | modules.extraction.pipeline:run:228 - File uploaded: files/xhvn2rak2xbr
+2026-02-02 06:35:33 | INFO     | modules.extraction.pipeline:run:232 - Policy Type: commercial_package (high)
+2026-02-02 06:35:33 | WARNING  | modules.extraction.pipeline:_create_cache:409 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-02 06:35:52 | DEBUG    | modules.extraction.pipeline:save:174 - CACHE SAVED: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 06:38:51 | INFO     | modules.extraction.pipeline:get:154 - CACHE HIT: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 06:38:51 | INFO     | modules.extraction.pipeline:run:204 - Uploading to Gemini File API...
+2026-02-02 06:38:53 | INFO     | modules.extraction.pipeline:run:208 - File uploaded: files/8vzoguyzubs5
+2026-02-02 06:38:55 | INFO     | modules.extraction.pipeline:run:212 - Policy Type: commercial_package (high)
+2026-02-02 06:38:56 | WARNING  | modules.extraction.pipeline:_create_cache:331 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-02 06:39:19 | DEBUG    | modules.extraction.pipeline:save:166 - CACHE SAVED: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 06:39:41 | INFO     | modules.extraction.pipeline:get:154 - CACHE HIT: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 06:39:41 | INFO     | modules.extraction.pipeline:run:204 - Uploading to Gemini File API...
+2026-02-02 06:39:42 | INFO     | modules.extraction.pipeline:run:208 - File uploaded: files/ytqsd4y2ddtv
+2026-02-02 06:39:44 | INFO     | modules.extraction.pipeline:run:212 - Policy Type: commercial_package (high)
+2026-02-02 06:39:45 | WARNING  | modules.extraction.pipeline:_create_cache:331 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-02 06:40:03 | DEBUG    | modules.extraction.pipeline:save:166 - CACHE SAVED: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 06:44:50 | INFO     | modules.extraction.pipeline:get:139 - CACHE HIT: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 06:44:50 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-02-02 06:44:51 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/s415tmy51lc6
+2026-02-02 06:44:53 | INFO     | modules.extraction.pipeline:run:197 - Policy Type: commercial_package (high)
+2026-02-02 06:44:53 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-02 06:45:17 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 06:46:14 | INFO     | modules.extraction.pipeline:get:139 - CACHE HIT: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 06:46:14 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-02-02 06:46:16 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/xa6apj86lrit
+2026-02-02 06:46:18 | INFO     | modules.extraction.pipeline:run:197 - Policy Type: commercial_package (high)
+2026-02-02 06:46:18 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-02 06:46:37 | INFO     | modules.extraction.pipeline:_assemble_result:422 - DEBUG: Raw Coverages extracted: 9
+2026-02-02 06:46:37 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 07:12:37 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-02-02 07:12:39 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/ltvzd6vfs2zv
+2026-02-02 07:12:41 | INFO     | modules.extraction.pipeline:run:197 - Policy Type: commercial_auto (high)
+2026-02-02 07:12:42 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-02 07:12:56 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_0a71684dafb4c9c29acdce3d45a8ee4a237d0688a4efc593db997d7c3f7ce434
+2026-02-02 07:12:56 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-02-02 07:12:58 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/tnbf6srqhcu4
+2026-02-02 07:13:00 | INFO     | modules.extraction.pipeline:run:197 - Policy Type: commercial_auto (high)
+2026-02-02 07:13:00 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-02 07:13:15 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_96f0f74b2fb6c6181b5a91c7129721ea067ee8745932bcc88c36611dd7fdf960
+2026-02-02 07:13:15 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-02-02 07:13:17 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/3pmm52epbm0m
+2026-02-02 07:13:19 | INFO     | modules.extraction.pipeline:run:197 - Policy Type: commercial_auto (high)
+2026-02-02 07:13:20 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-02 07:13:38 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_909e9b16ee6a9b679e5687fce1bf11fbd7c601e813c61a50109b0305556fe58a
+2026-02-02 07:13:38 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-02-02 07:13:40 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/pgihhky1l0zh
+2026-02-02 07:13:42 | INFO     | modules.extraction.pipeline:run:197 - Policy Type: commercial_auto (high)
+2026-02-02 07:13:43 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=788, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-02 07:14:05 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f4bafa8e9f8482a15caf489b21a59288b802be0351e86acaf5156d3b1e719845
+2026-02-02 07:14:05 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-02-02 07:14:06 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/fwxq4wtg0hl6
+2026-02-02 07:14:08 | INFO     | modules.extraction.pipeline:run:197 - Policy Type: personal_auto (high)
+2026-02-02 07:14:11 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/qvzb69ucjcpmg36o1xnugab9lnehg0ito29ysj7y (TTL: 300s)
+2026-02-02 07:14:31 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-02-02 07:14:33 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_afccefc7335d11122e3994134a62da1dadbf18ddc11c9fc953d12719c9a0283d
+2026-02-02 07:14:33 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-02-02 07:14:36 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/dn2e8bzjbust
+2026-02-02 07:14:39 | INFO     | modules.extraction.pipeline:run:197 - Policy Type: commercial_auto (high)
+2026-02-02 07:14:39 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=530, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-02 07:15:05 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_d648a7964d389d13e9f1707cd48c8d42d095de69849f1f2c375fefba7ab45cf7
+2026-02-02 07:38:36 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-02-02 07:38:38 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/je70b7hytq9d
+2026-02-02 07:38:38 | WARNING  | modules.extraction.pipeline:_create_cache:315 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-02 07:38:54 | INFO     | modules.extraction.pipeline:run:245 - Policy Classified: commercial_package (high)
+2026-02-02 07:38:56 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-02 07:39:50 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-02-02 07:39:52 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/vicyygkhab03
+2026-02-02 07:39:53 | WARNING  | modules.extraction.pipeline:_create_cache:315 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-02 07:40:06 | INFO     | modules.extraction.pipeline:run:245 - Policy Classified: commercial_auto (high)
+2026-02-02 07:40:07 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_d7fd6308717df97123aabe432eeb55fed744197a4cd475a9058ab15a18bd33e6
+2026-02-02 07:40:07 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-02-02 07:40:09 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/u09fc07a2hkq
+2026-02-02 07:40:10 | WARNING  | modules.extraction.pipeline:_create_cache:315 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-02 07:40:20 | INFO     | modules.extraction.pipeline:run:245 - Policy Classified: commercial_auto (high)
+2026-02-02 07:40:21 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_e245bfe481a3d95ddbbc35138af1141135d6ca04251ad1f3c5d243e80c270a27
+2026-02-02 07:40:21 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-02-02 07:40:23 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/onaunlvpouy6
+2026-02-02 07:40:24 | WARNING  | modules.extraction.pipeline:_create_cache:315 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-02 07:40:42 | INFO     | modules.extraction.pipeline:run:245 - Policy Classified: commercial_auto (high)
+2026-02-02 07:40:43 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_0a81c418469049e9527493672c85553da5cc5ac9b33c23a28e08cf7ce1aeed8b
+2026-02-02 07:53:08 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-02-02 07:53:10 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/zt6hi3j40e5e
+2026-02-02 07:53:12 | INFO     | modules.extraction.pipeline:_create_cache:312 - CACHE CREATED: cachedContents/k4wpnz7n1chb3aw59prsfir81q0hjvy9wfwmlk2z (TTL: 300s)
+2026-02-02 07:54:03 | INFO     | modules.extraction.pipeline:run:245 - Policy Classified: commercial_package (high)
+2026-02-02 07:54:04 | DEBUG    | modules.extraction.pipeline:run:258 - Deleted Cache context.
+2026-02-02 07:54:05 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_42244ed5add16d05820198334e273e62115034f91b9a0ae51161977d6cde3f0b

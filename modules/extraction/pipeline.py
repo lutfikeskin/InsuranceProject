@@ -4,9 +4,8 @@ import os
 import json
 import tempfile
 import time
-import concurrent.futures
+
 from dataclasses import dataclass, field
-from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Dict, List, Any
 from functools import lru_cache
 
@@ -14,7 +13,7 @@ from functools import lru_cache
 from core.logger import logger
 from .pdf_ops import PdfProcessor
 from utils.vehicle_utils import refine_vehicle_type
-from modules.resolution.premium_resolver import audit_premium_extraction
+
 from core.coverage_ontology import (
     COVERAGE_REGISTRY, 
     POLICY_TYPE_CONSTRAINTS,
@@ -31,32 +30,22 @@ from core.coverage_ontology import (
 )
 from core.database import get_session, create_engine
 from core.services import UsageService
-from .auditor import Auditor
+
 from .knowledge_base import CarrierKnowledgeBase
 
 # Import schemas and prompts
 from .schemas import (
     CLASSIFICATION_SCHEMA,
-    SECTION_LOCATOR_SCHEMA,
     DECLARATIONS_SCHEMA,
     COVERAGE_SCHEMA,
     VEHICLE_SCHEMA,
     DRIVER_SCHEMA,
-    VEHICLE_SCHEMA,
-    DRIVER_SCHEMA,
-    UNIVERSAL_SCOUT_SCHEMA,
-    CARTOGRAPHER_SCHEMA
+    COMPLETE_POLICY_SCHEMA
 )
 
 from .prompts import (
     CLASSIFY_POLICY_PROMPT,
-    LOCATE_SECTIONS_PROMPT,
-    EXTRACT_DECLARATIONS_PROMPT,
-    EXTRACT_VEHICLES_PROMPT,
-    EXTRACT_DRIVERS_PROMPT,
-    get_coverages_prompt,
-    UNIVERSAL_SCOUT_PROMPT,
-    CARTOGRAPHER_PROMPT
+    get_extract_all_prompt
 )
 
 # --- HELPERS ---
@@ -66,29 +55,32 @@ def get_cached_registry_json(policy_type: str) -> str:
     """Cached generation of the registry JSON string to save tokens/CPU."""
     filtered_registry = {}
     constraints = POLICY_TYPE_CONSTRAINTS.get(policy_type)
+    
+    # We always minify to save tokens (f=family, s=structure, l=allowed_limits)
+    def _minify(entry):
+        return {
+            "f": entry["family"],
+            "s": entry["limit_structure"],
+            "l": entry.get("allowed_limits", [])
+        }
+
     if constraints:
             allowed = set(constraints.get("allowed_families", []))
             forbidden = set(constraints.get("forbidden_codes", []))
             for code, entry in COVERAGE_REGISTRY.items():
                 if entry["family"] in allowed and code not in forbidden:
-                    filtered_registry[code] = entry
+                    filtered_registry[code] = _minify(entry)
     else:
-            filtered_registry = COVERAGE_REGISTRY
-    return json.dumps(filtered_registry, indent=2)
+            for code, entry in COVERAGE_REGISTRY.items():
+                filtered_registry[code] = _minify(entry)
+                
+    return json.dumps(filtered_registry, separators=(',', ':')) # Compact JSON
 
 # --- CONFIGURATION ---
 ROUTING_MODEL = "gemini-2.5-flash"
 EXTRACTION_MODEL = "gemini-2.5-flash"
 CACHE_VERSION = "v11_turbo" # Bumped for new Architecture + Short Doc Strategy
 
-MAX_PAGES = {
-  "declarations": 8,
-  "coverages": 8,
-  "vehicles": 6,
-  "drivers": 4
-}
-
-TURBO_PAGE_LIMIT = 5  # Docs <= This size skip Locator/Scout
 
 # --- STATE MANAGEMENT ---
 
@@ -99,8 +91,6 @@ class ExtractionContext:
     file_hash: str
     
     classification: dict = field(default_factory=dict)
-    section_map: dict = field(default_factory=dict)
-    scout_map: dict = field(default_factory=dict) # Universal Scout Findings
     extracted_data: dict = field(default_factory=dict) # Raw API responses
     
     # Normalized Results
@@ -170,21 +160,9 @@ class GeminiExtractionPipeline:
         self.session = get_session(self.engine)
         self.usage_service = UsageService(self.session)
         self.kb = CarrierKnowledgeBase()
-        self.auditor = Auditor()
 
-    def _validate_extraction_completeness(self, final_result, ctx):
-        """Phase 4: Sanity Check - Detect Silent Failures using Scout Signals."""
-        policy_type = final_result.get("classification", {}).get("policy_type")
-        
-        # Only check Auto-like policies
-        if policy_type in ["personal_auto", "commercial_auto", "motor_truck_cargo", "commercial_package"]: # Added commercial_package
-             has_vehs = len(final_result.get("vehicles", [])) > 0
-             scout_has_vehs = len(ctx.scout_map.get("vehicle_schedule_signals", [])) > 0
-             
-             if scout_has_vehs and not has_vehs:
-                 return False, "Silent Failure: Scout detected vehicles but extraction returned 0."
-                 
-        return True, "Passed"
+
+
 
     def run(self, file_bytes: bytes, status_callback=None, force_refresh=False) -> tuple[dict, dict, str]:
         """
@@ -198,7 +176,7 @@ class GeminiExtractionPipeline:
             file_hash=processor.get_hash()
         )
         
-        # 0. Cache Check
+        # 2. Local Cache Check
         cache_system = ExtractionCache()
         cached_result = cache_system.get(ctx.file_hash)
         if cached_result and not force_refresh:
@@ -207,106 +185,94 @@ class GeminiExtractionPipeline:
         uploaded_file = None
         
         try:
-            # 2. Upload (File API)
+            # 3. Upload to Gemini File API
             logger.info("Uploading to Gemini File API...")
             if status_callback: status_callback(" Uploading to Google AI Studio...")
             
             uploaded_file = self._upload_to_gemini(file_bytes)
             logger.info(f"File uploaded: {uploaded_file.name}")
             
-            # --- TURBO MODE CHECK ---
-            total_pages = processor.get_page_count()
-            is_turbo = total_pages <= TURBO_PAGE_LIMIT
-            
-            ctx.classification = self._classify_policy(uploaded_file)
-            logger.info(f"Policy Type: {ctx.policy_type} ({ctx.confidence})")
-            
-            if ctx.policy_type == "unknown":
-                return None, None, "Unknown Policy Type"
-
-            if is_turbo:
-                logger.info(f"TURBO MODE ACTIVE: Skipping Locator & Scout for {total_pages} page(s).")
-                # Skip Locator/Scout -> Everything maps to page 1-N (handled by slice logic)
-                ctx.section_map = {} # Will fallback to full doc
-                ctx.scout_map = {}
-            else:
-                # 3.1. The Cartographer (Merged Locator + Scout)
-                if status_callback: status_callback(" 🗺️ Mapping Document (Cartographer)...")
-                cartography_data = self._run_cartographer(uploaded_file)
-                
-                # Split the unified response back into section_map and scout_map for compatibility
-                ctx.section_map = {
-                    "declarations": cartography_data.get("declarations", []),
-                    "coverages": cartography_data.get("coverages", []),
-                    "vehicles": cartography_data.get("vehicles", []),
-                    "drivers": cartography_data.get("drivers", [])
-                }
-                
-                ctx.scout_map = {
-                    "premium_signals": cartography_data.get("premium_signals", []),
-                    "vehicle_schedule_signals": cartography_data.get("vehicle_schedule_signals", []),
-                    "driver_schedule_signals": cartography_data.get("driver_schedule_signals", []),
-                    "coverage_schedule_signals": cartography_data.get("coverage_schedule_signals", [])
-                }
-                
-                logger.info(f"Cartographer Results: {json.dumps(ctx.section_map)}")
-
-                # --- INTELLIGENT MERGING ---
-                ctx.section_map = self._merge_scout_signals(ctx, total_pages)
-                logger.info(f"Smart Slices (Merged): {json.dumps(ctx.section_map)}")
-
         except Exception as e:
             return None, None, f"Initialization Error: {str(e)}"
             
-        finally:
-            # 4. Cleanup Remote File (EARLY CLEANUP)
-            if uploaded_file:
-                try:
-                    self.client.files.delete(name=uploaded_file.name)
-                    logger.debug(f"Deleted remote file: {uploaded_file.name}")
-                except Exception as e:
-                    logger.warning(f"Failed to delete file: {e}")
-            
-        # 5. Extract (Parallel Sliced Execution)
+        # 4. Extraction (Universal One-Shot)
+        active_cache = None
         try:
-            if status_callback: status_callback(" Starting Sliced Extraction...")
-            self._perform_extraction(ctx, processor)
+            # --- CACHE CREATION (Always attempt for One-Shot) ---
+            if uploaded_file:
+                if status_callback: status_callback(" Creating Context Cache...")
+                active_cache = self._create_cache(uploaded_file)
+            
+            # Use Cache Name if valid, otherwise fallback to uploaded_file object
+            final_content_reference = active_cache.name if active_cache else uploaded_file
+
+            if status_callback: status_callback(" 🧠 Performing Deep Extraction (Universal One-Shot)...")
+            
+            # Generate Dynamic Registry Prompt (Full Registry for Universal Call)
+            registry_json = get_cached_registry_json(None) 
+            prompt = get_extract_all_prompt(registry_json)
+
+            # --- SINGLE MEGA-CALL ---
+            config = types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=COMPLETE_POLICY_SCHEMA
+            )
+            
+            # If using cache, we pass the cache name in the config
+            contents = [prompt]
+            if active_cache:
+                config.cached_content = active_cache.name
+            else:
+                # Fallback: Pass the file object directly if cache failed (e.g. small file)
+                contents.insert(0, uploaded_file)
+
+            response = self._call_gemini(
+                model=EXTRACTION_MODEL,
+                contents=contents, # Prompt + (Optional File if no cache)
+                config=config,
+                request_type="universal_one_shot"
+            )
+
+            raw_data = self._parse_json_response(response.text, ctx)
+            
+            # --- MAP TO CONTEXT ---
+            ctx.classification = raw_data.get("classification", {})
+            ctx.extracted_data["policy"] = raw_data.get("policy", {})
+            ctx.extracted_data["coverages"] = {"coverages": raw_data.get("coverages", [])}
+            ctx.extracted_data["vehicles"] = {"vehicles": raw_data.get("vehicles", [])} 
+            ctx.extracted_data["drivers"] = {"drivers": raw_data.get("drivers", [])}
+            
+            logger.info(f"Policy Classified: {ctx.policy_type} ({ctx.confidence})")
+
+            if ctx.policy_type == "unknown":
+                return None, None, "Unknown Policy Type"
+            
         except Exception as e:
             return None, None, f"Extraction Error: {str(e)}"
+        
+        finally:
+            # Cleanup Cache explicitly if we finished
+             if active_cache:
+                try:
+                    self.client.caches.delete(name=active_cache.name)
+                    logger.debug("Deleted Cache context.")
+                except:
+                    pass
+             
+             # Cleanup File if it exists (and we aren't relying on it for a living cache)
+             if uploaded_file:
+                 try:
+                     self.client.files.delete(name=uploaded_file.name)
+                 except: pass
+            
+
 
         # 6. Normalize & Validate
         final_result = self._assemble_result(ctx, processor)
         
-        # --- TIER 1 VERIFICATION (AUDITOR) ---
-        is_valid, errors = self.auditor.quick_validate(final_result)
-        
-        if not is_valid:
-             logger.warning(f"Tier 1 Validation Failed: {errors}")
-             if status_callback: status_callback(f" ⚠️ Tier 1 Fail: {len(errors)} errors. Attempting Repair...")
-             
-             # --- TIER 2 REPAIR (Optional) ---
-             # We assume Declarations is the most critical part usually (Policy #, Insured)
-             # Reprocess Declarations with error context
-             repaired_data = self._repair_declarations(ctx, processor, errors, final_result["policy"])
-             if repaired_data:
-                  ctx.extracted_data["policy"] = repaired_data
-                  # Re-assemble
-                  final_result = self._assemble_result(ctx, processor)
-                  # Re-validate
-                  is_valid_2, errors_2 = self.auditor.quick_validate(final_result)
-                  if is_valid_2:
-                       logger.info("Tier 2 Repair SUCCESSFUL.")
-                  else:
-                       logger.warning(f"Tier 2 Repair Partial/Failed: {errors_2}")
-             else:
-                  logger.warning("Tier 2 Repair returned no data.")
 
-        # 6b. Sanity Check (Scout Consistency) - Only run if not turbo (since scout is skipped in turbo)
-        if not is_turbo:
-            is_scout_valid, sanity_msg = self._validate_extraction_completeness(final_result, ctx)
-            if not is_scout_valid:
-                ctx.usage_metadata["sanity_failure"] = sanity_msg  # Log metadata
-                logger.warning(f"SANITY CHECK FAILED: {sanity_msg}")
+
+
         
         # 7. Cache Save
         # Only save if valid OR if we accept partials (user preference usually valid)
@@ -318,43 +284,7 @@ class GeminiExtractionPipeline:
 
         return final_result, ctx.usage_metadata, None
 
-    def _merge_scout_signals(self, ctx, total_pages):
-        """Fuses broad section pages with discrete scout signals + context."""
-        def merge_pages(section_key, signal_key, signal_is_object_list=False):
-            # Start with Locator findings
-            current_pages = set(ctx.section_map.get(section_key, []))
-            if section_key == "declarations" and total_pages > 0:
-                current_pages.add(1) # SAFETY FALLBACK: Always include Page 1 for Decs.
-            
-            # Extract pages from Scout
-            scout_data = ctx.scout_map.get(signal_key, [])
-            scout_pages = set()
-            
-            for item in scout_data:
-                if signal_is_object_list:
-                     if isinstance(item, dict):
-                        p = item.get("page")
-                        if isinstance(p, int): scout_pages.add(p)
-                elif isinstance(item, int):
-                    scout_pages.add(item)
 
-            # Add context (+/- 1 page) to scout findings
-            expanded_scout = set()
-            for p in scout_pages:
-                expanded_scout.add(p)
-                expanded_scout.add(p - 1)
-                expanded_scout.add(p + 1)
-            
-            # Union and Validate range
-            final_set = current_pages.union(expanded_scout)
-            return sorted([p for p in final_set if 1 <= p <= total_pages])
-
-        return {
-            "declarations": merge_pages("declarations", "premium_signals", signal_is_object_list=True),
-            "vehicles": merge_pages("vehicles", "vehicle_schedule_signals"),
-            "drivers": merge_pages("drivers", "driver_schedule_signals"),
-            "coverages": merge_pages("coverages", "coverage_schedule_signals")
-        }
 
     # --- INTERNAL STEPS ---
 
@@ -366,6 +296,24 @@ class GeminiExtractionPipeline:
             return self.client.files.upload(file=tmp_path)
         finally:
             os.remove(tmp_path)
+
+    def _create_cache(self, uploaded_file, ttl="300s"):
+        """Creates a temporary context cache for this document."""
+        try:
+            cache = self.client.caches.create(
+                model=EXTRACTION_MODEL,
+                config=types.CreateCachedContentConfig(
+                    display_name="insurance_extraction_ctx",
+                    system_instruction="You are an expert insurance underwriter and data extraction specialist.",
+                    contents=[uploaded_file],
+                    ttl=ttl
+                )
+            )
+            logger.info(f"CACHE CREATED: {cache.name} (TTL: {ttl})")
+            return cache
+        except Exception as e:
+            logger.warning(f"Failed to create cache: {e}. Falling back to standard upload.")
+            return None
 
     def _call_gemini(self, model: str, contents: list, config: types.GenerateContentConfig, request_type: str = "extraction"):
         """Centralized wrapper to enforce $2.50 daily budget and log usage."""
@@ -405,24 +353,7 @@ class GeminiExtractionPipeline:
         )
         return self._parse_json_response(response.text)
 
-    def _run_cartographer(self, uploaded_file) -> dict:
-        """Phase 1: The Cartographer - Unified Mapping Step."""
-        try:
-            logger.info("Running Cartographer (Full PDF)...")
-            response = self._call_gemini(
-                model=ROUTING_MODEL,
-                contents=[uploaded_file, CARTOGRAPHER_PROMPT],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=CARTOGRAPHER_SCHEMA
-                ),
-                request_type="cartographer"
-            )
-            return self._parse_json_response(response.text)
-        except Exception as e:
-            logger.warning(f"Cartographer failed: {e}")
-            if "STOPS" in str(e): raise e
-            return {}
+
 
     def _parse_json_response(self, text: str, ctx: Optional[ExtractionContext] = None) -> dict:
         """Centralized result parser to handle Gemini's list/dict inconsistency recursively."""
@@ -444,201 +375,12 @@ class GeminiExtractionPipeline:
             logger.error(f"JSON Parse Error: {e}")
             return {}
 
-    def _perform_extraction(self, ctx: ExtractionContext, processor: PdfProcessor):
-        """Orchestrates parallel extraction using sliced PDFs."""
-        
-        # Prepare Slices
-        sections = ["declarations", "coverages", "vehicles", "drivers"]
-        slices = {}
-        
-        total_pages = processor.get_page_count()
-        # TURBO MODE LOGIC: If we skipped locator, slice map is empty, so we must rely on fallback (full doc)
-        
-        full_doc_bytes = None
-        # Optimization: Only load full bytes if needed
-        
-        for section in sections:
-            # Check map
-            pages = self._get_pages_for_section(ctx.section_map, section, total_pages)
-            
-            # If pages == all pages (fallback or turbo), use same object
-            if len(pages) == total_pages:
-                 if not full_doc_bytes:
-                      full_doc_bytes = types.Part.from_bytes(data=ctx.file_bytes, mime_type='application/pdf')
-                 slices[section] = full_doc_bytes
-            else:
-                 logger.info(f"PIPELINE: Slicing {section} -> Pages {pages}")
-                 pdf_bytes = processor.create_slice(pages)
-                 slices[section] = types.Part.from_bytes(data=pdf_bytes, mime_type='application/pdf')
 
-        # Parallel Execution (Max Workers = 4)
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            future_decs = executor.submit(self._extract_declarations, slices["declarations"], ctx)
-            future_cov = executor.submit(self._extract_coverages, slices["coverages"], ctx.policy_type, ctx)
-            
-            future_veh = None
-            future_drv = None
-            
-            # Conditional Tasks
-            # FIX: Allow 'commercial_package' (COIs often have GL+Auto)
-            if ctx.policy_type in ["personal_auto", "commercial_auto", "motor_truck_cargo", "umbrella", "commercial_package"]:
-                 future_veh = executor.submit(self._extract_vehicles, slices["vehicles"], ctx)
-            
-            if ctx.policy_type in ["personal_auto", "commercial_auto", "commercial_package"]:
-                 future_drv = executor.submit(self._extract_drivers, slices["drivers"], ctx)
-            
-            if future_decs: ctx.extracted_data["policy"] = future_decs.result()
-            if future_cov: ctx.extracted_data["coverages"] = future_cov.result()
-            
-            if future_veh:
-                ctx.extracted_data["vehicles"] = future_veh.result()
-            if future_drv:
-                ctx.extracted_data["drivers"] = future_drv.result()
 
-    def _get_pages_for_section(self, section_map, section_name, total_pages):
-        """Resolves 1-based Gemini pages to 0-based list, preserving sparse selections."""
-        info = section_map.get(section_name, [])
-        
-        # GUARD: Empty slice optimization
-        if info in (None, {}, []):
-            # Fail Open for Safety (Scanning whole doc is safer than missing data)
-            return list(range(total_pages))
-            
-        selected_pages = []
 
-        # Case A: List of Integers (Standardized)
-        if isinstance(info, list) and info:
-            for item in info:
-                if isinstance(item, int):
-                    if 1 <= item <= total_pages:
-                        selected_pages.append(item - 1)
-                elif isinstance(item, dict):
-                    # Handle legacy dict inside list if it somehow persists
-                    s = item.get("start_page", 1)
-                    e = item.get("end_page", total_pages)
-                    for p in range(max(1, s), min(e, total_pages) + 1):
-                         selected_pages.append(p - 1)
-            
-            # Dedupe and Sort
-            selected_pages = sorted(list(set(selected_pages)))
-            
-        # Apply MAX_PAGES Cap (Take first N pages)
-        max_p = MAX_PAGES.get(section_name, 10)
-        if len(selected_pages) > max_p:
-            logger.warning(f"Capping {section_name} from {len(selected_pages)} to {max_p} pages.")
-            selected_pages = selected_pages[:max_p]
-            
-        return selected_pages
 
-    # --- API WRAPPERS ---
-    
-    def _extract_declarations(self, part, ctx):
-        res = self._call_gemini(
-            model=EXTRACTION_MODEL, 
-            contents=[part, EXTRACT_DECLARATIONS_PROMPT],
-            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=DECLARATIONS_SCHEMA),
-            request_type="extraction_declarations"
-        )
-        data = self._parse_json_response(res.text, ctx)
-        
-        # Inject Carrier Hints if available (Post-Processing or Pre? Pre is better but we need carrier name first)
-        # We can't do it Pre-Extraction because we don't know the carrier yet.
-        # This is where 2-Stage Repair loop shines.
-        
-        carrier = data.get("carrier_name")
-        if carrier:
-             hints = self.kb.get_hints(carrier)
-             if hints:
-                  logger.info(f"Loaded hints for {carrier}")
-                  ctx.carrier_hints = hints
-                  
-        return data
 
-    def _extract_coverages(self, part, policy_type, ctx):
-        # Use Cached Registry Helper
-        registry_json = get_cached_registry_json(policy_type)
 
-        prompt = get_coverages_prompt(registry_json, policy_type)
-        res = self._call_gemini(
-            model=EXTRACTION_MODEL, 
-            contents=[part, prompt],
-            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=COVERAGE_SCHEMA),
-            request_type="extraction_coverages"
-        )
-        return self._parse_json_response(res.text, ctx)
-
-    def _extract_vehicles(self, part, ctx):
-        scout_pages = ctx.scout_map.get("vehicle_schedule_signals", [])
-        scout_hint = ""
-        if scout_pages:
-            cleaned_pages = []
-            for p in scout_pages:
-                 if isinstance(p, int): cleaned_pages.append(p)
-                 elif isinstance(p, dict): cleaned_pages.append(p.get("page", 0))
-            if cleaned_pages:
-                 scout_hint = f"\nKNOWN VEHICLE SIGNAL PAGES: {sorted(list(set(cleaned_pages)))}\n"
-
-        prompt = scout_hint + EXTRACT_VEHICLES_PROMPT
-        res = self._call_gemini(
-            model=EXTRACTION_MODEL, 
-            contents=[part, prompt],
-            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=VEHICLE_SCHEMA),
-            request_type="extraction_vehicles"
-        )
-        return self._parse_json_response(res.text, ctx)
-
-    def _extract_drivers(self, part, ctx):
-        scout_pages = ctx.scout_map.get("driver_schedule_signals", [])
-        scout_hint = ""
-        if scout_pages:
-            cleaned_pages = []
-            for p in scout_pages:
-                 if isinstance(p, int): cleaned_pages.append(p)
-                 elif isinstance(p, dict): cleaned_pages.append(p.get("page", 0))
-            if cleaned_pages:
-                 scout_hint = f"\nKNOWN DRIVER SIGNAL PAGES: {sorted(list(set(cleaned_pages)))}\n"
-
-        prompt = scout_hint + EXTRACT_DRIVERS_PROMPT
-        res = self._call_gemini(
-            model=EXTRACTION_MODEL, 
-            contents=[part, prompt],
-            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=DRIVER_SCHEMA),
-            request_type="extraction_drivers"
-        )
-        return self._parse_json_response(res.text, ctx)
-
-    def _repair_declarations(self, ctx, processor, errors, current_data):
-        """Tier 2: Targeted Retry for Declarations."""
-        logger.info(f"REPAIR: Taking action on {errors}")
-        
-        # Determine strict slice for repair
-        # Ideally we know WHICH page caused the issue, but for now we reuse the 'declarations' slice logic.
-        pages = self._get_pages_for_section(ctx.section_map, "declarations", processor.get_page_count())
-        
-        # If turbo mode, pages is all pages.
-        # Create fresh part
-        pdf_bytes = processor.create_slice(pages)
-        part = types.Part.from_bytes(data=pdf_bytes, mime_type='application/pdf')
-        
-        # Generate Surgical Prompt
-        prompt = self.auditor.generate_repair_prompt(errors, current_data)
-        
-        # Inject Knowledge Base hints if we know the carrier
-        if ctx.carrier_hints:
-             prompt += f"\n\n{ctx.carrier_hints}"
-             
-        # Call API
-        try:
-             res = self._call_gemini(
-                 model=EXTRACTION_MODEL,
-                 contents=[part, prompt],
-                 config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=DECLARATIONS_SCHEMA),
-                 request_type="repair_declarations"
-             )
-             return self._parse_json_response(res.text, ctx)
-        except Exception as e:
-             logger.error(f"Repair attempt failed: {str(e)}")
-             return None
 
 
     # --- NORMALIZATION ---
@@ -677,7 +419,6 @@ class GeminiExtractionPipeline:
         # 2. Validate Coverages
         raw_covs = ctx.extracted_data.get("coverages", {}).get("coverages", [])
         for c in raw_covs:
-            # GUARD: specific fix for KeyError: 'coverage_code'
             code = c.get("coverage_code")
             if not code:
                 continue
@@ -688,6 +429,7 @@ class GeminiExtractionPipeline:
             if is_valid:
                 final["coverages"].append(c)
 
+
         # 3. Sanity Checks (CSL vs Split)
         self._apply_auto_liability_rules(final["coverages"], ctx.policy_type)
         
@@ -696,25 +438,6 @@ class GeminiExtractionPipeline:
         
         final["policy"]["has_full_collision"] = any(c.get("family") == "physical_damage" for c in final["coverages"])
 
-        # 5. Premium Auditing (Resolver)
-        # We need the page number of the extracted premium to check against Scout.
-        # Check extraction metadata for premium location.
-        prem_locs = final["policy"].get("field_locations", [])
-        prem_page = None
-        for loc in prem_locs:
-            if loc.get("field") == "premium":
-                prem_page = loc.get("page_number")
-                break
-        
-        if prem_page:
-            scout_signals = ctx.scout_map.get("premium_signals", [])
-            audit_meta = audit_premium_extraction(prem_page, scout_signals)
-            final["policy"]["premium_audit"] = audit_meta
-            # Log the finding
-            if audit_meta["confidence"] == "low":
-                logger.warning(f"Premium Audit Warning: {audit_meta['flag']} on page {prem_page}")
-            else:
-                logger.info(f"Premium Audit: {audit_meta['flag']}")
 
         return final
 

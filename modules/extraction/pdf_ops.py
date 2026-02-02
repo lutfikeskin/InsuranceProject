@@ -1,6 +1,7 @@
 import hashlib
 import io
 import pypdf
+from core.logger import logger
 
 class PdfProcessor:
     """
@@ -33,7 +34,7 @@ class PdfProcessor:
                 })
             return dims
         except Exception as e:
-            print(f"Error getting dimensions: {e}")
+            logger.error(f"Error getting dimensions: {e}")
             return []
 
     def create_slice(self, page_indices: list[int]) -> bytes:
@@ -51,7 +52,7 @@ class PdfProcessor:
                 # Fallback: if no valid pages, return the first page to avoid empty PDF error
                 # or maybe just return self.file_bytes?
                 # For safety in extraction, a single page is better than a full doc crash
-                print(f"WARNING: PdfProcessor found no valid pages to slice for indices {page_indices}. Fallback to page 0.")
+                logger.warning(f"PdfProcessor found no valid pages to slice for indices {page_indices}. Fallback to page 0.")
                 valid_pages = [0]
             
             for p in valid_pages:
@@ -62,9 +63,29 @@ class PdfProcessor:
             return out_buffer.getvalue()
             
         except Exception as e:
-            print(f"PdfProcessor Error: {e}")
+            logger.error(f"PdfProcessor Error: {e}")
             # Fallback to full document on critical slicing error
             return self.file_bytes
 
     def get_page_count(self) -> int:
         return len(self.reader.pages)
+
+    def extract_text(self, page_indices: list[int]) -> str:
+        """
+        Extracts raw text from specific pages. 
+        Returns empty string if no text found (scanned).
+        """
+        try:
+            full_text = []
+            total_pages = len(self.reader.pages)
+            valid_pages = [p for p in page_indices if 0 <= p < total_pages]
+            
+            for p_idx in valid_pages:
+                text = self.reader.pages[p_idx].extract_text()
+                if text:
+                    full_text.append(text)
+            
+            return "\n\n".join(full_text)
+        except Exception as e:
+            logger.error(f"Text Extraction Error: {e}")
+            return ""

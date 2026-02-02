@@ -1,139 +1,105 @@
 {
   "policy": {
     "carrier_name": "GEICO Marine Insurance Company",
-    "naic_number": "",
-    "policy_number": "9300275899",
-    "effective_date": "01/30/2026",
-    "expiration_date": "01/30/2027",
-    "account_type": "",
-    "insured_name": "FINNEDY TRANSPORT LLC DBA Finnedy Innocent",
-    "insured_address": "9533 SW LIBERTAS WAY",
-    "insured_city": "PORT SAINT LUCIE",
-    "insured_state_code": "FL",
-    "insured_zip": "34987",
-    "business_name": "FINNEDY TRANSPORT LLC DBA Finnedy Innocent",
-    "premium": "",
-    "financial_responsibility_name": "FINNEDY TRANSPORT LLC DBA Finnedy Innocent",
-    "state": "FL",
+    "policy_number": "9300093577",
+    "effective_date": "12/10/2024",
+    "expiration_date": "12/10/2025",
+    "insured_name": "TONEYS FREIGHT TRANSPORT LLC",
+    "insured_address": "143 AUSTEN LAKES DRIVE",
+    "insured_city": "YORK",
+    "insured_state_code": "SC",
+    "insured_zip": "29745",
+    "business_name": "TONEYS FREIGHT TRANSPORT LLC",
+    "state": "South Carolina",
     "field_locations": [
-      {
-        "field": "carrier_name",
-        "page_number": 1,
-        "bbox": [
-          99,
-          63,
-          112,
-          299
-        ]
-      },
       {
         "field": "policy_number",
         "page_number": 1,
         "bbox": [
-          73,
-          166,
-          86,
-          300
+          70,
+          200,
+          80,
+          290
+        ]
+      },
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          90,
+          60,
+          100,
+          270
         ]
       },
       {
         "field": "effective_date",
         "page_number": 1,
         "bbox": [
-          73,
-          480,
-          86,
-          590
+          70,
+          490,
+          80,
+          570
         ]
       },
       {
         "field": "expiration_date",
         "page_number": 1,
         "bbox": [
-          73,
-          720,
-          86,
-          830
+          70,
+          700,
+          80,
+          780
         ]
       },
       {
         "field": "insured_name",
         "page_number": 1,
         "bbox": [
-          99,
-          480,
-          112,
-          820
+          110,
+          490,
+          120,
+          700
         ]
       },
       {
         "field": "insured_address",
         "page_number": 1,
         "bbox": [
-          114,
-          480,
-          127,
-          650
+          120,
+          490,
+          130,
+          670
         ]
       },
       {
         "field": "insured_city",
         "page_number": 1,
         "bbox": [
-          129,
-          480,
-          142,
-          590
+          130,
+          490,
+          140,
+          530
         ]
       },
       {
         "field": "insured_state_code",
         "page_number": 1,
         "bbox": [
-          129,
-          590,
-          142,
-          610
+          130,
+          530,
+          140,
+          550
         ]
       },
       {
         "field": "insured_zip",
         "page_number": 1,
         "bbox": [
-          129,
-          610,
-          142,
-          660
-        ]
-      },
-      {
-        "field": "business_name",
-        "page_number": 1,
-        "bbox": [
-          99,
-          480,
-          112,
-          820
-        ]
-      },
-      {
-        "field": "financial_responsibility_name",
-        "page_number": 1,
-        "bbox": [
-          99,
-          480,
-          112,
-          820
-        ]
-      },
-      {
-        "field": "state",
-        "page_number": 1,
-        "bbox": [
-          129,
-          590,
-          142,
-          610
+          130,
+          550,
+          140,
+          600
         ]
       }
     ],
@@ -141,7 +107,7 @@
     "cargo_limit": "$100,000",
     "cargo_deductible": "1000",
     "um_uim_limit": "100,000 CSL",
-    "med_pay_limit": null,
+    "med_pay_limit": "5,000",
     "pip_limit": null,
     "comp_deductible": "1000",
     "coll_deductible": "1000",
@@ -152,7 +118,7 @@
   "coverages": [
     {
       "coverage_code": "AUTO_LIAB_CSL",
-      "display_name": "Auto Liability - Combined Single Limit - Automobile Liability",
+      "display_name": "Commercial Automobile Liability - Combined Single Limit",
       "family": "auto_liability",
       "limit_structure": "csl",
       "limits": {
@@ -161,16 +127,34 @@
       "location": {
         "page_number": 1,
         "bbox": [
+          330,
+          60,
           340,
-          170,
-          353,
-          240
+          140
+        ]
+      }
+    },
+    {
+      "coverage_code": "HIRED_AUTO",
+      "display_name": "Hired Autos Liability",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          290,
+          370,
+          300,
+          380
         ]
       }
     },
     {
       "coverage_code": "UM_CSL",
-      "display_name": "Uninsured Motorist CSL",
+      "display_name": "Uninsured Motorists - Combined Single Limit",
       "family": "uninsured_motorist",
       "limit_structure": "csl",
       "limits": {
@@ -179,16 +163,16 @@
       "location": {
         "page_number": 1,
         "bbox": [
-          479,
-          59,
-          493,
-          160
+          490,
+          60,
+          500,
+          130
         ]
       }
     },
     {
       "coverage_code": "UIM_CSL",
-      "display_name": "Underinsured Motorist CSL",
+      "display_name": "Underinsured Motorists - Combined Single Limit",
       "family": "underinsured_motorist",
       "limit_structure": "csl",
       "limits": {
@@ -197,16 +181,34 @@
       "location": {
         "page_number": 1,
         "bbox": [
-          530,
-          59,
-          543,
-          160
+          540,
+          60,
+          550,
+          130
+        ]
+      }
+    },
+    {
+      "coverage_code": "MED_PAY",
+      "display_name": "Medical Payments",
+      "family": "medical_payments",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 5000
+      },
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          580,
+          170,
+          590,
+          210
         ]
       }
     },
     {
       "coverage_code": "CARGO_LEGAL_LIAB",
-      "display_name": "Motor Truck Cargo",
+      "display_name": "Motor Truck Cargo Coverage",
       "family": "cargo",
       "limit_structure": "per_occurrence",
       "limits": {
@@ -216,72 +218,71 @@
       "location": {
         "page_number": 1,
         "bbox": [
-          669,
-          429,
-          682,
-          600
+          660,
+          430,
+          670,
+          580
         ]
       }
     },
     {
       "coverage_code": "COMP",
-      "display_name": "Comprehensive / OTC",
+      "display_name": "Comprehensive Deductible",
       "family": "physical_damage",
       "limit_structure": "deductible_only",
       "deductible": 1000,
+      "vehicle_vin": "3C6LRVDGXME542606",
       "location": {
         "page_number": 1,
         "bbox": [
-          739,
-          579,
-          752,
-          770
+          740,
+          530,
+          750,
+          680
         ]
       }
     },
     {
       "coverage_code": "COLL",
-      "display_name": "Collision",
+      "display_name": "Collision Deductible",
       "family": "physical_damage",
       "limit_structure": "deductible_only",
       "deductible": 1000,
+      "vehicle_vin": "3C6LRVDGXME542606",
       "location": {
         "page_number": 1,
         "bbox": [
-          755,
-          579,
-          768,
-          770
+          760,
+          530,
+          770,
+          680
         ]
       }
     }
   ],
   "vehicles": [
     {
-      "year": 2023,
+      "year": 2021,
       "make": "RAM",
       "model": "PROMASTER 2500",
-      "vin": "3C6LRVDG4PE603193",
-      "gvw": 0,
+      "vin": "3C6LRVDGXME542606",
       "type": "Cargo Van",
       "chassis": "Cargo Van",
-      "body": "null"
+      "body": null
     }
   ],
   "drivers": [
     {
-      "full_name": "Finnedy Innocent",
-      "license_number": "null",
-      "is_excluded": false
+      "full_name": "Jason Toney"
     }
   ],
   "classification": {
-    "policy_type": "commercial_package",
+    "policy_type": "commercial_auto",
     "confidence": "high",
     "signals": [
-      "Commercial Auto",
-      "General Liability",
-      "Motor Truck Cargo"
+      "COMMERCIAL AUTOMOBILE LIABILITY",
+      "COMMERCIAL AUTOMOBILE OTHER COVERAGES",
+      "Motor Truck Cargo Coverage"
     ]
   },
   "page_dimensions": [

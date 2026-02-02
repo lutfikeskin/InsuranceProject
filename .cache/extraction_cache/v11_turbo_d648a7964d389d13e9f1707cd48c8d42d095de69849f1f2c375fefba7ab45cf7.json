@@ -3,9 +3,9 @@
     "carrier_name": "Midwest Family Mutual Insurance Company",
     "naic_number": "",
     "policy_number": "CPKS0560137865",
-    "effective_date": "2025-01-29",
-    "expiration_date": "2026-01-29",
-    "account_type": "",
+    "effective_date": "01/29/25",
+    "expiration_date": "01/29/26",
+    "account_type": "Commercial Auto Policy",
     "insured_name": "JEEWAN GURUNG",
     "insured_address": "11115 KIMBALL AVE",
     "insured_city": "KANSAS CITY",
@@ -20,9 +20,9 @@
         "field": "carrier_name",
         "page_number": 1,
         "bbox": [
-          104,
-          199,
-          154,
+          106,
+          215,
+          149,
           572
         ]
       },
@@ -30,9 +30,9 @@
         "field": "policy_number",
         "page_number": 1,
         "bbox": [
-          270,
+          269,
           83,
-          284,
+          282,
           200
         ]
       },
@@ -40,90 +40,90 @@
         "field": "effective_date",
         "page_number": 1,
         "bbox": [
-          284,
-          340,
-          298,
-          400
+          282,
+          300,
+          295,
+          360
         ]
       },
       {
         "field": "expiration_date",
         "page_number": 1,
         "bbox": [
-          284,
-          470,
-          298,
-          530
+          282,
+          460,
+          295,
+          520
+        ]
+      },
+      {
+        "field": "account_type",
+        "page_number": 1,
+        "bbox": [
+          206,
+          399,
+          219,
+          599
         ]
       },
       {
         "field": "insured_name",
         "page_number": 1,
         "bbox": [
-          315,
+          309,
           83,
-          329,
-          200
+          322,
+          190
         ]
       },
       {
         "field": "insured_address",
         "page_number": 1,
         "bbox": [
-          330,
+          322,
           83,
-          344,
-          230
+          335,
+          220
         ]
       },
       {
         "field": "insured_city",
         "page_number": 1,
         "bbox": [
-          345,
+          335,
           83,
-          359,
-          180
+          348,
+          170
         ]
       },
       {
         "field": "insured_state_code",
         "page_number": 1,
         "bbox": [
-          345,
-          190,
-          359,
-          210
+          335,
+          175,
+          348,
+          195
         ]
       },
       {
         "field": "insured_zip",
         "page_number": 1,
         "bbox": [
-          345,
-          240,
-          359,
-          290
+          335,
+          200,
+          348,
+          250
         ]
       },
       {
         "field": "premium",
         "page_number": 1,
         "bbox": [
-          786,
-          899,
-          800,
-          949
-        ]
-      },
-      {
-        "field": "state",
-        "page_number": 1,
-        "bbox": [
-          345,
-          190,
-          359,
-          210
+          409,
+          890,
+          422,
+          930
         ]
       }
     ],
@@ -135,11 +135,7 @@
     "coll_deductible": "1000",
     "has_auto_liability": true,
     "has_general_liability": false,
-    "has_full_collision": true,
-    "premium_audit": {
-      "confidence": "low",
-      "flag": "UNSCOUTED_LOCATION"
-    }
+    "has_full_collision": true
   },
   "coverages": [
     {
@@ -150,31 +146,15 @@
       "limits": {
         "combined_single_limit": 1000000
       },
+      "deductible": 0,
+      "vehicle_vin": "W1W4DCHY4MT050894",
       "location": {
         "page_number": 1,
         "bbox": [
-          592,
-          600,
-          606,
-          669
-        ]
-      }
-    },
-    {
-      "coverage_code": "PIP",
-      "display_name": "Personal Injury Protection",
-      "family": "pip",
-      "limit_structure": "csl",
-      "limits": {
-        "combined_single_limit": 0
-      },
-      "location": {
-        "page_number": 1,
-        "bbox": [
-          629,
-          599,
-          656,
-          799
+          589,
+          60,
+          602,
+          150
         ]
       }
     },
@@ -186,13 +166,15 @@
       "limits": {
         "combined_single_limit": 1000000
       },
+      "deductible": 0,
+      "vehicle_vin": "W1W4DCHY4MT050894",
       "location": {
         "page_number": 1,
         "bbox": [
-          670,
-          600,
-          684,
-          669
+          649,
+          60,
+          662,
+          240
         ]
       }
     },
@@ -204,29 +186,33 @@
       "limits": {
         "combined_single_limit": 1000000
       },
+      "deductible": 0,
+      "vehicle_vin": "W1W4DCHY4MT050894",
       "location": {
         "page_number": 1,
         "bbox": [
-          707,
-          600,
-          721,
-          669
+          679,
+          60,
+          692,
+          250
         ]
       }
     },
     {
       "coverage_code": "COMP",
-      "display_name": "Physical Damage Comprehensive",
+      "display_name": "Comprehensive",
       "family": "physical_damage",
       "limit_structure": "deductible_only",
+      "limits": {},
       "deductible": 1000,
+      "vehicle_vin": "W1W4DCHY4MT050894",
       "location": {
-        "page_number": 2,
+        "page_number": 1,
         "bbox": [
-          337,
-          699,
-          351,
-          749
+          709,
+          60,
+          722,
+          160
         ]
       }
     },
@@ -235,14 +221,16 @@
       "display_name": "Collision",
       "family": "physical_damage",
       "limit_structure": "deductible_only",
+      "limits": {},
       "deductible": 1000,
+      "vehicle_vin": "W1W4DCHY4MT050894",
       "location": {
-        "page_number": 2,
+        "page_number": 1,
         "bbox": [
-          320,
-          699,
-          334,
-          749
+          739,
+          60,
+          752,
+          120
         ]
       }
     }
@@ -256,7 +244,7 @@
       "gvw": 0,
       "type": "Cargo Van",
       "chassis": "Cargo Van",
-      "body": "null"
+      "body": ""
     }
   ],
   "drivers": [],
@@ -266,13 +254,8 @@
     "signals": [
       "Commercial Auto Policy",
       "Renewal Coverage Summary",
-      "Liability",
-      "Personal Injury Protection",
-      "Uninsured Motorist",
-      "Underinsured Motorist",
-      "Physical Damage",
-      "Collision",
-      "Comprehensive",
+      "Item Two - Schedule of Coverages and Covered Autos",
+      "Business Auto Coverage Form",
       "Commercial Auto Forms"
     ]
   },

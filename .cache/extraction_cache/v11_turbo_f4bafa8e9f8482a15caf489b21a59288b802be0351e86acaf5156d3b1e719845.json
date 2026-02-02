@@ -1,0 +1,378 @@
+{
+  "policy": {
+    "carrier_name": "GEICO Marine Insurance Company",
+    "naic_number": "null",
+    "policy_number": "9300271559-00",
+    "effective_date": "01-27-2026",
+    "expiration_date": "01-27-2027",
+    "account_type": "Limited Liability Company",
+    "insured_name": "GINA & JOHN MULTI SERVICE & TRUCKING LLC",
+    "insured_address": "5224 RISING COMET LN",
+    "insured_city": "LAKE WORTH",
+    "insured_state_code": "FL",
+    "insured_zip": "33463",
+    "business_name": "GINA & JOHN MULTI SERVICE & TRUCKING LLC",
+    "premium": "12843",
+    "financial_responsibility_name": "null",
+    "state": "FL",
+    "field_locations": [
+      {
+        "field": "carrier_name",
+        "page_number": 1,
+        "bbox": [
+          170,
+          70,
+          182,
+          260
+        ]
+      },
+      {
+        "field": "policy_number",
+        "page_number": 1,
+        "bbox": [
+          226,
+          380,
+          238,
+          480
+        ]
+      },
+      {
+        "field": "effective_date",
+        "page_number": 1,
+        "bbox": [
+          240,
+          380,
+          252,
+          448
+        ]
+      },
+      {
+        "field": "expiration_date",
+        "page_number": 1,
+        "bbox": [
+          240,
+          450,
+          252,
+          518
+        ]
+      },
+      {
+        "field": "insured_name",
+        "page_number": 1,
+        "bbox": [
+          315,
+          70,
+          327,
+          340
+        ]
+      },
+      {
+        "field": "insured_address",
+        "page_number": 1,
+        "bbox": [
+          329,
+          70,
+          341,
+          240
+        ]
+      },
+      {
+        "field": "insured_city",
+        "page_number": 1,
+        "bbox": [
+          343,
+          70,
+          355,
+          150
+        ]
+      },
+      {
+        "field": "insured_state_code",
+        "page_number": 1,
+        "bbox": [
+          343,
+          152,
+          355,
+          170
+        ]
+      },
+      {
+        "field": "insured_zip",
+        "page_number": 1,
+        "bbox": [
+          343,
+          172,
+          355,
+          210
+        ]
+      },
+      {
+        "field": "business_name",
+        "page_number": 1,
+        "bbox": [
+          315,
+          70,
+          327,
+          340
+        ]
+      },
+      {
+        "field": "account_type",
+        "page_number": 1,
+        "bbox": [
+          370,
+          150,
+          382,
+          300
+        ]
+      },
+      {
+        "field": "premium",
+        "page_number": 2,
+        "bbox": [
+          720,
+          490,
+          732,
+          540
+        ]
+      },
+      {
+        "field": "state",
+        "page_number": 1,
+        "bbox": [
+          343,
+          152,
+          355,
+          170
+        ]
+      }
+    ],
+    "liability_limit": "1,000,000 CSL",
+    "cargo_limit": "$100,000",
+    "cargo_deductible": "1000",
+    "um_uim_limit": "UMOnly: 100,000 CSL",
+    "med_pay_limit": null,
+    "pip_limit": null,
+    "comp_deductible": "500",
+    "coll_deductible": "500",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "CARGO_LEGAL_LIAB",
+      "display_name": "Motor Truck Cargo Coverage",
+      "family": "cargo",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 100000
+      },
+      "deductible": 1000,
+      "vehicle_vin": "null",
+      "location": {
+        "page_number": 1,
+        "bbox": [
+          438,
+          70,
+          450,
+          250
+        ]
+      }
+    },
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "display_name": "Covered Auto Liability",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "deductible": 0,
+      "vehicle_vin": "null",
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          210,
+          70,
+          222,
+          170
+        ]
+      }
+    },
+    {
+      "coverage_code": "PIP",
+      "display_name": "Personal Injury Protection",
+      "family": "pip",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 0
+      },
+      "deductible": 0,
+      "vehicle_vin": "null",
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          240,
+          70,
+          260,
+          170
+        ]
+      }
+    },
+    {
+      "coverage_code": "UM_CSL",
+      "display_name": "Uninsured Motorists",
+      "family": "uninsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 100000
+      },
+      "deductible": 0,
+      "vehicle_vin": "null",
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          300,
+          70,
+          312,
+          170
+        ]
+      }
+    },
+    {
+      "coverage_code": "UIM_CSL",
+      "display_name": "Underinsured Motorists",
+      "family": "underinsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 0
+      },
+      "deductible": 0,
+      "vehicle_vin": "null",
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          315,
+          70,
+          335,
+          170
+        ]
+      }
+    },
+    {
+      "coverage_code": "COMP",
+      "display_name": "Physical Damage Comprehensive Coverage",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "limits": {},
+      "deductible": 500,
+      "vehicle_vin": "3C6MRVJG4SE539173",
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          370,
+          70,
+          390,
+          170
+        ]
+      }
+    },
+    {
+      "coverage_code": "COLL",
+      "display_name": "Physical Damage Collision Coverage",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "limits": {},
+      "deductible": 500,
+      "vehicle_vin": "3C6MRVJG4SE539173",
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          430,
+          70,
+          442,
+          170
+        ]
+      }
+    },
+    {
+      "coverage_code": "TOWING",
+      "display_name": "Physical Damage Towing and Labor Coverage",
+      "family": "physical_damage",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 0
+      },
+      "deductible": 0,
+      "vehicle_vin": "null",
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          470,
+          70,
+          490,
+          170
+        ]
+      }
+    },
+    {
+      "coverage_code": "RENTAL",
+      "display_name": "Rental Reimbursement Coverage",
+      "family": "physical_damage",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 0
+      },
+      "deductible": 0,
+      "vehicle_vin": "null",
+      "location": {
+        "page_number": 2,
+        "bbox": [
+          500,
+          70,
+          520,
+          170
+        ]
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2025,
+      "make": "RAM",
+      "model": "PROMASTER 3500",
+      "vin": "3C6MRVJG4SE539173",
+      "gvw": 10000,
+      "type": "Cargo Van",
+      "chassis": "Cargo Van",
+      "body": "null"
+    }
+  ],
+  "drivers": [],
+  "classification": {
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "Business Auto Declaration",
+      "Schedule Of Coverages And Covered Autos",
+      "Motor Truck Cargo Coverage",
+      "Covered Auto Liability",
+      "Physical Damage"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 595.22,
+      "height": 842.0
+    },
+    {
+      "width": 595.22,
+      "height": 842.0
+    },
+    {
+      "width": 595.22,
+      "height": 842.0
+    }
+  ]
+}
