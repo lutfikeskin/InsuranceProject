@@ -187,7 +187,7 @@ class GeminiExtractionPipeline:
         try:
             # 3. Upload to Gemini File API
             logger.info("Uploading to Gemini File API...")
-            if status_callback: status_callback(" Uploading to Google AI Studio...")
+            if status_callback: status_callback(" Reading the Document...")
             
             uploaded_file = self._upload_to_gemini(file_bytes)
             logger.info(f"File uploaded: {uploaded_file.name}")

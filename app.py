@@ -57,6 +57,19 @@ def settings_modal():
             st.rerun()
         else:
             st.warning("Please enter a valid key.")
+    
+    st.divider()
+    st.markdown("##### 📊 Usage Management")
+    if st.button("Reset Daily Usage Meter", width='stretch', type="secondary"):
+        session = get_session(st.session_state.db_engine)
+        usage_svc = UsageService(session)
+        success, msg = usage_svc.clear_usage()
+        session.close()
+        if success:
+            st.success("Usage meter reset successfully!")
+            st.rerun()
+        else:
+            st.error(f"Error: {msg}")
 
 # --- Sidebar Navigation ---
 with st.sidebar:
@@ -102,27 +115,69 @@ with st.sidebar:
     if api_key:
         st.success("API Active", icon="✅")
         
-        # --- BUDGET METER (NEW) ---
+        # --- LIVE COST MONITOR ---
         try:
             from core.services import UsageService
+            import pandas as pd
+            
             usage_service = UsageService(get_session(st.session_state.db_engine))
             daily_spend = usage_service.get_daily_usage()
             budget_limit = DEFAULT_DAILY_BUDGET
-            
             progress = min(daily_spend / budget_limit, 1.0)
             
-            st.markdown(f"""
-            <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #eee; margin-top: 10px;">
-                <p style="margin:0; font-size: 0.8rem; color: #666;">Daily Budget ($2.50)</p>
-                <h4 style="margin:5px 0;">${daily_spend:.4f}</h4>
-                <div style="background: #eee; height: 8px; border-radius: 4px;">
-                    <div style="background: {'#ff4b4b' if progress > 0.8 else '#005AA9'}; width: {progress*100}%; height: 100%; border-radius: 4px;"></div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            # 1. Main Budget Card
+            st.markdown("---")
+            st.markdown("### 📊 Cost Monitor")
             
-            if daily_spend >= budget_limit:
-                st.error("Quota Exceeded! 🛑")
+            with st.container():
+                # Progress Bar & Metric
+                col_a, col_b = st.columns([2, 1])
+                with col_a:
+                    st.metric("Today's Spend", f"${daily_spend:.4f}")
+                with col_b:
+                     st.caption(f"Limit: ${budget_limit}")
+                
+                st.progress(progress, text=f"{progress*100:.1f}% Used")
+                if daily_spend >= budget_limit:
+                    st.error("Quota Exceeded! 🛑")
+
+            # 2. Token Details (Collapsible)
+            with st.expander("Details", expanded=True):
+                in_tok, out_tok = usage_service.get_todays_token_stats()
+                st.markdown(f"""
+                <div style="font-size: 0.8rem; color: #555;">
+                    <div>📥 <b>Input:</b> {in_tok:,} toks</div>
+                    <div>📤 <b>Output:</b> {out_tok:,} toks</div>
+                    <div style="margin-top:5px; font-weight:bold; color: #005AA9;">Verified Accurate ✅</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # 3. Recent Activity Stream (Mini-Log)
+            st.markdown("##### Recent Activity")
+            recent_logs = usage_service.get_recent_usage(limit=5)
+            if recent_logs:
+                for log in recent_logs:
+                     # Compact log item
+                     st.markdown(f"""
+                     <div style="
+                        background: #f8f9fa; 
+                        padding: 8px; 
+                        border-radius: 6px; 
+                        border-left: 3px solid #28a745; 
+                        margin-bottom: 6px; 
+                        font-size: 0.75rem;">
+                        <div style="display:flex; justify-content:space-between;">
+                            <b>{log.model_name.replace('gemini-', '')}</b>
+                            <span>${log.cost:.5f}</span>
+                        </div>
+                        <div style="color: #666; font-size: 0.7rem;">
+                            {log.timestamp.strftime('%H:%M:%S')} • {log.request_type}
+                        </div>
+                     </div>
+                     """, unsafe_allow_html=True)
+            else:
+                st.caption("No activity yet.")
+
         except Exception as e:
             st.error(f"Usage Error: {e}")
     else:

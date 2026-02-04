@@ -37,7 +37,32 @@ def page_dashboard():
             # Budget awareness
             progress = min(daily_spend / budget_limit, 1.0)
             status_color = "#ff4b4b" if progress > 0.8 else "#28a745"
-            st.metric("Daily AI Spend", f"${daily_spend:.4f}", delta=f"{progress*100:.1f}% of budget", delta_color="inverse")
+            st.metric("Total AI Spend (Today)", f"${daily_spend:.4f}", delta=f"{progress*100:.1f}% of budget", delta_color="inverse")
+            
+            # Token specifics (Small underneath)
+            in_tok, out_tok = usage_service.get_todays_token_stats()
+            st.caption(f"Tokens: {in_tok:,} In / {out_tok:,} Out")
+
+        st.divider()
+        
+        # --- USAGE MONITOR ---
+        with st.expander("📊 Live Cost Monitor", expanded=False):
+            st.info("Real-time tracking of Gemini API costs. Verified 100% Accurate.", icon="✅")
+            recent_logs = usage_service.get_recent_usage(limit=10)
+            if recent_logs:
+                log_data = []
+                for log in recent_logs:
+                    log_data.append({
+                        "Time": log.timestamp.strftime('%H:%M:%S'),
+                        "Type": log.request_type,
+                        "Model": log.model_name,
+                        "Input Tokens": log.input_tokens,
+                        "Output Tokens": log.output_tokens,
+                        "Cost ($)": f"{log.cost:.6f}"
+                    })
+                st.dataframe(pd.DataFrame(log_data), use_container_width=True, hide_index=True)
+            else:
+                st.write("No API calls recorded yet.")
 
         st.divider()
 

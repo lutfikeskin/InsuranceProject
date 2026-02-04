@@ -571,4 +571,29 @@ class UsageService:
         """Checks if the daily spend has exceeded the limit."""
         return self.get_daily_usage() >= daily_limit
 
+    def clear_usage(self):
+        """Deletes all usage logs."""
+        try:
+            self.session.query(ApiUsage).delete()
+            self.session.commit()
+            return True, "Usage logs cleared."
+        except Exception as e:
+            self.session.rollback()
+            return False, str(e)
+
+    def get_recent_usage(self, limit: int = 10):
+        """Returns the most recent API calls."""
+        return self.session.query(ApiUsage).order_by(ApiUsage.timestamp.desc()).limit(limit).all()
+
+    def get_todays_token_stats(self):
+        """Returns tuple (total_input, total_output) for today."""
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        result = self.session.query(
+            func.sum(ApiUsage.input_tokens),
+            func.sum(ApiUsage.output_tokens)
+        ).filter(ApiUsage.timestamp >= today_start).first()
+        
+        return (result[0] or 0, result[1] or 0)
+
 
