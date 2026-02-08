@@ -68,11 +68,10 @@ This is the most complex component, utilizing a multi-phase, parallelized pipeli
 
 1.  **`pdf_ops.py`**: Handles low-level PDF manipulation (hashing, slicing, counting pages).
 2.  **`pipeline.py` (`GeminiExtractionPipeline`)**:
-    - **Step 0 (Universal Scouting) [NEW]**: Before slicing, the system runs a fast, full-document scout using `UNIVERSAL_SCOUT_PROMPT`. This identifies specific pages containing **Premium Signals**, **Vehicle Schedules**, **Driver Lists**, and **Coverage Schedules**.
+    - **Step 0 (Universal Scouting)**: Before slicing, the system runs a fast, full-document scout. This identifies specific pages containing **Premium Signals**, **Vehicle Schedules**, **Driver Lists**, and **Coverage Schedules**.
     - **Step 1 (Section Locating)**: Identifies general page ranges for major sections (Declarations, Vehicles, etc.).
-    - **Step 2 (Smart Slicing)**: Merges findings from the Scout and the Section Locator. It expands discovered pages by +/- 1 to ensure full context, creating optimized "Smart Slices".
-    - **Step 3 (Parallel Extraction)**: Runs 4 parallel Gemini calls (one for each slice) using specialized **Prompts** and **Schemas**.
-    - **Step 4 (Assembly)**: Merges the parallel results, applies CSL/Split rules, and validates against the Ontology.
+    - **Step 2 (Parallel Extraction)**: Runs 4 parallel Gemini calls (one for each slice) using specialized **Prompts** and **Schemas**.
+    - **Step 3 (Assembly)**: Merges the parallel results, applies CSL/Split rules, and validates against the Ontology.
 3.  **`prompts.py` / `schemas.py`**: Define the instructions and the strict JSON output format the AI must follow.
 4.  **`ExtractionCache`**: A versioned caching system that prevents re-processing identical PDF hashes, saving API costs and time.
 
