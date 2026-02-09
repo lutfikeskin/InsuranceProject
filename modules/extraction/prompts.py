@@ -66,6 +66,7 @@ def get_extract_all_prompt(registry_text):
 
     --- SECTION 2: POLICY DECLARATIONS ---
     - Distinguish between Carrier (Risk Bearer) and Agency (Broker).
+    - ACCURACY RULE: Only extract values you can literally see on the page. Never infer or guess.
     - Fields: Carrier Name, Policy #, NAIC, Effective/Expiration Dates, Insured Name/Address/City/State/Zip, Business Name.
     - Premium: Extract the GRAND TOTAL premium for the policy term.
 
