@@ -691,3 +691,13 @@
 2026-02-02 10:52:56 | WARNING  | modules.extraction.pipeline:_create_cache:315 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
 2026-02-02 10:53:20 | INFO     | modules.extraction.pipeline:run:245 - Policy Classified: commercial_auto (high)
 2026-02-02 10:53:21 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_50b4bc0527318bda86d4d10305db9b7b1b08c263799f3d5d352a0c0bf72f4ddd
+2026-02-16 09:47:00 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-02-16 09:47:02 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/9fq6z192uzss
+2026-02-16 09:47:02 | WARNING  | modules.extraction.pipeline:_create_cache:315 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-16 09:47:24 | INFO     | modules.extraction.pipeline:run:245 - Policy Classified: commercial_auto (high)
+2026-02-16 09:47:26 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-02-16 10:13:00 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-02-16 10:13:02 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/vs3l04f91wf0
+2026-02-16 10:13:02 | WARNING  | modules.extraction.pipeline:_create_cache:315 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=788, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-02-16 10:13:23 | INFO     | modules.extraction.pipeline:run:245 - Policy Classified: commercial_auto (high)
+2026-02-16 10:13:24 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f4bafa8e9f8482a15caf489b21a59288b802be0351e86acaf5156d3b1e719845

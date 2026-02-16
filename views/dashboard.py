@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 from core.services import PolicyService, UsageService
 from core.database import get_session
-from st_aggrid import AgGrid, GridOptionsBuilder
 from views.edit_dialog import edit_policy_dialog
 from core.constants import DEFAULT_DAILY_BUDGET
+from datetime import date
 
 def page_dashboard():
     session = get_session(st.session_state.db_engine)
@@ -17,15 +17,19 @@ def page_dashboard():
         budget_limit = DEFAULT_DAILY_BUDGET
         
         # --- COMMAND CENTER HEADER ---
+        today = date.today()
+        hour = pd.Timestamp.now().hour
+        greeting = "Good morning" if hour < 12 else ("Good afternoon" if hour < 17 else "Good evening")
+        
         st.markdown(f"""
         <div style="background: linear-gradient(90deg, #005AA9 0%, #003366 100%); padding: 30px; border-radius: 15px; margin-bottom: 25px; color: white;">
             <div style="margin:0; font-size: 1.8rem; font-weight: 700; color: white !important;">🚀 Project Command Center</div>
-            <p style="margin:5px 0 0 0; opacity: 0.8;">Welcome back. Here is your platform overview for today.</p>
+            <p style="margin:5px 0 0 0; opacity: 0.8;">{greeting}! Here is your platform overview for {today.strftime('%A, %B %d, %Y')}.</p>
         </div>
         """, unsafe_allow_html=True)
 
         # --- METRICS GRID ---
-        m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+        m_col1, m_col2, m_col3 = st.columns(3)
         
         with m_col1:
             st.metric("Total Policies", total_policies)
@@ -33,36 +37,92 @@ def page_dashboard():
             st.metric("Total Vehicles", total_vehicles)
         with m_col3:
             st.metric("Total Premium", f"${total_premium:,.2f}")
-        with m_col4:
-            # Budget awareness
-            progress = min(daily_spend / budget_limit, 1.0)
-            status_color = "#ff4b4b" if progress > 0.8 else "#28a745"
-            st.metric("Total AI Spend (Today)", f"${daily_spend:.4f}", delta=f"{progress*100:.1f}% of budget", delta_color="inverse")
-            
-            # Token specifics (Small underneath)
-            in_tok, out_tok = usage_service.get_todays_token_stats()
-            st.caption(f"Tokens: {in_tok:,} In / {out_tok:,} Out")
 
-        st.divider()
+        # --- EXPIRATION ALERTS ---
+        expiring_30 = service.get_expiring_policies(days=30)
+        expiring_60 = service.get_expiring_policies(days=60)
         
-        # --- USAGE MONITOR ---
-        with st.expander("📊 Live Cost Monitor", expanded=False):
-            st.info("Real-time tracking of Gemini API costs. Verified 100% Accurate.", icon="✅")
-            recent_logs = usage_service.get_recent_usage(limit=10)
-            if recent_logs:
-                log_data = []
-                for log in recent_logs:
-                    log_data.append({
-                        "Time": log.timestamp.strftime('%H:%M:%S'),
-                        "Type": log.request_type,
-                        "Model": log.model_name,
-                        "Input Tokens": log.input_tokens,
-                        "Output Tokens": log.output_tokens,
-                        "Cost ($)": f"{log.cost:.6f}"
-                    })
-                st.dataframe(pd.DataFrame(log_data), use_container_width=True, hide_index=True)
-            else:
-                st.write("No API calls recorded yet.")
+        # Only show policies in the 31-60 day window for the second bucket
+        expiring_31_60 = [p for p in expiring_60 if p not in expiring_30]
+        
+        if expiring_30 or expiring_31_60:
+            st.divider()
+            st.subheader("🔔 Expiration Alerts")
+            
+            alert_col1, alert_col2 = st.columns(2)
+            
+            with alert_col1:
+                if expiring_30:
+                    st.error(f"⚠️ **{len(expiring_30)}** {'policy expires' if len(expiring_30) == 1 else 'policies expire'} within **30 days**")
+                    with st.expander(f"View {len(expiring_30)} expiring policies", expanded=True):
+                        for p in expiring_30:
+                            days_left = (p.expiration_date - date.today()).days
+                            st.markdown(f"""
+                            <div style="border-left: 4px solid #dc3545; padding: 8px 12px; background: #fff5f5; margin-bottom: 8px; border-radius: 0 6px 6px 0;">
+                                <div style="display:flex; justify-content:space-between;">
+                                    <strong>{p.policy_number}</strong>
+                                    <span style="color: #dc3545; font-weight: 600;">{days_left} days left</span>
+                                </div>
+                                <div style="font-size: 0.85rem; color: #666;">{p.insured_name} • {p.carrier_name}</div>
+                                <div style="font-size: 0.8rem; color: #999;">Expires: {p.expiration_date.strftime('%b %d, %Y')}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                else:
+                    st.success("✅ No policies expiring in the next 30 days")
+            
+            with alert_col2:
+                if expiring_31_60:
+                    st.warning(f"📋 **{len(expiring_31_60)}** {'policy expires' if len(expiring_31_60) == 1 else 'policies expire'} in **31-60 days**")
+                    with st.expander(f"View {len(expiring_31_60)} upcoming expirations"):
+                        for p in expiring_31_60:
+                            days_left = (p.expiration_date - date.today()).days
+                            st.markdown(f"""
+                            <div style="border-left: 4px solid #ffc107; padding: 8px 12px; background: #fffbea; margin-bottom: 8px; border-radius: 0 6px 6px 0;">
+                                <div style="display:flex; justify-content:space-between;">
+                                    <strong>{p.policy_number}</strong>
+                                    <span style="color: #856404; font-weight: 600;">{days_left} days left</span>
+                                </div>
+                                <div style="font-size: 0.85rem; color: #666;">{p.insured_name} • {p.carrier_name}</div>
+                                <div style="font-size: 0.8rem; color: #999;">Expires: {p.expiration_date.strftime('%b %d, %Y')}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                else:
+                    st.info("No policies expiring in the 31-60 day window")
+        else:
+            if total_policies > 0:
+                st.divider()
+                st.success("✅ **All policies are current** — no upcoming expirations in the next 60 days.")
+
+        # --- PORTFOLIO ANALYTICS ---
+        if total_policies > 0:
+            st.divider()
+            st.subheader("📊 Portfolio Analytics")
+            
+            chart_col1, chart_col2 = st.columns(2)
+            
+            with chart_col1:
+                st.markdown("**Policies by Carrier**")
+                carrier_data = service.get_carrier_distribution()
+                if carrier_data:
+                    carrier_df = pd.DataFrame(
+                        list(carrier_data.items()), 
+                        columns=["Carrier", "Policies"]
+                    ).set_index("Carrier")
+                    st.bar_chart(carrier_df, color="#005AA9")
+                else:
+                    st.caption("No carrier data available.")
+            
+            with chart_col2:
+                st.markdown("**Expiration Timeline (Next 6 Months)**")
+                timeline_data = service.get_expiration_timeline(months=6)
+                if timeline_data and any(v > 0 for v in timeline_data.values()):
+                    timeline_df = pd.DataFrame(
+                        list(timeline_data.items()),
+                        columns=["Month", "Expiring"]
+                    ).set_index("Month")
+                    st.bar_chart(timeline_df, color="#dc3545")
+                else:
+                    st.caption("No policies expiring in the next 6 months.")
 
         st.divider()
 

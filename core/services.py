@@ -60,6 +60,58 @@ class PolicyService:
         self.session.delete(policy)
         self.session.commit()
 
+    def get_expiring_policies(self, days=30):
+        """Returns policies expiring within the given number of days."""
+        from datetime import date
+        today = date.today()
+        cutoff = today + timedelta(days=days)
+        return self.session.query(Policy).filter(
+            Policy.expiration_date != None,
+            Policy.expiration_date >= today,
+            Policy.expiration_date <= cutoff
+        ).order_by(Policy.expiration_date.asc()).all()
+
+    def check_duplicate(self, policy_number):
+        """Returns existing policy with the same number, or None."""
+        if not policy_number:
+            return None
+        return self.session.query(Policy).filter_by(policy_number=policy_number).first()
+
+    def get_carrier_distribution(self):
+        """Returns dict of {carrier_name: count} for all policies."""
+        results = self.session.query(
+            Policy.carrier_name, func.count(Policy.id)
+        ).group_by(Policy.carrier_name).all()
+        return {name or "Unknown": count for name, count in results}
+
+    def get_expiration_timeline(self, months=6):
+        """Returns dict of {month_label: count} for policies expiring in the next N months."""
+        from datetime import date
+        import calendar
+        today = date.today()
+        cutoff = today + timedelta(days=months * 30)
+        
+        expiring = self.session.query(Policy.expiration_date).filter(
+            Policy.expiration_date != None,
+            Policy.expiration_date >= today,
+            Policy.expiration_date <= cutoff
+        ).all()
+        
+        # Group by month
+        monthly = {}
+        for i in range(months):
+            future = today + timedelta(days=i * 30)
+            label = f"{calendar.month_abbr[future.month]} {future.year}"
+            monthly[label] = 0
+        
+        for (exp_date,) in expiring:
+            if exp_date:
+                label = f"{calendar.month_abbr[exp_date.month]} {exp_date.year}"
+                if label in monthly:
+                    monthly[label] += 1
+        
+        return monthly
+
     def normalize_policy_data(self, extraction_result):
         """
         Normalizes raw extraction data into a standard structure for persistence.
@@ -309,7 +361,7 @@ class PolicyService:
                 # Apply Refinement if not already present
                 ref_type = v.get('vehicle_type')
                 if not ref_type:
-                     refinement = refine_vehicle_type(v.get('year'), v.get('make'), v.get('model'), v.get('vin'), v.get('type'))
+                     refinement = refine_vehicle_type(v.get('year'), v.get('make'), v.get('model'), v.get('vin'), v.get('type'), gvw=v.get('gvw'))
                      ref_type = refinement.get('final_type')
                      # Could also refine chassis/body if missing
                 

@@ -117,19 +117,38 @@ def page_process_policies(api_key):
                 
             if d_col2.button("💾 Save All to Database (Skip Review)", type="primary", width='stretch'):
                 processed_count = 0
+                skipped_count = 0
+                updated_count = 0
                 session = get_session(st.session_state.db_engine)
                 service = PolicyService(session)
                 
                 try:
                     for item in st.session_state["temp_extracted"]:
+                        # Check for duplicates before saving
+                        pol_num = item['data'].get('policy', {}).get('policy_number', '')
+                        existing = service.check_duplicate(pol_num) if pol_num else None
+                        
                         success, msg = service.save_policy_from_extraction(item['data'])
                         
                         if success:
-                            processed_count += 1
+                            if existing:
+                                updated_count += 1
+                            else:
+                                processed_count += 1
                         else:
+                            skipped_count += 1
                             st.toast(msg, icon="⚠️")
                     
-                    st.success(f"Successfully saved {processed_count} policies!")
+                    # Summary message
+                    parts = []
+                    if processed_count:
+                        parts.append(f"**{processed_count}** new {'policy' if processed_count == 1 else 'policies'} saved")
+                    if updated_count:
+                        parts.append(f"**{updated_count}** existing {'policy' if updated_count == 1 else 'policies'} updated")
+                    if skipped_count:
+                        parts.append(f"**{skipped_count}** skipped (no changes)")
+                    
+                    st.success(" • ".join(parts) if parts else "No changes made.")
                     st.session_state["temp_extracted"] = []
                     st.rerun()
                     
@@ -459,6 +478,10 @@ def page_process_policies(api_key):
                     )
 
                 st.markdown("---")
+                
+                # Duplicate detection warning
+                b_col_warn = st.container()
+                
                 b_col1, b_col2, b_col3 = st.columns([1, 1, 1])
                 saved = b_col1.form_submit_button("💾 Save", type="secondary")
                 save_next = b_col2.form_submit_button("💾⏩ Save & Next", type="primary")
@@ -468,6 +491,15 @@ def page_process_policies(api_key):
                     session = get_session(st.session_state.db_engine)
                     service = PolicyService(session)
                     try:
+                        # Check for duplicate before saving
+                        existing = service.check_duplicate(r_pol_num)
+                        if existing:
+                            b_col_warn.warning(
+                                f"⚡ **Duplicate Detected:** Policy `{r_pol_num}` already exists "
+                                f"(Insured: {existing.insured_name}, Carrier: {existing.carrier_name}). "
+                                f"Saving will **update** the existing record."
+                            )
+                        
                         # Construct flattened dictionary for factory
                         policy_payload = {
                             "carrier_name": r_carrier,

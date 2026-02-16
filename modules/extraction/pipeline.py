@@ -407,7 +407,8 @@ class GeminiExtractionPipeline:
                 vin=v.get('vin'),
                 extracted_type=v.get('type'),
                 extracted_chassis=v.get('chassis'),
-                extracted_body=v.get('body')
+                extracted_body=v.get('body'),
+                gvw=v.get('gvw')
             )
             v['type'] = refined['final_type']
             v['make'] = refined['make']
