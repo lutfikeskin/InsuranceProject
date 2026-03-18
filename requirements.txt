@@ -12,3 +12,4 @@ loguru
 pytest
 pytest-mock
 alembic
+pymupdf

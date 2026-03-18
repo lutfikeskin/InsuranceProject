@@ -36,23 +36,7 @@ DECLARATIONS_SCHEMA = {
         "business_name": {"type": "STRING"},
         "premium": {"type": "STRING"},
         "financial_responsibility_name": {"type": "STRING"},
-
-        "state": {"type": "STRING"},
-        "field_locations": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "field": {"type": "STRING"},
-                    "page_number": {"type": "INTEGER"},
-                    "bbox": {
-                        "type": "ARRAY", 
-                        "items": {"type": "INTEGER"},
-                        "description": "[ymin, xmin, ymax, xmax] in 0-1000 scale"
-                    }
-                }
-            }
-        }
+        "state": {"type": "STRING"}
     }
 }
 
@@ -95,13 +79,6 @@ COVERAGE_SCHEMA = {
                     "vehicle_vin": {
                         "type": "STRING",
                         "description": "If coverage applies to a specific vehicle/unit, provide the VIN here. Otherwise null."
-                    },
-                    "location": {
-                        "type": "OBJECT",
-                        "properties": {
-                            "page_number": {"type": "INTEGER"},
-                            "bbox": {"type": "ARRAY", "items": {"type": "INTEGER"}}
-                        }
                     }
                 }
             }

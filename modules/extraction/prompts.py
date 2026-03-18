@@ -1,10 +1,8 @@
-
 GLOBAL_EXTRACTION_PRINCIPLES = """
     GLOBAL EXTRACTION PRINCIPLES:
     - Extract from tables, key-value blocks, or prose.
-    - BE CONCISE: Only reason about high-ambiguity cases. 
-    - THINKING RULE: Keep internal chain-of-thought extremely short (under 50 tokens).
     - Output MUST be valid JSON.
+    - Return null for any field not explicitly visible on the page. Never infer or guess.
 """
 
 CLASSIFY_POLICY_PROMPT = GLOBAL_EXTRACTION_PRINCIPLES + """
@@ -50,50 +48,31 @@ CLASSIFY_POLICY_PROMPT = GLOBAL_EXTRACTION_PRINCIPLES + """
 def get_extract_all_prompt(registry_text):
     return GLOBAL_EXTRACTION_PRINCIPLES + f"""
     You are an expert insurance underwriter and data extraction specialist.
-    Your task is to CLASSIFY and EXTRACT the COMPLETE policy information from the provided document in a single pass.
+    Extract the COMPLETE policy information from the provided document in a single pass.
 
-    You must extract five main sections:
-    1. CLASSIFICATION: Determine the primary policy type (e.g., commercial_auto, personal_auto).
-    2. POLICY DECLARATIONS: General info like Carrier, Policy #, Dates, Insured Name/Address.
-    3. COVERAGES: Limits & Deductibles based on the provided registry.
-    4. VEHICLES: Full schedule of vehicles.
-    5. DRIVERS: Full schedule of drivers.
-
-    --- SECTION 1: CLASSIFICATION ---
+    --- CLASSIFICATION ---
     Choose ONE: personal_auto, commercial_auto, general_liability, bop, commercial_package, umbrella, motor_truck_cargo, unknown.
     - Base decision on explicit wording.
     - PACKAGE RULE: If 'commercial_package', confirm AT LEAST TWO of: General Liability, Property, or Auto.
+    - If Auto + Cargo only, classify as 'commercial_auto' (dominance rule).
 
-    --- SECTION 2: POLICY DECLARATIONS ---
-    - Distinguish between Carrier (Risk Bearer) and Agency (Broker).
-    - ACCURACY RULE: Only extract values you can literally see on the page. Never infer or guess.
-    - Fields: Carrier Name, Policy #, NAIC, Effective/Expiration Dates, Insured Name/Address/City/State/Zip, Business Name.
-    - Premium: Extract the GRAND TOTAL premium for the policy term.
+    --- POLICY DECLARATIONS ---
+    - Distinguish between Carrier (Risk Bearer) and Agency (Broker). Extract Carrier only.
+    - Fields: Carrier Name, NAIC, Policy #, Effective/Expiration Dates, Insured Name, Address, City, State, Zip, Business Name, Premium (GRAND TOTAL).
 
-    --- SECTION 3: VEHICLES ---
+    --- VEHICLES ---
     - Extract ALL vehicles (VIN, Year, Make, Model, GVW, Type).
-    - Look for explicit schedules OR vehicles mentioned in prose.
+    - Look for explicit schedules and vehicles mentioned in prose.
 
-    --- SECTION 4: DRIVERS ---
-    - Extract ALL drivers (Name, License #, Excluded Status).
+    --- DRIVERS ---
+    - Extract ALL drivers (Name, License #, Excluded status).
 
-    --- SECTION 5: COVERAGES ---
-    - Use the strict COVERAGE ONTOLOGY below.
-    - REGISTRY (MINIFIED):
-    {registry_text}
-    
-    - Map every coverage to a valid 'coverage_code'.
-    - Link coverages to 'vehicle_vin' if they apply to a specific unit.
+    --- COVERAGES ---
+    - Map every coverage to a valid coverage_code from the registry below.
+    - Link vehicle-specific coverages to vehicle_vin.
+    - For COMP and COLL, always extract the deductible amount — check schedules, tables, and endorsement pages.
+    - REGISTRY: {registry_text}
 
-    OUTPUT FORMAT:
-    Return a SINGLE JSON object matching exactly:
-    {{
-        "classification": {{ "policy_type": "...", "confidence": "...", "signals": [...] }},
-        "policy": {{ ...declarations_fields... }},
-        "coverages": [ ...list_of_coverages... ],
-        "vehicles": [ ...list_of_vehicles... ],
-        "drivers": [ ...list_of_drivers... ]
-    }}
-    
-    Verify that all JSON keys match the schema exactly.
+    OUTPUT: Return a single JSON object with exactly these top-level keys:
+    classification, policy, coverages, vehicles, drivers
     """

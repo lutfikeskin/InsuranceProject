@@ -701,3 +701,201 @@
 2026-02-16 10:13:02 | WARNING  | modules.extraction.pipeline:_create_cache:315 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=788, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
 2026-02-16 10:13:23 | INFO     | modules.extraction.pipeline:run:245 - Policy Classified: commercial_auto (high)
 2026-02-16 10:13:24 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f4bafa8e9f8482a15caf489b21a59288b802be0351e86acaf5156d3b1e719845
+2026-03-12 17:04:26 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-12 17:04:28 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/eulzfggxdwy7
+2026-03-12 17:04:28 | WARNING  | modules.extraction.pipeline:_create_cache:315 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=788, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-12 17:04:45 | INFO     | modules.extraction.pipeline:run:245 - Policy Classified: commercial_auto (high)
+2026-03-12 17:04:47 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_9aa8ce4268fff688c02e2d2feff3cbd3b7c0285748ca9e8fb8594fd95fce4af7
+2026-03-12 17:09:47 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-12 17:09:49 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/gm1s41t0zan1
+2026-03-12 17:09:49 | WARNING  | modules.extraction.pipeline:_create_cache:315 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=530, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-12 17:10:22 | INFO     | modules.extraction.pipeline:run:245 - Policy Classified: commercial_package (high)
+2026-03-12 17:10:24 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_6666cdf6cd37b72a38b359c2eef2c751aa3e9ab9a8d77d08c2232aff3ba7555a
+2026-03-12 17:25:20 | INFO     | modules.extraction.pipeline:get:139 - CACHE HIT: v11_turbo_6666cdf6cd37b72a38b359c2eef2c751aa3e9ab9a8d77d08c2232aff3ba7555a
+2026-03-12 18:03:25 | INFO     | modules.extraction.pipeline:get:139 - CACHE HIT: v11_turbo_6666cdf6cd37b72a38b359c2eef2c751aa3e9ab9a8d77d08c2232aff3ba7555a
+2026-03-15 00:03:35 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:03:37 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/0hs5kehcsfbx
+2026-03-15 00:03:39 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/h3x3toeu8rb6275joz6773dg4mgjl1j3wxr9b5kv (TTL: 300s)
+2026-03-15 00:03:52 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: personal_auto (high)
+2026-03-15 00:03:53 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-03-15 00:04:01 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_45fe714ecf17b106b4ce1cf9369e3d73d1812a1debe3df9a2740d6bdfb3470b2
+2026-03-15 00:04:01 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:04:03 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/vabzh3h7mm3a
+2026-03-15 00:04:04 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/ewi4ci8jksfwxmegwx196v7qfcxxuvh67rq6fqw3 (TTL: 300s)
+2026-03-15 00:04:17 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: personal_auto (high)
+2026-03-15 00:04:18 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-03-15 00:04:25 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_0d3a82865e6f522349091d47a8476d8ed62c0a42b6433ccb384d982192b3c8ce
+2026-03-15 00:04:25 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:04:27 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/v62c1p8jasnl
+2026-03-15 00:04:28 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=530, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 00:04:36 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_auto (high)
+2026-03-15 00:04:37 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_d648a7964d389d13e9f1707cd48c8d42d095de69849f1f2c375fefba7ab45cf7
+2026-03-15 00:04:37 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:04:39 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/xdrn7hhp79su
+2026-03-15 00:04:40 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=530, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 00:04:47 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: personal_auto (high)
+2026-03-15 00:04:48 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f6008231c2d6f97c3a6f769ad14bcf875f08db9111bd24cf2a8ef77cf7eb8e5a
+2026-03-15 00:04:48 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:04:50 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/jis4si2no0hq
+2026-03-15 00:04:51 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=788, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 00:05:00 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_auto (high)
+2026-03-15 00:05:01 | INFO     | modules.extraction.pipeline:_apply_auto_liability_rules:457 - Refactor: Pruning Split limits in favor of CSL.
+2026-03-15 00:05:02 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_5cc4c030e8c72d4338c303e91e343dffefd5666d35b4a625842e4dd6abfe5818
+2026-03-15 00:05:02 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:05:03 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/6uo1vfg4mdmp
+2026-03-15 00:05:05 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/vpq5lv9i1ww7j7n478h0b0xh3aiyabo7pfgvsc4a (TTL: 300s)
+2026-03-15 00:05:16 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: personal_auto (high)
+2026-03-15 00:05:17 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-03-15 00:05:21 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_afccefc7335d11122e3994134a62da1dadbf18ddc11c9fc953d12719c9a0283d
+2026-03-15 00:05:21 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:05:23 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/z2ly5nfhvq46
+2026-03-15 00:05:23 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 00:05:32 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_auto (high)
+2026-03-15 00:05:36 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-03-15 00:05:36 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:05:39 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/xajzadpia9zu
+2026-03-15 00:05:40 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/jat2k3mfb8zsrbl2odi3dlc4gdn3w5uksr99qqgp (TTL: 300s)
+2026-03-15 00:05:56 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_package (high)
+2026-03-15 00:05:57 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-03-15 00:06:01 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_42244ed5add16d05820198334e273e62115034f91b9a0ae51161977d6cde3f0b
+2026-03-15 00:06:01 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:06:03 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/jw2cz29l7xhi
+2026-03-15 00:06:04 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=788, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 00:06:11 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_auto (high)
+2026-03-15 00:06:13 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f4bafa8e9f8482a15caf489b21a59288b802be0351e86acaf5156d3b1e719845
+2026-03-15 00:06:13 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:06:15 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/xro5wn2i01d8
+2026-03-15 00:06:16 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 00:06:20 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_auto (high)
+2026-03-15 00:06:22 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_37abce84c308d9535bdba8da66aa213ba0c31292f743bf4d9b15fff866982c1f
+2026-03-15 00:44:17 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:44:19 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/4wyposmyt18h
+2026-03-15 00:44:20 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 00:44:24 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_auto (high)
+2026-03-15 00:44:27 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-03-15 00:44:27 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:44:29 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/cxyzkislcj59
+2026-03-15 00:44:31 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/zih9cctq59ext1z6hik3uh9niixjh9l5zbafo5w4 (TTL: 300s)
+2026-03-15 00:44:36 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_package (high)
+2026-03-15 00:44:37 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-03-15 00:44:38 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_42244ed5add16d05820198334e273e62115034f91b9a0ae51161977d6cde3f0b
+2026-03-15 00:44:38 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:44:40 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/0ueieh71og0x
+2026-03-15 00:44:41 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=788, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 00:44:45 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: motor_truck_cargo (high)
+2026-03-15 00:44:46 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f4bafa8e9f8482a15caf489b21a59288b802be0351e86acaf5156d3b1e719845
+2026-03-15 00:44:46 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:44:48 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/kc3il6z07muz
+2026-03-15 00:44:49 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 00:44:52 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_auto (high)
+2026-03-15 00:44:53 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_37abce84c308d9535bdba8da66aa213ba0c31292f743bf4d9b15fff866982c1f
+2026-03-15 00:44:53 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:44:55 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/eyfl0c12fu0a
+2026-03-15 00:44:57 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/qohi7u4gu2ker1amoxz13p1r5qwdq3bilyphuuus (TTL: 300s)
+2026-03-15 00:45:06 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: personal_auto (high)
+2026-03-15 00:45:07 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-03-15 00:45:09 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_45fe714ecf17b106b4ce1cf9369e3d73d1812a1debe3df9a2740d6bdfb3470b2
+2026-03-15 00:45:09 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:45:11 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/wqd4gt3pj57o
+2026-03-15 00:45:12 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/xdruis9cxrro0sbjn4u7hj5ynpeyjmyjv5wf45mf (TTL: 300s)
+2026-03-15 00:45:16 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: personal_auto (high)
+2026-03-15 00:45:17 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-03-15 00:45:19 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_0d3a82865e6f522349091d47a8476d8ed62c0a42b6433ccb384d982192b3c8ce
+2026-03-15 00:45:19 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:45:22 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/kqu7myuq2q03
+2026-03-15 00:45:23 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=530, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 00:45:28 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_auto (high)
+2026-03-15 00:45:30 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_d648a7964d389d13e9f1707cd48c8d42d095de69849f1f2c375fefba7ab45cf7
+2026-03-15 00:45:30 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:45:32 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/jmdju90hlbkm
+2026-03-15 00:45:32 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=530, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 00:45:38 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: personal_auto (high)
+2026-03-15 00:45:40 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f6008231c2d6f97c3a6f769ad14bcf875f08db9111bd24cf2a8ef77cf7eb8e5a
+2026-03-15 00:45:40 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:45:42 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/t2da6k7vcior
+2026-03-15 00:45:42 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=788, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 00:45:48 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_auto (high)
+2026-03-15 00:45:50 | INFO     | modules.extraction.pipeline:_apply_auto_liability_rules:457 - Refactor: Pruning Split limits in favor of CSL.
+2026-03-15 00:45:50 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_5cc4c030e8c72d4338c303e91e343dffefd5666d35b4a625842e4dd6abfe5818
+2026-03-15 00:45:50 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:45:51 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/sv8co4gms831
+2026-03-15 00:45:53 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/9ze42hbpqhzmnv3oj8efb69oa0x3fmmrmn6b5a1g (TTL: 300s)
+2026-03-15 00:46:02 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: personal_auto (high)
+2026-03-15 00:46:03 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-03-15 00:46:05 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_afccefc7335d11122e3994134a62da1dadbf18ddc11c9fc953d12719c9a0283d
+2026-03-15 00:55:44 | INFO     | modules.extraction.pipeline:get:139 - CACHE HIT: v11_turbo_0d3a82865e6f522349091d47a8476d8ed62c0a42b6433ccb384d982192b3c8ce
+2026-03-15 00:56:47 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:56:49 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/kn2guz2gvkzv
+2026-03-15 00:56:51 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/tadfgfry43z1xtu2t7d91wt0x9mcgdde4y3n66ck (TTL: 300s)
+2026-03-15 00:56:57 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: personal_auto (high)
+2026-03-15 00:56:57 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-03-15 00:56:59 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_0d3a82865e6f522349091d47a8476d8ed62c0a42b6433ccb384d982192b3c8ce
+2026-03-15 00:57:00 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:57:02 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/q0y9uxe1g0e8
+2026-03-15 00:57:02 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=788, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 00:57:07 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: motor_truck_cargo (high)
+2026-03-15 00:57:09 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f4bafa8e9f8482a15caf489b21a59288b802be0351e86acaf5156d3b1e719845
+2026-03-15 00:57:09 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:57:11 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/p85akixr5qeq
+2026-03-15 00:57:13 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/btm3ka4w73i7hk1abr4lumescqgv77mc4iwcngjs (TTL: 300s)
+2026-03-15 00:57:21 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: personal_auto (high)
+2026-03-15 00:57:22 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-03-15 00:57:25 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_45fe714ecf17b106b4ce1cf9369e3d73d1812a1debe3df9a2740d6bdfb3470b2
+2026-03-15 00:59:06 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 00:59:08 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/mk90nbecxnit
+2026-03-15 00:59:09 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=530, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 00:59:15 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_auto (high)
+2026-03-15 00:59:16 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_d648a7964d389d13e9f1707cd48c8d42d095de69849f1f2c375fefba7ab45cf7
+2026-03-15 01:13:46 | INFO     | modules.extraction.pipeline:get:139 - CACHE HIT: v11_turbo_d648a7964d389d13e9f1707cd48c8d42d095de69849f1f2c375fefba7ab45cf7
+2026-03-15 01:13:46 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 01:13:48 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/gayn3ilmgy6n
+2026-03-15 01:13:50 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/8vwdzibptf40dtitv4l417cm04xd7ujxi7anzly9 (TTL: 300s)
+2026-03-15 01:13:59 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: personal_auto (high)
+2026-03-15 01:14:00 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-03-15 01:14:03 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_45fe714ecf17b106b4ce1cf9369e3d73d1812a1debe3df9a2740d6bdfb3470b2
+2026-03-15 01:14:21 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 01:14:23 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/kc3asg8skr7e
+2026-03-15 01:14:23 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=530, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 01:14:29 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_auto (high)
+2026-03-15 01:14:30 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_d648a7964d389d13e9f1707cd48c8d42d095de69849f1f2c375fefba7ab45cf7
+2026-03-15 01:14:30 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 01:14:33 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/h6qdmvjq6ney
+2026-03-15 01:14:35 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/qtgodszlggxzj75wpph4tah66918nprgsyvqor5b (TTL: 300s)
+2026-03-15 01:14:43 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: personal_auto (high)
+2026-03-15 01:14:44 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-03-15 01:14:48 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_45fe714ecf17b106b4ce1cf9369e3d73d1812a1debe3df9a2740d6bdfb3470b2
+2026-03-15 01:15:30 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 01:15:32 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/n3x32zw1st32
+2026-03-15 01:15:34 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/pxce5zjuhvouxtaoz4edvylbt5p7mucpk1m9dxie (TTL: 300s)
+2026-03-15 01:15:40 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: personal_auto (high)
+2026-03-15 01:15:40 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-03-15 01:15:42 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_afccefc7335d11122e3994134a62da1dadbf18ddc11c9fc953d12719c9a0283d
+2026-03-15 01:15:42 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 01:15:44 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/5vq7ou6bfsjb
+2026-03-15 01:15:45 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 01:15:49 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_auto (high)
+2026-03-15 01:15:53 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_37abce84c308d9535bdba8da66aa213ba0c31292f743bf4d9b15fff866982c1f
+2026-03-15 01:15:53 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 01:15:55 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/ozzq4w4xtzs0
+2026-03-15 01:15:57 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/mytraiswuvu24q3x688cgamln15kbmo2rdc4blos (TTL: 300s)
+2026-03-15 01:16:02 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: personal_auto (high)
+2026-03-15 01:16:03 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-03-15 01:16:08 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_0d3a82865e6f522349091d47a8476d8ed62c0a42b6433ccb384d982192b3c8ce
+2026-03-15 01:18:19 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 01:18:22 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/bzypw7cuk5yz
+2026-03-15 01:18:24 | INFO     | modules.extraction.pipeline:_create_cache:313 - CACHE CREATED: cachedContents/jpkyt876m7748k3dmuql27bdh6ru0qmrytzmcl6f (TTL: 300s)
+2026-03-15 01:18:29 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_auto (high)
+2026-03-15 01:18:29 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 01:18:30 | DEBUG    | modules.extraction.pipeline:run:259 - Deleted Cache context.
+2026-03-15 01:18:31 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/i52ug77tw2je
+2026-03-15 01:18:31 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_42244ed5add16d05820198334e273e62115034f91b9a0ae51161977d6cde3f0b
+2026-03-15 01:18:32 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 01:18:36 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_auto (high)
+2026-03-15 01:18:38 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-03-15 11:30:51 | INFO     | modules.extraction.pipeline:get:139 - CACHE HIT: v11_turbo_37abce84c308d9535bdba8da66aa213ba0c31292f743bf4d9b15fff866982c1f
+2026-03-15 11:31:05 | INFO     | modules.extraction.pipeline:get:139 - CACHE HIT: v11_turbo_42244ed5add16d05820198334e273e62115034f91b9a0ae51161977d6cde3f0b
+2026-03-15 11:31:05 | INFO     | modules.extraction.pipeline:run:189 - Uploading to Gemini File API...
+2026-03-15 11:31:08 | INFO     | modules.extraction.pipeline:run:193 - File uploaded: files/f6tl9qqkadpr
+2026-03-15 11:31:09 | WARNING  | modules.extraction.pipeline:_create_cache:316 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=788, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-03-15 11:31:16 | INFO     | modules.extraction.pipeline:run:246 - Policy Classified: commercial_auto (high)
+2026-03-15 11:31:18 | DEBUG    | modules.extraction.pipeline:save:151 - CACHE SAVED: v11_turbo_f4bafa8e9f8482a15caf489b21a59288b802be0351e86acaf5156d3b1e719845

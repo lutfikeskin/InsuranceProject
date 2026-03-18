@@ -514,7 +514,10 @@ class PolicyService:
             # 2. Generate SQL
             response = client.models.generate_content(
                 model='gemini-2.5-flash', 
-                contents=f"{schema_context}\n\nUser Question: {user_query}\nSQL:"
+                contents=f"{schema_context}\n\nUser Question: {user_query}\nSQL:",
+                config=types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(thinking_budget=0)
+                )
             )
             generated_sql = response.text.strip()
             

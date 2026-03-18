@@ -95,16 +95,12 @@ class COIGenerator:
                 "F[0].P1[0].Form_CompletionDate_A[0]": datetime.now().strftime("%m/%d/%Y")
             }
             
-            # Add "A" only if coverage exists
-            if has_gl:
-                fields["F[0].P1[0].GeneralLiability_InsurerLetterCode_A[0]"] = "A"
-            if has_auto:
-                fields["F[0].P1[0].Vehicle_InsurerLetterCode_A[0]"] = "A"
+            # Add "A" only if coverage exists, otherwise set to empty string to ensure it's cleared
+            fields["F[0].P1[0].GeneralLiability_InsurerLetterCode_A[0]"] = "A" if has_gl else ""
+            fields["F[0].P1[0].Vehicle_InsurerLetterCode_A[0]"] = "A" if has_auto else ""
             
-            # Cargo usually falls under "Other", so we set that if cargo exists
-            if has_cargo:
-                fields["F[0].P1[0].OtherPolicy_InsurerLetterCode_A[0]"] = "A"
-                # fields["F[0].P1[0].OtherPolicy_CoverageCode_A[0]"] = "X" # REMOVED per user request
+            # Cargo usually falls under "Other"
+            fields["F[0].P1[0].OtherPolicy_InsurerLetterCode_A[0]"] = "A" if has_cargo else ""
             
             # 2. Dynamic Mapping
             # (Key in JSON) -> (Value from Data)
@@ -159,7 +155,27 @@ class COIGenerator:
 
             output_buffer = io.BytesIO()
             writer.write(output_buffer)
-            return output_buffer.getvalue()
+            filled_pdf_bytes = output_buffer.getvalue()
+            
+            # 3. Flatten (Bake) the PDF using PyMuPDF (fitz)
+            try:
+                import fitz
+                doc = fitz.open("pdf", filled_pdf_bytes)
+                # doc.bake() flattens all form fields and annotations across the document
+                doc.bake()
+                
+                # Save to a new buffer
+                flattened_buffer = io.BytesIO()
+                doc.save(flattened_buffer)
+                doc.close()
+                return flattened_buffer.getvalue()
+            except ImportError:
+                print("Warning: PyMuPDF (fitz) not found. PDF will not be flattened/baked.")
+                return filled_pdf_bytes
+            except Exception as e:
+                print(f"Error flattening PDF: {e}")
+                # Fallback to filled but not flattened PDF if flattening fails
+                return filled_pdf_bytes
 
         except Exception as e:
             # Re-raise to let the UI handle it or log it

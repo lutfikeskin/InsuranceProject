@@ -1,0 +1,211 @@
+{
+  "policy": {
+    "carrier_name": "State Farm Mutual Automobile Insurance Company",
+    "naic_number": "009501",
+    "policy_number": "483 3497-E30-53F",
+    "effective_date": "AUG 23 2024",
+    "expiration_date": "NOV 30 2024",
+    "account_type": "unknown",
+    "insured_name": "ORABILE, CHIEDOZIE",
+    "insured_address": "2326 RAIDER DR",
+    "insured_city": "CONROE",
+    "insured_state_code": "TX",
+    "insured_zip": "77301-2690",
+    "business_name": "null",
+    "premium": "1208.01",
+    "financial_responsibility_name": "null",
+    "state": "TX",
+    "liability_limit": "50/100/50",
+    "um_uim_limit": "UMOnly: 30/60",
+    "med_pay_limit": null,
+    "pip_limit": "2,500",
+    "comp_deductible": "500",
+    "coll_deductible": "500",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_BI",
+      "display_name": "Bodily Injury Limits",
+      "family": "auto_liability",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 50000,
+        "per_accident": 100000,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "4T1M11AK3LU507875"
+    },
+    {
+      "coverage_code": "AUTO_LIAB_PD",
+      "display_name": "Property Damage Limit",
+      "family": "auto_liability",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_person": null,
+        "per_accident": null,
+        "per_occurrence": 50000,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "4T1M11AK3LU507875"
+    },
+    {
+      "coverage_code": "PIP",
+      "display_name": "Personal Injury Protection Coverage",
+      "family": "pip",
+      "limit_structure": "csl",
+      "limits": {
+        "per_person": 2500,
+        "per_accident": null,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "4T1M11AK3LU507875"
+    },
+    {
+      "coverage_code": "COMP",
+      "display_name": "Comprehensive Coverage",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "limits": {
+        "per_person": null,
+        "per_accident": null,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": 500,
+      "vehicle_vin": "4T1M11AK3LU507875"
+    },
+    {
+      "coverage_code": "COLL",
+      "display_name": "Collision Coverage",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "limits": {
+        "per_person": null,
+        "per_accident": null,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": 500,
+      "vehicle_vin": "4T1M11AK3LU507875"
+    },
+    {
+      "coverage_code": "TOWING",
+      "display_name": "Emergency Road Service Coverage",
+      "family": "physical_damage",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_person": null,
+        "per_accident": null,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "4T1M11AK3LU507875"
+    },
+    {
+      "coverage_code": "RENTAL",
+      "display_name": "Car Rental and Travel Expenses Coverage",
+      "family": "physical_damage",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_person": null,
+        "per_accident": null,
+        "per_occurrence": 50,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "4T1M11AK3LU507875"
+    },
+    {
+      "coverage_code": "UM_BI",
+      "display_name": "Uninsured/Underinsured Motorists Coverage Bodily Injury Limits",
+      "family": "uninsured_motorist",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 30000,
+        "per_accident": 60000,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "4T1M11AK3LU507875"
+    },
+    {
+      "coverage_code": "UM_PD",
+      "display_name": "Uninsured/Underinsured Motorists Coverage Property Damage Limit",
+      "family": "uninsured_motorist",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_person": null,
+        "per_accident": null,
+        "per_occurrence": 25000,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "4T1M11AK3LU507875"
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2020,
+      "make": "TOYOTA",
+      "model": "CAMRY",
+      "vin": "4T1M11AK3LU507875",
+      "gvw": 0,
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": "4DR"
+    }
+  ],
+  "drivers": [],
+  "classification": {
+    "policy_type": "personal_auto",
+    "confidence": "high",
+    "signals": [
+      "personal_auto"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 648.0,
+      "height": 1008.0
+    },
+    {
+      "width": 648.0,
+      "height": 1008.0
+    },
+    {
+      "width": 648.0,
+      "height": 1008.0
+    },
+    {
+      "width": 648.0,
+      "height": 1008.0
+    },
+    {
+      "width": 1008.0,
+      "height": 648.0
+    },
+    {
+      "width": 1008.0,
+      "height": 648.0
+    }
+  ]
+}

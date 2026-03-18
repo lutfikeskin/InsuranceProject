@@ -1,0 +1,77 @@
+{
+  "policy": {
+    "carrier_name": "GEICO Marine Insurance Company",
+    "naic_number": "37923",
+    "policy_number": "9300089751",
+    "effective_date": "11/26/2025",
+    "expiration_date": "11/26/2026",
+    "insured_name": "ABC EXPRESS LLC",
+    "insured_address": "673 CUPPS BRIDGE RD",
+    "insured_city": "FRANKFORT",
+    "insured_state_code": "OH",
+    "insured_zip": "45628",
+    "business_name": "ABC EXPRESS LLC",
+    "liability_limit": "1,000,000 CSL",
+    "cargo_limit": "$100,000",
+    "cargo_deductible": "1000",
+    "um_uim_limit": null,
+    "med_pay_limit": null,
+    "pip_limit": null,
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": false
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "display_name": "COMBINED SINGLE LIMIT",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      }
+    },
+    {
+      "coverage_code": "CARGO_LEGAL_LIAB",
+      "display_name": "Motor Truck Cargo",
+      "family": "cargo",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 100000
+      },
+      "deductible": 1000
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2009,
+      "make": "CHEVROLET",
+      "model": "EXPRESS",
+      "vin": "1GBHG31KX91155554",
+      "type": "Cargo Van",
+      "chassis": "Cargo Van",
+      "body": null
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "DMITRIY PAVLOV",
+      "is_excluded": false
+    }
+  ],
+  "classification": {
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "commercial_auto",
+      "motor_truck_cargo",
+      "general_liability"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}

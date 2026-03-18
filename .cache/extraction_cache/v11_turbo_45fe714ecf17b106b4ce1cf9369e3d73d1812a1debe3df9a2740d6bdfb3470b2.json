@@ -1,0 +1,315 @@
+{
+  "policy": {
+    "carrier_name": "Allstate North American Insurance Company",
+    "naic_number": "null",
+    "policy_number": "974 544 835",
+    "effective_date": "October 9, 2025",
+    "expiration_date": "April 9, 2026",
+    "account_type": "null",
+    "insured_name": "ILIER GONZALEZ GUTIERREZ and KIRENIA I MARQUEZ",
+    "insured_address": "17311 CUTHBERT ST",
+    "insured_city": "HUMBLE",
+    "insured_state_code": "TX",
+    "insured_zip": "77346-4857",
+    "business_name": "null",
+    "premium": "3017.65",
+    "financial_responsibility_name": "null",
+    "state": "TX",
+    "liability_limit": "30/60/50",
+    "um_uim_limit": "UMOnly: 30/60",
+    "med_pay_limit": null,
+    "pip_limit": null,
+    "comp_deductible": "500",
+    "coll_deductible": "500",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_BI",
+      "display_name": "Liability Insurance - Bodily Injury",
+      "family": "auto_liability",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 30000,
+        "per_accident": 60000,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "1FMNU40P65EC25074"
+    },
+    {
+      "coverage_code": "AUTO_LIAB_PD",
+      "display_name": "Liability Insurance - Property Damage",
+      "family": "auto_liability",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_person": null,
+        "per_accident": null,
+        "per_occurrence": 50000,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "1FMNU40P65EC25074"
+    },
+    {
+      "coverage_code": "UM_BI",
+      "display_name": "Uninsured Motorists Insurance - Bodily Injury",
+      "family": "uninsured_motorist",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 30000,
+        "per_accident": 60000,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "1FMNU40P65EC25074"
+    },
+    {
+      "coverage_code": "AUTO_LIAB_BI",
+      "display_name": "Liability Insurance - Bodily Injury",
+      "family": "auto_liability",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 30000,
+        "per_accident": 60000,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "5NMP14GL1SH116815"
+    },
+    {
+      "coverage_code": "AUTO_LIAB_PD",
+      "display_name": "Liability Insurance - Property Damage",
+      "family": "auto_liability",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_person": null,
+        "per_accident": null,
+        "per_occurrence": 50000,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "5NMP14GL1SH116815"
+    },
+    {
+      "coverage_code": "COLL",
+      "display_name": "Collision Insurance",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "limits": {
+        "per_person": null,
+        "per_accident": null,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": 500,
+      "vehicle_vin": "5NMP14GL1SH116815"
+    },
+    {
+      "coverage_code": "COMP",
+      "display_name": "Comprehensive Insurance",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "limits": {
+        "per_person": null,
+        "per_accident": null,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": 500,
+      "vehicle_vin": "5NMP14GL1SH116815"
+    },
+    {
+      "coverage_code": "RENTAL",
+      "display_name": "Transportation Expense",
+      "family": "physical_damage",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_person": null,
+        "per_accident": null,
+        "per_occurrence": 200,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "5NMP14GL1SH116815"
+    },
+    {
+      "coverage_code": "UM_BI",
+      "display_name": "Uninsured Motorists Insurance - Bodily Injury",
+      "family": "uninsured_motorist",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 30000,
+        "per_accident": 60000,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "5NMP14GL1SH116815"
+    },
+    {
+      "coverage_code": "AUTO_LIAB_BI",
+      "display_name": "Liability Insurance - Bodily Injury",
+      "family": "auto_liability",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 30000,
+        "per_accident": 60000,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "1GTG5DE30G1207387"
+    },
+    {
+      "coverage_code": "AUTO_LIAB_PD",
+      "display_name": "Liability Insurance - Property Damage",
+      "family": "auto_liability",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_person": null,
+        "per_accident": null,
+        "per_occurrence": 50000,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "1GTG5DE30G1207387"
+    },
+    {
+      "coverage_code": "COLL",
+      "display_name": "Collision Insurance",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "limits": {
+        "per_person": null,
+        "per_accident": null,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": 500,
+      "vehicle_vin": "1GTG5DE30G1207387"
+    },
+    {
+      "coverage_code": "COMP",
+      "display_name": "Comprehensive Insurance",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "limits": {
+        "per_person": null,
+        "per_accident": null,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": 500,
+      "vehicle_vin": "1GTG5DE30G1207387"
+    },
+    {
+      "coverage_code": "UM_BI",
+      "display_name": "Uninsured Motorists Insurance - Bodily Injury",
+      "family": "uninsured_motorist",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 30000,
+        "per_accident": 60000,
+        "per_occurrence": null,
+        "combined_single_limit": null,
+        "aggregate": null
+      },
+      "deductible": null,
+      "vehicle_vin": "1GTG5DE30G1207387"
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2005,
+      "make": "FORD",
+      "model": "EXCURSION",
+      "vin": "1FMNU40P65EC25074",
+      "gvw": 0,
+      "type": "Trailer",
+      "chassis": "Trailer",
+      "body": "null"
+    },
+    {
+      "year": 2025,
+      "make": "HYUNDAI",
+      "model": "SANTA FE",
+      "vin": "5NMP14GL1SH116815",
+      "gvw": 0,
+      "type": "Trailer",
+      "chassis": "Trailer",
+      "body": "null"
+    },
+    {
+      "year": 2016,
+      "make": "GMC",
+      "model": "CANYON",
+      "vin": "1GTG5DE30G1207387",
+      "gvw": 0,
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": "null"
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "ILIER GONZALEZ GUTIERREZ",
+      "license_number": "null",
+      "is_excluded": false
+    },
+    {
+      "full_name": "KIRENIA I MARQUEZ",
+      "license_number": "null",
+      "is_excluded": false
+    }
+  ],
+  "classification": {
+    "policy_type": "personal_auto",
+    "confidence": "high",
+    "signals": []
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}

@@ -215,7 +215,8 @@ class GeminiExtractionPipeline:
             # --- SINGLE MEGA-CALL ---
             config = types.GenerateContentConfig(
                 response_mime_type="application/json",
-                response_schema=COMPLETE_POLICY_SCHEMA
+                response_schema=COMPLETE_POLICY_SCHEMA,
+                thinking_config=types.ThinkingConfig(thinking_budget=0)
             )
             
             # If using cache, we pass the cache name in the config
@@ -347,7 +348,8 @@ class GeminiExtractionPipeline:
             contents=[uploaded_file, CLASSIFY_POLICY_PROMPT],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                response_schema=CLASSIFICATION_SCHEMA
+                response_schema=CLASSIFICATION_SCHEMA,
+                thinking_config=types.ThinkingConfig(thinking_budget=0)
             ),
             request_type="classification"
         )
@@ -385,6 +387,27 @@ class GeminiExtractionPipeline:
 
     # --- NORMALIZATION ---
 
+    def _clean_coverage_zeros(self, coverages: list) -> list:
+        """
+        Gemini's structured output fills missing INTEGER fields with 0 instead of null.
+        Since $0 limits and $0 deductibles don't exist in real insurance documents,
+        we safely convert them to None so downstream logic (summaries, validation) works correctly.
+        """
+        LIMIT_KEYS = {"per_person", "per_accident", "per_occurrence", "combined_single_limit", "aggregate"}
+        for c in coverages:
+            # Clean limits sub-object
+            if isinstance(c.get("limits"), dict):
+                for k in LIMIT_KEYS:
+                    if c["limits"].get(k) == 0:
+                        c["limits"][k] = None
+            # Clean deductible
+            if c.get("deductible") == 0:
+                c["deductible"] = None
+            # Clean string "null" values the model sometimes emits
+            if c.get("vehicle_vin") in ("null", ""):
+                c["vehicle_vin"] = None
+        return coverages
+
     def _assemble_result(self, ctx: ExtractionContext, processor: PdfProcessor) -> dict:
         
         # 1. Base Policy Data
@@ -417,8 +440,12 @@ class GeminiExtractionPipeline:
             v['body'] = refined.get('body') or v.get('body')
             final["vehicles"].append(v)
         
-        # 2. Validate Coverages
-        raw_covs = ctx.extracted_data.get("coverages", {}).get("coverages", [])
+        # 2. Clean zero-fills from structured output schema enforcement
+        raw_covs = self._clean_coverage_zeros(
+            ctx.extracted_data.get("coverages", {}).get("coverages", [])
+        )
+
+        # 3. Validate Coverages
         for c in raw_covs:
             code = c.get("coverage_code")
             if not code:

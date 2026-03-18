@@ -1,0 +1,409 @@
+{
+  "policy": {
+    "carrier_name": "Circle Star Insurance Company, a RRG",
+    "naic_number": "null",
+    "policy_number": "AL314549-40144",
+    "effective_date": "10/16/2025",
+    "expiration_date": "10/16/2026",
+    "account_type": "Limited Liability Company",
+    "insured_name": "NOUNOU TRANSPORTATION LLC",
+    "insured_address": "6156 N SAM HOUSTON PKWY W",
+    "insured_city": "HOUSTON",
+    "insured_state_code": "TX",
+    "insured_zip": "77066",
+    "business_name": "NOUNOU TRANSPORTATION LLC",
+    "premium": "20107.00",
+    "financial_responsibility_name": "NOUNOU TRANSPORTATION LLC",
+    "state": "TX",
+    "liability_limit": "1,000,000 CSL",
+    "cargo_limit": "$50,000",
+    "cargo_deductible": "2500",
+    "um_uim_limit": null,
+    "med_pay_limit": null,
+    "pip_limit": null,
+    "comp_deductible": "2500",
+    "coll_deductible": "2500",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true
+  },
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "display_name": "Motor Carrier Coverage/Commercial Auto",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "deductible": null,
+      "vehicle_vin": null
+    },
+    {
+      "coverage_code": "CARGO_LEGAL_LIAB",
+      "display_name": "Trailer Interchange Coverage",
+      "family": "cargo",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 50000
+      },
+      "deductible": 2500,
+      "vehicle_vin": null
+    },
+    {
+      "coverage_code": "COMP",
+      "display_name": "Trailer Interchange Comprehensive Coverage",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "limits": {},
+      "deductible": 2500,
+      "vehicle_vin": null
+    },
+    {
+      "coverage_code": "COLL",
+      "display_name": "Trailer Interchange Collision Coverage",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "limits": {},
+      "deductible": 2500,
+      "vehicle_vin": null
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2020,
+      "make": "KENWORTH",
+      "model": "T680",
+      "vin": "1XKYDP9X0LJ400899",
+      "gvw": 33000,
+      "type": "Tractor",
+      "chassis": "Tractor",
+      "body": "Tractor"
+    }
+  ],
+  "drivers": [],
+  "classification": {
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "commercial_auto",
+      "motor_carrier_declarations",
+      "motor_carrier_coverage_form",
+      "commercial_general_liability_coverage_form"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    },
+    {
+      "width": 595.0,
+      "height": 842.0
+    }
+  ]
+}
