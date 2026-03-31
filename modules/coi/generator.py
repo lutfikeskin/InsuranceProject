@@ -1,4 +1,5 @@
 import io
+import textwrap
 import pypdf
 from datetime import datetime, date
 
@@ -6,7 +7,7 @@ class COIGenerator:
     def __init__(self, template_path="data/COI Example.pdf"):
         self.template_path = template_path
 
-    def generate_coi(self, policy_data, holder_data):
+    def generate_coi(self, policy_data, holder_data, desc_font_size=8):
         """
         Fills the COI PDF template with policy and certificate holder data.
         """
@@ -83,8 +84,12 @@ class COIGenerator:
             
             if holder_data.get('description'):
                 desc_lines.append(holder_data.get('description'))
-                
-            full_description = "\n".join(desc_lines)
+
+            # Preserve natural section breaks only; let the PDF field auto-wrap within its bounds
+            wrapped_lines = []
+            for line in desc_lines:
+                wrapped_lines.extend(line.splitlines() or [line])
+            full_description = "\n".join(wrapped_lines)
 
             # Prepare the data dictionary
             # We construct the fields dict by looking up the PDF field name in our map
@@ -118,6 +123,11 @@ class COIGenerator:
                 "EffectiveDate_GL": fmt_date(policy_data.get('effective_date')) if has_gl else "",
                 "ExpirationDate_GL": fmt_date(policy_data.get('expiration_date')) if has_gl else "",
                 "Limit_GL_Occurrence": clean_limit(policy_data.get('liability_limit', '')) if has_gl else "",
+                "Limit_GL_FireDamage": "$100,000" if has_gl else "",
+                "Limit_GL_MedExp": "$5,000" if has_gl else "",
+                "Limit_GL_PersonalAdv": clean_limit(policy_data.get('liability_limit', '')) if has_gl else "",
+                "Limit_GL_GeneralAggregate": clean_limit(policy_data.get('liability_limit', '')) if has_gl else "",
+                "Limit_GL_ProductsAgg": clean_limit(policy_data.get('liability_limit', '')) if has_gl else "",
                 
                 "PolicyNumber_Auto": policy_data.get('policy_number', '') if has_auto else "",
                 "EffectiveDate_Auto": fmt_date(policy_data.get('effective_date')) if has_auto else "",
@@ -161,6 +171,18 @@ class COIGenerator:
             try:
                 import fitz
                 doc = fitz.open("pdf", filled_pdf_bytes)
+
+                # Set font size on the description widget before baking
+                desc_field_key = field_map.get("Holder_Description", "")
+                for page in doc:
+                    for widget in page.widgets():
+                        wname = widget.field_name or ""
+                        # PyMuPDF may return full path or just terminal segment
+                        if wname == desc_field_key or desc_field_key.endswith(wname) or wname.endswith(desc_field_key):
+                            widget.text_fontsize = desc_font_size
+                            widget.update()
+                            break
+
                 # doc.bake() flattens all form fields and annotations across the document
                 doc.bake()
                 

@@ -78,6 +78,7 @@ def page_create_coi():
                         st.session_state["h_desc_val"] = default_desc
                     
                     h_desc = st.text_area("Operations Description", value=default_desc, height=150)
+                    h_desc_font_size = st.slider("Description Font Size (pt)", min_value=4, max_value=12, value=8, key="single_desc_font")
             else:
                 # BULK MODE
                 selected_companies = st.multiselect("Select Companies", options=company_options)
@@ -88,7 +89,8 @@ def page_create_coi():
                 desc_lines.append("Certificate Holder is also listed as an additional insured")
                 default_desc = "\n".join(desc_lines)
                 h_desc = st.text_area("Operations Description (applied to all)", value=default_desc, height=150)
-                
+                h_desc_font_size = st.slider("Description Font Size (pt)", min_value=4, max_value=12, value=8, key="bulk_desc_font")
+
                 if selected_companies:
                     st.info(f"Selected {len(selected_companies)} companies for bulk generation.")
                 
@@ -151,7 +153,7 @@ def page_create_coi():
                         h_data = {"name": h_name, "address": h_addr, "city": h_city, "state": h_state, "zip": h_zip, "description": h_desc}
                         
                         try:
-                            pdf = gen.generate_coi(p_data, h_data)
+                            pdf = gen.generate_coi(p_data, h_data, desc_font_size=h_desc_font_size)
                             if pdf:
                                 st.success("Successfully generated COI!")
                                 st.download_button("📥 Download COI PDF", data=pdf, file_name=f"COI_{p.policy_number}.pdf", mime="application/pdf")
@@ -178,7 +180,7 @@ def page_create_coi():
                                         "zip": comp_data.get("zip", ""),
                                         "description": h_desc
                                     }
-                                    pdf = gen.generate_coi(p_data, h_data)
+                                    pdf = gen.generate_coi(p_data, h_data, desc_font_size=h_desc_font_size)
                                     if pdf:
                                         # Sanitize filename
                                         safe_name = "".join([c for c in comp_name if c.isalnum() or c in (' ', '_')]).strip()

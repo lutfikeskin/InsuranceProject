@@ -1,0 +1,263 @@
+{
+  "policy": {
+    "carrier_name": "GEICO Marine Insurance Company",
+    "naic_number": "37923",
+    "policy_number": "9300100869",
+    "effective_date": "01/06/2026",
+    "expiration_date": "01/06/2027",
+    "insured_name": "KIMPHO INC",
+    "insured_address": "820 SHERMER RD",
+    "insured_city": "GLENVIEW",
+    "insured_state_code": "IL",
+    "insured_zip": "60025",
+    "business_name": "KIMPHO INC",
+    "liability_limit": "1,000,000 CSL",
+    "cargo_limit": "$100,000",
+    "cargo_deductible": "1000",
+    "um_uim_limit": null,
+    "med_pay_limit": "5,000",
+    "pip_limit": null,
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": false
+  },
+  "coverages": [
+    {
+      "coverage_code": "MED_PAY",
+      "display_name": "MED EXP (Any one person)",
+      "family": "medical_payments",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 5000
+      }
+    },
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "display_name": "COMBINED SINGLE LIMIT (Ea accident)",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      }
+    },
+    {
+      "coverage_code": "CARGO_LEGAL_LIAB",
+      "display_name": "Motor Truck Cargo",
+      "family": "cargo",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 100000
+      },
+      "deductible": 1000
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2022,
+      "make": "FORD",
+      "model": "TRANSIT",
+      "vin": "1FDBF6P86NKA63293",
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": null
+    },
+    {
+      "year": 2022,
+      "make": "FORD",
+      "model": "TRANSIT",
+      "vin": "1FDBR5ZG0NKA85487",
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": null
+    },
+    {
+      "year": 2016,
+      "make": "FORD",
+      "model": "TRANSIT",
+      "vin": "1FDDF9PM5GKA87935",
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": null
+    },
+    {
+      "year": 2019,
+      "make": "GMC",
+      "model": "SAVANA",
+      "vin": "7GZ07SFG2KN000117",
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": null
+    },
+    {
+      "year": 2022,
+      "make": "RAM",
+      "model": "PROMASTER 3500",
+      "vin": "3C7WRVLG6NE138164",
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": null
+    },
+    {
+      "year": 2025,
+      "make": "FREIGHTLINER",
+      "model": "M2",
+      "vin": "3ALACWFC1SDWD0538",
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": null
+    },
+    {
+      "year": 2021,
+      "make": "RAM",
+      "model": "PROMASTER 3500",
+      "vin": "3C7WRVMG3ME552130",
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": null
+    },
+    {
+      "year": 2017,
+      "make": "FORD",
+      "model": "TRANSIT",
+      "vin": "1FDBF9ZM6HKB18843",
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": null
+    },
+    {
+      "year": 2021,
+      "make": "RAM",
+      "model": "2500",
+      "vin": "3C6UR5CL6MG659378",
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": null
+    },
+    {
+      "year": 2015,
+      "make": "FREIGHTLINER",
+      "model": "M2",
+      "vin": "3ALACWDT7FDGT3539",
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": null
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "ARKADIY KIM",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Nazarii Stenyk",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Serhii Chaika",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Stanislav Hordon",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Roman Darahan",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Andrii Pukailo",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Vitaly Chernavsky",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Vasyl Shestopal",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Vitally Zborovets",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Igor Zinskyy",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Marat Bigler",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Yury Shastapalau",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Evgenii Chokan",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Oleg Domych",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Dmytro Plakatin",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Andrii Slobodianiuk",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Ivan Zayets",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Oleksandr Melnychuk",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Vladimir Starovyotov",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Gennadii Seliverstov",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Ruslan Gudiev",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Aleksandr Bakasov",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Aleksander Sklyar",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Alexey Astakhov",
+      "is_excluded": false
+    },
+    {
+      "full_name": "Volodymyr Illiuk",
+      "is_excluded": false
+    }
+  ],
+  "classification": {
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "commercial_auto",
+      "general_liability",
+      "motor_truck_cargo"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ]
+}
