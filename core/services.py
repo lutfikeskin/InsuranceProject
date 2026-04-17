@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from sqlalchemy.orm import Session
 from .database import get_session, Policy, Vehicle, Driver, Coverage, ApiUsage
 from datetime import datetime, timedelta

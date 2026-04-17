@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import streamlit as st
 import pandas as pd
 from core.constants import VEHICLE_TYPES, INTEREST_TYPES, VIN_REGEX
