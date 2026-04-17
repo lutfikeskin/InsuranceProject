@@ -3,7 +3,12 @@ import pandas as pd
 from core.services import PolicyService, UsageService
 from core.database import get_session
 from views.edit_dialog import edit_policy_dialog
-from core.constants import DEFAULT_DAILY_BUDGET
+from core.constants import (
+    DEFAULT_DAILY_BUDGET,
+    APP_DISPLAY_NAME,
+    APP_DISPLAY_TAGLINE,
+    POLICY_SEARCH_PAGE_LIMIT,
+)
 from datetime import date
 
 def page_dashboard():
@@ -23,8 +28,9 @@ def page_dashboard():
         
         st.markdown(f"""
         <div style="background: linear-gradient(90deg, #005AA9 0%, #003366 100%); padding: 30px; border-radius: 15px; margin-bottom: 25px; color: white;">
-            <div style="margin:0; font-size: 1.8rem; font-weight: 700; color: white !important;">🚀 Project Command Center</div>
-            <p style="margin:5px 0 0 0; opacity: 0.8;">{greeting}! Here is your platform overview for {today.strftime('%A, %B %d, %Y')}.</p>
+            <div style="margin:0; font-size: 1.8rem; font-weight: 700; color: white !important;">{APP_DISPLAY_NAME}</div>
+            <p style="margin:5px 0 0 0; opacity: 0.85; font-size: 0.95rem;">{APP_DISPLAY_TAGLINE}</p>
+            <p style="margin:10px 0 0 0; opacity: 0.8;">{greeting} — Overview for {today.strftime('%A, %B %d, %Y')}.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -151,14 +157,33 @@ def page_dashboard():
         with c2:
             st.subheader("🔍 Quick Lookup")
             if total_policies > 0:
-                policies = service.get_all_policies()
-                policy_map = {f"{p.policy_number} | {p.insured_name}": p for p in policies}
-                selected_p_key = st.selectbox("Find policy", options=[""] + list(policy_map.keys()), label_visibility="collapsed")
-                
-                if selected_p_key:
-                    st.success(f"Found: {selected_p_key}")
-                    if st.button("Edit Policy", type="primary", width='stretch'):
-                        edit_policy_dialog(policy_map[selected_p_key], service)
+                q_lookup = st.text_input(
+                    "Search policy # or insured",
+                    "",
+                    key="dash_policy_lookup",
+                    label_visibility="collapsed",
+                    placeholder="Type to search…",
+                )
+                term_l = q_lookup.strip() or None
+                policies_l = service.search_policies(term_l, limit=POLICY_SEARCH_PAGE_LIMIT)
+                if not policies_l:
+                    st.caption("No matches.")
+                else:
+                    policy_map = {f"{p.policy_number} | {p.insured_name}": p for p in policies_l}
+                    selected_p_key = st.selectbox(
+                        "Pick a policy",
+                        options=list(policy_map.keys()),
+                        label_visibility="collapsed",
+                        key="dash_policy_pick",
+                    )
+                    if selected_p_key:
+                        st.caption(f"Showing up to {POLICY_SEARCH_PAGE_LIMIT} newest matches.")
+                        if st.button("Edit Policy", type="primary", width="stretch"):
+                            edit_policy_dialog(policy_map[selected_p_key], service)
+                        if st.button("Open in Create COI", width="stretch"):
+                            st.session_state["nav_request"] = "Create COI"
+                            st.session_state["coi_policy_id"] = policy_map[selected_p_key].id
+                            st.rerun()
             else:
                 st.info("Add a policy to enable lookup.")
 

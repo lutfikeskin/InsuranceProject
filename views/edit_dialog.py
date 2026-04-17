@@ -3,6 +3,25 @@ from core.services import PolicyService
 import pandas as pd
 from core.constants import POLICY_TYPES, STATUS_OPTIONS, CONFIDENCE_OPTIONS, VEHICLE_TYPES, INTEREST_TYPES, VIN_REGEX
 
+
+def _coverage_limit_display(c) -> str:
+    if c.combined_single_limit:
+        return f"${c.combined_single_limit:,} CSL"
+    if c.per_occurrence:
+        return f"${c.per_occurrence:,} Per Occ"
+    if c.per_person and c.per_accident:
+        return f"${c.per_person:,}/${c.per_accident:,}"
+    if c.per_accident:
+        return f"${c.per_accident:,}"
+    if c.limit_per_person and c.limit_per_accident:
+        return f"${c.limit_per_person:,}/${c.limit_per_accident:,} (legacy)"
+    if c.limit_per_person:
+        return f"${c.limit_per_person:,} per person (legacy)"
+    if c.limit_property_damage:
+        return f"${c.limit_property_damage:,} PD (legacy)"
+    return "N/A"
+
+
 @st.dialog("✏️ Edit Policy Details", width="large")
 def edit_policy_dialog(policy, service: PolicyService):
     st.write(f"Editing Policy: **{policy.policy_number}**")
@@ -116,13 +135,7 @@ def edit_policy_dialog(policy, service: PolicyService):
         if global_covs:
             c_data = []
             for c in global_covs:
-                 # Construct display string for limit
-                 lim_disp = "N/A"
-                 if c.combined_single_limit: lim_disp = f"${c.combined_single_limit:,} CSL"
-                 elif c.per_occurrence: lim_disp = f"${c.per_occurrence:,} Per Occ"
-                 elif c.per_person and c.per_accident: lim_disp = f"${c.per_person:,}/${c.per_accident:,}"
-                 elif c.per_accident: lim_disp = f"${c.per_accident:,}"
-                 
+                 lim_disp = _coverage_limit_display(c)
                  c_data.append({
                      "Code": c.coverage_code,
                      "Family": c.family,
@@ -145,8 +158,12 @@ def edit_policy_dialog(policy, service: PolicyService):
                     vc_data = []
                     for c in v.coverages:
                          lim_disp = "Included"
-                         if c.deductible: lim_disp = f"Ded: ${c.deductible}"
-                         elif c.per_occurrence: lim_disp = f"${c.per_occurrence:,}"
+                         if c.deductible:
+                             lim_disp = f"Ded: ${c.deductible}"
+                         else:
+                             alt = _coverage_limit_display(c)
+                             if alt != "N/A":
+                                 lim_disp = alt
                          
                          vc_data.append({
                              "Coverage": c.coverage_code or c.type,

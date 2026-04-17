@@ -4,7 +4,7 @@ from core.database import init_db, get_session
 import core.history_model # Ensure model is registered
 from core.services import UsageService
 from streamlit_option_menu import option_menu
-from core.constants import DEFAULT_DAILY_BUDGET
+from core.constants import DEFAULT_DAILY_BUDGET, APP_DISPLAY_TAGLINE
 
 # Import Views
 from views.dashboard import page_dashboard
@@ -76,14 +76,27 @@ with st.sidebar:
     if os.path.exists("assets/logo.png"):
         st.image("assets/logo.png", width=150)
     else:
-        st.markdown('<div class="brand-header"><h3>Truckers National</h3><p style="color: #666; font-size: 0.8rem;">Policy Intelligence Hub</p></div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="brand-header"><h3>Truckers National</h3>'
+            f'<p style="color: #666; font-size: 0.8rem;">{APP_DISPLAY_TAGLINE}</p></div>',
+            unsafe_allow_html=True,
+        )
     
+    MENU_OPTIONS = ["Dashboard", "Process Policies", "Database", "Create COI"]
+    manual_nav = None
+    if st.session_state.get("nav_request"):
+        req = st.session_state.pop("nav_request", None)
+        if req in MENU_OPTIONS:
+            manual_nav = MENU_OPTIONS.index(req)
+
     selected = option_menu(
         menu_title=None,
-        options=["Dashboard", "Process Policies", "Database", "Create COI"],
+        options=MENU_OPTIONS,
         icons=["house-fill", "cloud-arrow-up-fill", "database-fill", "file-earmark-pdf-fill"],
         menu_icon="cast",
         default_index=0,
+        manual_select=manual_nav,
+        key="sidebar_nav_menu",
         styles={
             "container": {"padding": "0!important", "background-color": "#fff", "border-radius": "0"},
             "icon": {"color": "#005AA9", "font-size": "18px"}, 

@@ -34,3 +34,11 @@ VIN_REGEX = "^[A-HJ-NPR-Z0-9]{17}$"
 
 # Application Settings
 DEFAULT_DAILY_BUDGET = 2.5
+
+# Policy list/search (Database, COI, Dashboard)
+POLICY_SEARCH_PAGE_LIMIT = 100
+POLICY_DELETE_CANDIDATE_LIMIT = 500
+
+# Product name (sidebar / page title should stay in sync in app.py)
+APP_DISPLAY_NAME = "Insurance Doc Intelligence"
+APP_DISPLAY_TAGLINE = "Policy Intelligence Hub"

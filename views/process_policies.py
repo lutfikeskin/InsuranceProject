@@ -7,10 +7,43 @@ from core.database import get_session, Policy, Vehicle, Driver, Coverage, Additi
 from modules.extraction import process_pdf
 from utils.vehicle_utils import refine_vehicle_type
 from utils.naic_utils import get_naic_for_carrier
-import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from streamlit_pdf_viewer import pdf_viewer
 
 # Highlights disabled for performance
+
+
+def _friendly_extraction_error(message: str | None) -> str:
+    if not message:
+        return "Extraction failed with no detail. Try Force Refresh or a different PDF."
+    m = str(message)
+    if "Daily Quota Exceeded" in m or "STOPS:" in m:
+        return (
+            "Daily API budget was reached. Increase DEFAULT_DAILY_BUDGET in core/constants.py "
+            "or reset usage under Settings, then try again."
+        )
+    if "JSON" in m or "parse" in m.lower() or "Extraction Error" in m:
+        return (
+            "The model response could not be parsed. Enable **Force Refresh (Bypass Cache)** "
+            "and retry; if it persists, try one file at a time."
+        )
+    if "Quota" in m or "quota" in m:
+        return "API quota or rate limit issue. Wait a moment, check your billing, and retry."
+    if "API Key" in m or "api" in m.lower() and "key" in m.lower():
+        return "API key problem. Add or update your Gemini key in Settings."
+    return m
+
+
+def _process_one_pdf(fname: str, content: bytes, api_key: str, force_refresh: bool):
+    """Worker for parallel extraction; each call uses its own stack (process_pdf creates its own client)."""
+    try:
+        data, usage, error_msg = process_pdf(
+            content, api_key, status_callback=None, force_refresh=force_refresh
+        )
+        return fname, data, usage, error_msg, None
+    except Exception as e:
+        return fname, None, None, None, str(e)
+
 
 def page_process_policies(api_key):
     st.title("📤 Process Policies")
@@ -51,9 +84,21 @@ def page_process_policies(api_key):
             if not uploaded_files:
                 st.info("👆 **Tip:** You can select multiple PDF files at once. The AI will process them sequentially.")
                 
+            opt_c1, opt_c2 = st.columns(2)
+            with opt_c1:
+                parallel_extract = st.checkbox(
+                    "Parallel extraction (max 2 files at a time)",
+                    value=False,
+                    help="Faster for many PDFs; logs are less detailed than sequential mode.",
+                )
+            with opt_c2:
+                force_refresh = st.checkbox(
+                    "Force Refresh (Bypass Cache)",
+                    value=False,
+                    help="Re-process files even if a cached result exists.",
+                )
+
             if st.button("Start Extraction", type="primary") and uploaded_files:
-                force_refresh = st.checkbox("Force Refresh (Bypass Cache)", value=False, help="Enable this to re-process files even if they were processed before.")
-                
                 if not api_key:
                     st.error("Missing Gemini API Key. Please add it in Settings.")
                     return
@@ -63,44 +108,133 @@ def page_process_policies(api_key):
                 
                 total_files = len(uploaded_files)
                 files_map = {f.name: f.getvalue() for f in uploaded_files}
-                
-                # Sequential processing to allow live logging (Better UX)
-                for i, (fname, content) in enumerate(files_map.items()):
-                    # progress_bar.progress((i) / total_files) # Optional
-                    
-                    with st.status(f"Processing `{fname}`...", expanded=True) as status:
-                        def update_status(msg):
-                            status.write(msg)
-                            
-                        try:
-                            # 0. Check Session Cache (UI Level)
-                            existing = next((item for item in st.session_state["temp_extracted"] if item["filename"] == fname), None)
-                            if existing and not force_refresh:
-                                status.write("Loaded from session memory.")
-                                status.update(label=f"`{fname}` Already Loaded", state="complete", expanded=False)
-                                continue
+                batch_rows = []
 
-                            # Pass callback to extractor
-                            data, usage, error_msg = process_pdf(content, api_key, status_callback=update_status, force_refresh=force_refresh)
-                            
-                            if data:
-                                st.session_state["temp_extracted"].append({
-                                    "filename": fname,
-                                    "pdf_bytes": content,
-                                    "data": data
-                                })
-                                status.update(label=f"`{fname}` Processed Successfully!", state="complete", expanded=False)
+                def _record_batch(fname, ok, detail, source=""):
+                    batch_rows.append(
+                        {
+                            "filename": fname,
+                            "status": "ok" if ok else "error",
+                            "detail": detail,
+                            "source": source,
+                        }
+                    )
+
+                if parallel_extract and total_files > 1:
+                    done = 0
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        futures = {
+                            pool.submit(
+                                _process_one_pdf, fn, files_map[fn], api_key, force_refresh
+                            ): fn
+                            for fn in files_map
+                        }
+                        for fut in as_completed(futures):
+                            fname, data, usage, error_msg, exc = fut.result()
+                            done += 1
+                            progress_bar.progress(done / total_files)
+                            if exc:
+                                st.error(f"`{fname}`: {_friendly_extraction_error(exc)}")
+                                _record_batch(fname, False, exc)
+                            elif data:
+                                if usage and usage.get("source") == "cache":
+                                    st.info(f"`{fname}`: loaded from extraction cache (no API charge).")
+                                st.session_state["temp_extracted"].append(
+                                    {"filename": fname, "pdf_bytes": files_map[fname], "data": data}
+                                )
+                                _record_batch(fname, True, "extracted", usage.get("source", "") if usage else "")
                             else:
-                                status.update(label=f"Extraction Failed for `{fname}`", state="error", expanded=True)
-                                st.error(f"Error: {error_msg}")
-                                
-                        except Exception as e:
-                            status.update(label=f"Error processing `{fname}`", state="error", expanded=True)
-                            st.error(f"Exception: {e}")
-                    
-                    progress_bar.progress((i+1) / total_files)
-                
-                status_text.text("Extraction Complete! Choose an action below.")
+                                st.error(f"`{fname}`: {_friendly_extraction_error(error_msg)}")
+                                _record_batch(fname, False, error_msg or "")
+                    status_text.text("Extraction complete (parallel).")
+                else:
+                    for i, (fname, content) in enumerate(files_map.items()):
+                        with st.status(f"Processing `{fname}`...", expanded=True) as status:
+                            def update_status(msg):
+                                status.write(msg)
+
+                            try:
+                                existing = next(
+                                    (
+                                        item
+                                        for item in st.session_state["temp_extracted"]
+                                        if item["filename"] == fname
+                                    ),
+                                    None,
+                                )
+                                if existing and not force_refresh:
+                                    status.write("Loaded from session memory (same upload session).")
+                                    status.update(
+                                        label=f"`{fname}` Already Loaded",
+                                        state="complete",
+                                        expanded=False,
+                                    )
+                                    _record_batch(fname, True, "session_memory", "")
+                                    continue
+
+                                data, usage, error_msg = process_pdf(
+                                    content,
+                                    api_key,
+                                    status_callback=update_status,
+                                    force_refresh=force_refresh,
+                                )
+
+                                if usage and usage.get("source") == "cache":
+                                    status.write("Loaded from file hash cache (no API call).")
+
+                                if data:
+                                    st.session_state["temp_extracted"].append(
+                                        {"filename": fname, "pdf_bytes": content, "data": data}
+                                    )
+                                    status.update(
+                                        label=f"`{fname}` Processed Successfully!",
+                                        state="complete",
+                                        expanded=False,
+                                    )
+                                    _record_batch(
+                                        fname,
+                                        True,
+                                        "extracted",
+                                        usage.get("source", "") if usage else "",
+                                    )
+                                else:
+                                    status.update(
+                                        label=f"Extraction Failed for `{fname}`",
+                                        state="error",
+                                        expanded=True,
+                                    )
+                                    friendly = _friendly_extraction_error(error_msg)
+                                    status.write(friendly)
+                                    st.error(f"`{fname}`: {friendly}")
+                                    _record_batch(fname, False, error_msg or "")
+
+                            except Exception as e:
+                                status.update(
+                                    label=f"Error processing `{fname}`",
+                                    state="error",
+                                    expanded=True,
+                                )
+                                friendly = _friendly_extraction_error(str(e))
+                                status.write(friendly)
+                                st.error(f"`{fname}`: {friendly}")
+                                _record_batch(fname, False, str(e))
+
+                        progress_bar.progress((i + 1) / total_files)
+
+                    status_text.text("Extraction complete! Choose an action below.")
+
+                if batch_rows:
+                    rep = pd.DataFrame(batch_rows)
+                    st.subheader("Batch report")
+                    st.dataframe(rep, hide_index=True, use_container_width=True)
+                    if len(batch_rows) > 1:
+                        st.download_button(
+                            "Download batch report (CSV)",
+                            data=rep.to_csv(index=False).encode("utf-8"),
+                            file_name="extraction_batch_report.csv",
+                            mime="text/csv",
+                            key="batch_report_csv",
+                        )
 
         # Decision Section (Inside Tab 1)
         if st.session_state["temp_extracted"]:

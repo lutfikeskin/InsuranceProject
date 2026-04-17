@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from .database import get_session, Policy, Vehicle, Driver, Coverage, ApiUsage
 from datetime import datetime, timedelta
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from utils.naic_utils import get_naic_for_carrier
 from .coverage_ontology import summarize_auto_liability, format_liability_limit
 from utils.vehicle_utils import refine_vehicle_type
@@ -47,8 +47,38 @@ class PolicyService:
     def get_recent_policies(self, limit=10):
         return self.session.query(Policy).order_by(Policy.id.desc()).limit(limit).all()
 
+    def search_policies(self, term: str | None = None, *, limit: int = 100, offset: int = 0):
+        """
+        Return policies matching policy_number or insured_name (case-insensitive).
+        Empty/whitespace term: most recent policies only (capped by limit).
+        """
+        q = self.session.query(Policy)
+        if term and str(term).strip():
+            t = f"%{str(term).strip()}%"
+            q = q.filter(
+                or_(
+                    Policy.policy_number.ilike(t),
+                    Policy.insured_name.ilike(t),
+                )
+            )
+        return q.order_by(Policy.id.desc()).offset(offset).limit(limit).all()
+
+    def count_policies(self, term: str | None = None) -> int:
+        """Count policies matching the same filter as search_policies (no limit)."""
+        q = self.session.query(Policy)
+        if term and str(term).strip():
+            t = f"%{str(term).strip()}%"
+            q = q.filter(
+                or_(
+                    Policy.policy_number.ilike(t),
+                    Policy.insured_name.ilike(t),
+                )
+            )
+        return q.count()
+
     def get_all_policies(self):
-        return self.session.query(Policy).all()
+        """Backward-compatible: capped list of recent policies (newest first)."""
+        return self.search_policies(None, limit=10000, offset=0)
 
     def get_policy_by_number(self, policy_number):
         return self.session.query(Policy).filter_by(policy_number=policy_number).first()
@@ -186,14 +216,32 @@ class PolicyService:
 
                 if collection_changes["coverages"]:
                     existing.coverages.clear()
+                    vin_map_existing = {
+                        str(v.vin).strip().upper(): v
+                        for v in existing.vehicles
+                        if getattr(v, "vin", None)
+                    }
                     for c in new_policy.coverages:
-                        existing.coverages.append(Coverage(
-                            type=c.type, coverage_code=c.coverage_code, family=c.family,
-                            per_person=c.per_person, per_accident=c.per_accident, per_occurrence=c.per_occurrence,
-                            combined_single_limit=c.combined_single_limit, aggregate=c.aggregate,
-                            limit_per_person=c.limit_per_person, limit_per_accident=c.limit_per_accident,
-                            limit_property_damage=c.limit_property_damage, deductible=c.deductible
-                        ))
+                        matched_ev = None
+                        if c.vehicle is not None and getattr(c.vehicle, "vin", None):
+                            matched_ev = vin_map_existing.get(str(c.vehicle.vin).strip().upper())
+                        existing.coverages.append(
+                            Coverage(
+                                type=c.type,
+                                coverage_code=c.coverage_code,
+                                family=c.family,
+                                per_person=c.per_person,
+                                per_accident=c.per_accident,
+                                per_occurrence=c.per_occurrence,
+                                combined_single_limit=c.combined_single_limit,
+                                aggregate=c.aggregate,
+                                limit_per_person=c.limit_per_person,
+                                limit_per_accident=c.limit_per_accident,
+                                limit_property_damage=c.limit_property_damage,
+                                deductible=c.deductible,
+                                vehicle=matched_ev,
+                            )
+                        )
 
                 if collection_changes["drivers"]:
                     existing.drivers.clear()
@@ -391,34 +439,52 @@ class PolicyService:
             elif isinstance(d, Driver):
                 policy.drivers.append(d)
 
+        def _norm_vin(v):
+            if not v:
+                return None
+            return str(v).strip().upper()
+
+        vin_to_vehicle = {}
+        for veh in policy.vehicles:
+            nv = _norm_vin(getattr(veh, "vin", None))
+            if nv:
+                vin_to_vehicle[nv] = veh
+
         # Coverages
         covs = data.get('coverages', [])
         for c in covs:
             if isinstance(c, dict):
                 # Handle flattened structure (from Editor) or nested limits (from Extraction)
-                
+
                 # Try flattened first (Editor style)
                 per_person = c.get('per_person') or c.get('limits', {}).get('per_person')
                 per_accident = c.get('per_accident') or c.get('limits', {}).get('per_accident')
                 per_occ = c.get('per_occurrence') or c.get('limits', {}).get('per_occurrence')
                 csl = c.get('combined_single_limit') or c.get('limits', {}).get('combined_single_limit')
                 agg = c.get('aggregate') or c.get('limits', {}).get('aggregate')
-                
-                policy.coverages.append(Coverage(
-                    type=c.get('type') or c.get('display_name'),
-                    coverage_code=c.get('coverage_code'),
-                    family=c.get('family'),
-                    per_person=per_person,
-                    per_accident=per_accident,
-                    per_occurrence=per_occ,
-                    combined_single_limit=csl,
-                    aggregate=agg,
-                    deductible=c.get('deductible'),
-                    # Legacy fields mapping
-                    limit_per_person=c.get('limit_per_person'),
-                    limit_per_accident=c.get('limit_per_accident'),
-                    limit_property_damage=c.get('limit_property_damage')
-                ))
+
+                matched_vehicle = None
+                vv = c.get('vehicle_vin')
+                if vv:
+                    matched_vehicle = vin_to_vehicle.get(_norm_vin(vv))
+
+                policy.coverages.append(
+                    Coverage(
+                        type=c.get('type') or c.get('display_name'),
+                        coverage_code=c.get('coverage_code'),
+                        family=c.get('family'),
+                        per_person=per_person,
+                        per_accident=per_accident,
+                        per_occurrence=per_occ,
+                        combined_single_limit=csl,
+                        aggregate=agg,
+                        deductible=c.get('deductible'),
+                        limit_per_person=c.get('limit_per_person'),
+                        limit_per_accident=c.get('limit_per_accident'),
+                        limit_property_damage=c.get('limit_property_damage'),
+                        vehicle=matched_vehicle,
+                    )
+                )
             elif isinstance(c, Coverage):
                 policy.coverages.append(c)
 

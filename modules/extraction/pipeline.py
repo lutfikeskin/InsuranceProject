@@ -11,6 +11,7 @@ from functools import lru_cache
 
 # Internal Modules
 from core.logger import logger
+from core.constants import DEFAULT_DAILY_BUDGET
 from .pdf_ops import PdfProcessor
 from utils.vehicle_utils import refine_vehicle_type
 
@@ -317,10 +318,12 @@ class GeminiExtractionPipeline:
             return None
 
     def _call_gemini(self, model: str, contents: list, config: types.GenerateContentConfig, request_type: str = "extraction"):
-        """Centralized wrapper to enforce $2.50 daily budget and log usage."""
-        if self.usage_service.is_over_budget(daily_limit=2.5):
+        """Centralized wrapper to enforce daily budget and log usage."""
+        if self.usage_service.is_over_budget(daily_limit=DEFAULT_DAILY_BUDGET):
              # Hard stop for safety
-             raise Exception("STOPS: API Daily Quota Exceeded ($2.50). Processing halted to prevent billing.")
+             raise Exception(
+                 f"STOPS: API Daily Quota Exceeded (${DEFAULT_DAILY_BUDGET}). Processing halted to prevent billing."
+             )
         
         # FORCE DETERMINISM: Temperature 0.0
         config.temperature = 0.0

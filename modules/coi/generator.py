@@ -57,6 +57,12 @@ class COIGenerator:
             # Logic Flags
             has_gl = policy_data.get('has_general_liability', True) # Default to True if missing to be safe
             has_auto = policy_data.get('has_auto_liability', True)
+            gl_occ = clean_limit(policy_data.get('liability_limit', '')) if has_gl else ""
+            gl_agg = (
+                clean_limit(policy_data.get('gl_general_aggregate') or policy_data.get('liability_limit', ''))
+                if has_gl
+                else ""
+            )
             
             # Cargo Handling
             cargo_limit = clean_limit(policy_data.get('cargo_limit', ''))
@@ -122,12 +128,12 @@ class COIGenerator:
                 "PolicyNumber_GL": policy_data.get('policy_number', '') if has_gl else "",
                 "EffectiveDate_GL": fmt_date(policy_data.get('effective_date')) if has_gl else "",
                 "ExpirationDate_GL": fmt_date(policy_data.get('expiration_date')) if has_gl else "",
-                "Limit_GL_Occurrence": clean_limit(policy_data.get('liability_limit', '')) if has_gl else "",
+                "Limit_GL_Occurrence": gl_occ,
                 "Limit_GL_FireDamage": "$100,000" if has_gl else "",
                 "Limit_GL_MedExp": "$5,000" if has_gl else "",
-                "Limit_GL_PersonalAdv": clean_limit(policy_data.get('liability_limit', '')) if has_gl else "",
-                "Limit_GL_GeneralAggregate": clean_limit(policy_data.get('liability_limit', '')) if has_gl else "",
-                "Limit_GL_ProductsAgg": clean_limit(policy_data.get('liability_limit', '')) if has_gl else "",
+                "Limit_GL_PersonalAdv": gl_occ,
+                "Limit_GL_GeneralAggregate": gl_agg,
+                "Limit_GL_ProductsAgg": gl_agg,
                 
                 "PolicyNumber_Auto": policy_data.get('policy_number', '') if has_auto else "",
                 "EffectiveDate_Auto": fmt_date(policy_data.get('effective_date')) if has_auto else "",
