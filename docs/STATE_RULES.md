@@ -1,51 +1,57 @@
 # State Extraction Hints
 
-Carrier formatting and terminology varies by state. These hints help the LLM correctly interpret what it sees in the document — they are NOT compliance checks or validation rules.
+State context notes used to improve extraction consistency.
 
-**Purpose**: Improve extraction accuracy by giving the LLM state-specific context about how coverages are typically written.
+## Purpose
 
-**NOT the purpose**: Checking whether the policy is legally compliant, flagging missing coverages, or validating minimum limits. If a coverage isn't in the document, we don't extract it. Period.
+- Improve model mapping quality for state-specific wording and coverage naming.
+- Guide ambiguous mapping cases (especially UM/UIM family codes).
 
----
+## Non-Goals
 
-## Hints by State
+- This file does not define compliance checks.
+- This file does not enforce minimum legal limits.
+- Missing coverages are not auto-flagged solely from state assumptions.
 
-### Texas (TX)
-- UM/UIM is typically combined as a single line item. Use `UMUIM_*` codes unless clearly separated.
+## Current Hint Set
 
-### Florida (FL)
-- PIP appears on almost all auto policies — look for it on the declarations page.
-- UM and UIM are typically listed separately with different limits.
+### Texas (`TX`)
+- UM/UIM often appears as one combined item.
+- Prefer `UMUIM_*` code family when presented as combined.
 
-### New York (NY)
-- UIM may be labeled "SUM" (Supplementary Uninsured/Underinsured Motorist). Map to `UIM_*` codes.
-- PIP appears on almost all auto policies.
+### Florida (`FL`)
+- PIP is commonly present in auto policy declarations.
+- UM and UIM are often shown separately.
 
-### California (CA)
-- UM/UIM typically listed separately.
+### New York (`NY`)
+- UIM may appear as `SUM` (Supplementary Uninsured/Underinsured Motorist).
+- PIP commonly appears in auto declarations.
 
-### Ohio (OH)
-- UM/UIM is typically combined. Use `UMUIM_*` codes unless clearly separated.
+### California (`CA`)
+- UM and UIM are frequently listed separately.
 
-### New Jersey (NJ)
-- May show "Basic" vs "Standard" policy type — extract whichever is present.
+### Ohio (`OH`)
+- UM/UIM combined formatting is common.
 
-### Pennsylvania (PA)
-- May show "Full Tort" or "Limited Tort" selection — note in policy metadata if visible.
+### New Jersey (`NJ`)
+- Policies may use `Basic` or `Standard` naming variants.
 
----
+### Pennsylvania (`PA`)
+- `Full Tort` or `Limited Tort` selections may appear and should be preserved when present.
 
-## How These Are Used
+## Usage in Pipeline
 
-During the extraction step, if the classification detects a state, the relevant hint is appended to the prompt. Example:
+- State hints are injected into extraction prompt construction when state context is available.
+- They are interpreted as extraction guidance only.
 
-```
-STATE CONTEXT (Texas):
-UM/UIM is typically combined as a single line item. Use UMUIM_* codes unless clearly separated.
-```
+See:
+- [`PROMPTS.md`](PROMPTS.md)
+- [`EXTRACTION_PIPELINE.md`](EXTRACTION_PIPELINE.md)
 
-This is purely to help the LLM pick the right coverage code. No validation, no warnings, no compliance.
+## Maintenance Rules
 
-## How to Add New Hints
-
-When you notice the LLM consistently misreading a coverage in a specific state's documents, add a hint here. Only add hints that directly improve extraction accuracy. Don't add rules about what "should" be in the document.
+When adding new hints:
+1. Base the hint on repeated extraction failures from real documents.
+2. Keep wording short and extraction-focused.
+3. Avoid legal/compliance directives unless the code explicitly enforces them.
+4. Update related tests or golden references when behavior intentionally changes.

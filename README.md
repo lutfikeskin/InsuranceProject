@@ -1,86 +1,97 @@
-# Insurance Policy Intelligence Hub
+# Insurance Doc Intelligence
 
-A Streamlit-based application for extracting data from insurance policy PDFs using Google Gemini AI, managing policy history in a local database, and automatically generating Certificates of Insurance (COI).
+Insurance operations workspace for extracting policy data from PDFs, reviewing results, storing structured records, and generating Certificates of Insurance (COIs).
 
-### 📘 Documentation
+The repository currently contains:
+- A production Streamlit application (`app.py`) with SQLite + SQLAlchemy.
+- Extraction and COI modules under `modules/`.
+- Service/domain logic under `core/`.
+- Pytest test suite under `tests/`.
 
-For a deep dive into the architecture, extraction pipeline, and ontology rules, see the **[Full Project Documentation](DOCUMENTATION.md)**.
+## Current Architecture (Implemented)
 
-## Features
+- **Primary runtime:** Streamlit multi-page app (`app.py`, `views/*`)
+- **Database:** SQLite (`insurance_data.db`) via SQLAlchemy models in `core/database.py`
+- **Migrations:** Alembic (`alembic/`)
+- **Extraction engine:** Gemini-based pipeline (`modules/extraction/pipeline.py`)
+- **COI generation:** PDF form fill + optional flattening (`modules/coi/generator.py`)
 
-- **AI Extraction**: Upload PDF policies to extract key data (Limits, Dates, Coverages, Drivers, Vehicles) using Google Gemini 2.5 Flash.
-  - **Turbo Mode**: Instantly processes short documents (< 5 pages) by skipping complex mapping steps.
-  - **Self-Healing**: "The Auditor" automatically detects and fixes errors (missing policy #, dates) in real-time.
-- **Data Management**: View, filter, edit, and delete extracted policies from a local SQLite database.
-  - **Modern Grid UX**: Compactpopover column controls, status indicators (✅ Active, ⚠️ Issue), and dynamic row-based actions.
-- **AI Chat with Data**: Communicate with an AI-powered agent to query your database in natural language.
-  - **Enhanced Visibility**: Whitelisted default views for clean results, preserved session state, and transparent SQL debugging.
-- **COI Generation**: Select a policy, pick a certificate holder, and generate a pre-filled PDF Certificate of Insurance.
-  - **Auto-Logic**: Automatically hides/shows "General Liability", "Auto", and "Cargo" sections based on coverage presence.
-  - **Smart Formatting**: Pre-fills the "Description of Operations" with vehicle/driver lists and required clauses.
-  - **NAIC Lookup**: Auto-populates NAIC codes for major carriers (Progressive, GEICO) if missing from the extraction.
-- **Excel Export**: Download your entire policy history as an Excel report.
+For deeper details, use the docs index: [`docs/README.md`](docs/README.md).
 
-## Setup & Installation
+## Repository Layout
 
-### Prerequisites
+- `app.py` - Streamlit entrypoint and navigation
+- `core/` - models, services, ontology, history, constants
+- `views/` - Streamlit pages (`dashboard`, `process_policies`, `database_page`, `create_coi`)
+- `modules/extraction/` - PDF extraction pipeline, schemas, prompts, PDF ops
+- `modules/coi/` - COI PDF generator and field mapping
+- `utils/` - helper utilities (vehicle typing, NAIC, export, text)
+- `tests/` - pytest suite (search, extraction logic, COI bulk logic, accuracy harness)
+- `data/` - template PDF and supporting data files
+- `docs/` - full project documentation
 
-- Python 3.10+
-- Google Cloud API Key for Gemini (AI Studio)
+## Prerequisites
 
-### Installation
+- Python 3.9+ (Dockerfile uses 3.9-slim)
+- Gemini API key (`GEMINI_API_KEY`) for extraction and NL query features
 
-1.  **Clone/Download** the repository.
-2.  **Install Dependencies**:
+## Quickstart (Backend / Main App)
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+1. Install dependencies:
+   - `pip install -r requirements.txt`
+2. Set API key:
+   - PowerShell: `$env:GEMINI_API_KEY="your_key"`
+3. Run app:
+   - `streamlit run app.py`
+4. Open the local Streamlit URL shown in terminal.
 
-    _(Key libraries: `streamlit`, `google-generativeai`, `sqlalchemy`, `pandas`, `pypdf`, `openpyxl`)_
+## Configuration Overview
 
-3.  **Configure API Key**:
-    - The app allows you to enter your key in the "Settings" menu.
-    - Alternatively, create a `.streamlit/secrets.toml` file:
-      ```toml
-      GEMINI_API_KEY = "your_api_key_here"
-      ```
+- `GEMINI_API_KEY`
+  - Read from Streamlit session state, environment, or `st.secrets`.
+- `DEFAULT_DAILY_BUDGET`
+  - Daily extraction/query budget in `core/constants.py`.
+- Database path
+  - Default SQLite file: `insurance_data.db`.
 
-## Usage
+Full configuration details: [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 
-1.  **Run the Application**:
+## Common Commands
 
-    ```bash
-    streamlit run app.py
-    ```
+### Python app and tests
+- Run app: `streamlit run app.py`
+- Run all tests: `pytest`
+- Run specific test: `pytest tests/test_bulk_logic.py -v`
 
-2.  **Process Policies**:
-    - Go to **Process Policies** tab.
-    - Drag & Drop PDF files.
-    - Click **Start Extraction**.
-    - Review Extracted Data, Compare with the source material PDF and make adjustments if needed before daving to the database.
-    - Control all the data in the **Dashboard** or **Database** tab.
-    - Communicate with the AI Powered Chatbot in the Database for specific information requests in a conversation-like style.
+### Database migrations
+- Apply migrations: `alembic upgrade head`
+- Create migration: `alembic revision --autogenerate -m "message"`
 
-3.  **Generate COI**:
-    - Go to **Create COI** tab.
-    - Select a Policy from the dropdown.
-    - Select or Enter Certificate Holder details.
-    - Review the "Insured Details" and "Operations Description" (fully editable).
-    - Click **Generate & Download PDF**.
+## Data and Runtime Files
 
-## Project Structure
+- Template and data assets live in `data/`.
+- Extraction cache is written to `.cache/extraction_cache/`.
+- Logs are written to `logs/app.log`.
 
-- **`app.py`**: Streamlit application handling the UI and routing.
-- **`extractor.py`**: Interacts with Google Gemini to parse PDF text into structured JSON.
-- **`database.py`**: Defines the SQLite database schema (`insurance_data.db`) using SQLAlchemy.
-- **`coi_generator.py`**: Handles filling the `COI Example.pdf` template with data.
-- **`coi_mapping.json`**: Maps internal database fields to the PDF form field names.
-- **`naic_utils.py`**: Helper dictionary for looking up NAIC codes by Carrier Name.
-- **`text_utils.py`**: Centralized string normalization and currency parsing logic.
-- **`coi_utils.py`**: Utility for loading company data (Certificate Holders) from Excel.
+## Deployment
 
-## Customization
+Container image is defined by [`Dockerfile`](Dockerfile) and runs:
+- `streamlit run app.py --server.port 8080 --server.address 0.0.0.0`
 
-- **Template**: Replace `COI Example.pdf` with your own ACORD form if needed (ensure field names match or update `coi_mapping.json`).
-- **NAIC Codes**: Add more carriers to `naic_utils.py` to expand the auto-lookup coverage.
+Deployment and operations details:
+- [`docs/OPERATIONS_AND_TROUBLESHOOTING.md`](docs/OPERATIONS_AND_TROUBLESHOOTING.md)
+- [`docs/DATABASE_AND_MIGRATIONS.md`](docs/DATABASE_AND_MIGRATIONS.md)
+
+## Documentation Index
+
+- Docs index: [`docs/README.md`](docs/README.md)
+- System architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Development workflow: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
+- API and integration contract: [`docs/API.md`](docs/API.md)
+- Extraction details: [`docs/EXTRACTION_PIPELINE.md`](docs/EXTRACTION_PIPELINE.md)
+- COI workflow: [`docs/COI_WORKFLOW.md`](docs/COI_WORKFLOW.md)
+- Testing guide: [`docs/TESTING.md`](docs/TESTING.md)
+
+## Notes on Scope
+
+- This documentation reflects the current implemented code in this repository.
