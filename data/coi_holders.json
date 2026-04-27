@@ -1321,5 +1321,32 @@
         "state": "CA",
         "zip": "93065",
         "email": "coi@assureassist.com"
+    },
+    {
+        "name": "NA Logistics, Inc",
+        "full_address": "13208 CLUB HOUSE RD,\nPRESTO, PA 15142",
+        "address": "13208 CLUB HOUSE RD,",
+        "city": "PRESTO",
+        "state": "PA",
+        "zip": "15142",
+        "email": ""
+    },
+    {
+        "name": "Novalogic LLC",
+        "full_address": "2607 Woodruff Rd Ste E #3088\nSimpsonville, SC 29681",
+        "address": "2607 Woodruff Rd Ste E #3088",
+        "city": "Simpsonville",
+        "state": "SC",
+        "zip": "29681",
+        "email": ""
+    },
+    {
+        "name": "MAR BEE INC",
+        "full_address": "102 HOMESTEAD RD.\nANDERSON, SC 29621",
+        "address": "102 HOMESTEAD RD.",
+        "city": "ANDERSON",
+        "state": "SC",
+        "zip": "29621",
+        "email": ""
     }
 ]
