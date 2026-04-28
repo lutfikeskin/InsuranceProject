@@ -1348,5 +1348,14 @@
         "state": "SC",
         "zip": "29621",
         "email": ""
+    },
+    {
+        "name": "TransChain Solutions Inc",
+        "full_address": "250 E 5th st, 15th Floor\nCincinnati, OH 45202",
+        "address": "250 E 5th st, 15th Floor",
+        "city": "Cincinnati",
+        "state": "OH",
+        "zip": "45202",
+        "email": ""
     }
 ]
