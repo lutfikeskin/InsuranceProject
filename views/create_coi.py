@@ -25,6 +25,27 @@ def _reset_coi_holder_session():
 GL_AGGREGATE_OPTIONS = ("$1,000,000", "$2,000,000")
 
 
+def _safe_coi_pdf_filename(insured_name: str, holder_name: str) -> str:
+    """Build a Windows-safe COI PDF filename."""
+    safe_insured = (insured_name or "").strip() or "Unknown Insured"
+    safe_holder = (holder_name or "").strip() or "Unknown Holder"
+
+    filename = f"COI - {safe_insured} - {safe_holder}.pdf"
+    # Replace Windows-invalid filename characters, then collapse extra whitespace.
+    filename = re.sub(r'[\\/:*?"<>|]+', " ", filename)
+    filename = re.sub(r"\s+", " ", filename).strip()
+    return filename
+
+
+def _safe_bulk_zip_filename(insured_name: str) -> str:
+    """Build a Windows-safe bulk ZIP filename."""
+    safe_insured = (insured_name or "").strip() or "Unknown Insured"
+    filename = f"COIs - {safe_insured} - Bulk.zip"
+    filename = re.sub(r'[\\/:*?"<>|]+', " ", filename)
+    filename = re.sub(r"\s+", " ", filename).strip()
+    return filename
+
+
 def _default_gl_agg_display_value(policy) -> str:
     """Pick default general-aggregate radio from policy limit text."""
     parts = [
@@ -304,7 +325,7 @@ def page_create_coi():
                             st.download_button(
                                 "📥 Download COI PDF",
                                 data=pdf,
-                                file_name=f"COI_{p.policy_number}.pdf",
+                                file_name=_safe_coi_pdf_filename(i_name, h_name),
                                 mime="application/pdf",
                             )
                     except Exception as e:
@@ -332,16 +353,16 @@ def page_create_coi():
                                 }
                                 pdf = gen.generate_coi(p_data, h_data, desc_font_size=h_desc_font_size)
                                 if pdf:
-                                    safe_name = "".join(
-                                        [c for c in comp_name if c.isalnum() or c in (" ", "_")]
-                                    ).strip()
-                                    zf.writestr(f"COI_{safe_name}.pdf", pdf)
+                                    zf.writestr(
+                                        _safe_coi_pdf_filename(i_name, comp_data.get("name", "")),
+                                        pdf,
+                                    )
 
                         st.success(f"Successfully generated {len(selected_companies)} COIs!")
                         st.download_button(
                             "📥 Download All (ZIP)",
                             data=zip_buffer.getvalue(),
-                            file_name=f"COIs_Bulk_{p.policy_number}.zip",
+                            file_name=_safe_bulk_zip_filename(i_name),
                             mime="application/zip",
                         )
                     except Exception as e:

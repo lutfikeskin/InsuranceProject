@@ -80,7 +80,7 @@ flowchart TD
 2. UI builds `policy_data` and `holder_data`.
 3. `COIGenerator.generate_coi()` fills the PDF template.
 4. Optional flattening is done with `pymupdf` when installed.
-5. Result is downloaded as PDF or ZIP for bulk mode.
+5. Result is downloaded as PDF or ZIP for bulk mode; PDF names use `COI - Insured Name - Certificate Holder Name.pdf`.
 
 ### Dashboard and Search
 

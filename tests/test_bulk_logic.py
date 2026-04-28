@@ -59,8 +59,8 @@ def test_bulk_generation_logic():
         with zipfile.ZipFile(zip_buffer, "r") as zf:
             file_list = zf.namelist()
             print(f"ZIP contains: {file_list}")
-            assert "COI_Comp A.pdf" in file_list
-            assert "COI_Comp B.pdf" in file_list
+            assert "COI - Test Insured - Comp A.pdf" in file_list
+            assert "COI - Test Insured - Comp B.pdf" in file_list
         
         print("Bulk Generation Logic Test PASSED!")
     except Exception as e:

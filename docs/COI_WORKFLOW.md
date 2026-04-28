@@ -46,6 +46,7 @@ This document covers Certificate of Insurance generation flow.
 - Multi-select company list.
 - Generate one PDF per company.
 - Package files into ZIP for download.
+- Generated PDF names follow: `COI - Insured Name - Certificate Holder Name.pdf` in both single and bulk flows.
 
 ## Dependencies
 

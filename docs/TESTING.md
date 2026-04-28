@@ -27,7 +27,7 @@ pytest tests/test_accuracy.py -v
 - `tests/test_extraction.py`
   - extraction helper behavior (including auto liability cleanup)
 - `tests/test_bulk_logic.py`
-  - COI bulk generation and ZIP output behavior
+  - COI bulk generation and ZIP output behavior, including file naming format (`COI - Insured Name - Certificate Holder Name.pdf`)
 - `tests/test_accuracy.py`
   - golden comparison against `tests/data` assets (requires API key)
 
