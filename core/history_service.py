@@ -15,9 +15,6 @@ class HistoryService:
         
         # Special case for currency-like values
         if isinstance(val, str) and ('$' in val or ',' in val):
-             # Try parsing as currency first if it looks like one, but only if it parses cleanly
-             # For history diffing, strictly speaking we treat mostly as strings unless they are clearly numbers.
-             # But the prompt said "replace internal _normalize with utils.text_utils.normalize_string"
              pass
 
         return normalize_string(val)
@@ -45,7 +42,6 @@ class HistoryService:
             "additional_interests": False
         }
         
-        # 1. Compare Scalar Fields (Policy Level)
         p_data = new_data.get('policy', {})
         
         scalar_map = {
@@ -74,7 +70,6 @@ class HistoryService:
                 new_val = p_data.get(json_key)
                 old_val = getattr(policy, attr)
                 
-                # Date Handling without Pandas
                 parsed_new = new_val
                 if "date" in json_key and isinstance(new_val, str) and new_val:
                     try:
@@ -82,7 +77,6 @@ class HistoryService:
                     except ValueError:
                         pass
 
-                # Comparison
                 norm_new = self._normalize(parsed_new)
                 norm_old = self._normalize(old_val)
 
@@ -92,13 +86,10 @@ class HistoryService:
                         "old_value": str(old_val),
                         "new_value": str(parsed_new)
                     })
-                    # Apply Update (Scalar only)
                     setattr(policy, attr, parsed_new)
 
-        # 2. Compare Collections (Semantic Diff)
         # CRITICAL FIX: If key is missing in new_data, ignore it (do not assume delete).
         
-        # Vehicles (By VIN)
         # Only process if 'vehicles' is explicitly in new_data
         if 'vehicles' in new_data:
             new_vehs = new_data.get('vehicles', [])
@@ -121,7 +112,6 @@ class HistoryService:
                 })
                 collection_changes["vehicles"] = True
 
-        # Coverages (By Code)
         if 'coverages' in new_data:
             new_covs = new_data.get('coverages', [])
             old_codes = {c.coverage_code for c in policy.coverages if c.coverage_code}
@@ -135,7 +125,6 @@ class HistoryService:
                 })
                 collection_changes["coverages"] = True
 
-        # Drivers
         if 'drivers' in new_data:
             new_drvs = new_data.get('drivers', [])
             old_drvs_set = {f"{d.full_name}|{d.license_number}" for d in policy.drivers}
@@ -149,10 +138,8 @@ class HistoryService:
                 })
                 collection_changes["drivers"] = True
         
-        # Additional Interests (New)
         if 'additional_interests' in new_data:
             new_ais = new_data.get('additional_interests', [])
-            # Compare by Name
             old_ais_set = {f"{a.name}|{a.interest_type}" for a in policy.additional_interests}
             new_ais_set = {f"{a.get('name')}|{a.get('interest_type')}" for a in new_ais}
             
@@ -164,7 +151,6 @@ class HistoryService:
                 })
                 collection_changes["additional_interests"] = True
 
-        # 3. Persist History
         if changes:
              version = self._get_next_version(policy.id)
              history = PolicyHistory(

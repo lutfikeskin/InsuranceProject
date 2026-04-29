@@ -29,14 +29,12 @@ class PolicyService:
         total_policies = self.session.query(Policy).count()
         total_vehicles = self.session.query(Vehicle).count()
         
-        # Calculate Total Premium
         # Note: premiums are stored as strings (e.g. "$1,200.00")
         all_premiums = self.session.query(Policy.premium).all()
         total_premium = 0.0
         for (p_str,) in all_premiums:
             if p_str:
                 try:
-                    # Remove $, commas and other non-numeric chars except dot
                     import re
                     clean_val = re.sub(r'[^\d.]', '', p_str)
                     if clean_val:
@@ -129,7 +127,6 @@ class PolicyService:
             Policy.expiration_date <= cutoff
         ).all()
         
-        # Group by month
         monthly = {}
         for i in range(months):
             future = today + timedelta(days=i * 30)
@@ -152,11 +149,9 @@ class PolicyService:
         classification = extraction_result.get('classification', {})
         policy_type = classification.get('policy_type', 'unknown')
         
-        # Determine account type based on classification
         account_type = ACCOUNT_TYPE_BY_POLICY.get(policy_type, "Commercial")
         policy_data['account_type'] = account_type
         
-        # Add classification metadata
         policy_data['policy_type'] = policy_type
         policy_data['classification_confidence'] = classification.get('confidence')
         policy_data['classification_signals'] = json.dumps(classification.get('signals', []))
@@ -173,10 +168,6 @@ class PolicyService:
         """Helper to create a transient Policy object from data."""
         normalized = self.normalize_policy_data(extraction_result)
         
-        # Flatten the normalized structure for the factory method
-        # normalized['policy'] contains scalar fields
-        # other keys are lists
-        
         flat_data = normalized['policy'].copy()
         flat_data['vehicles'] = normalized['vehicles']
         flat_data['coverages'] = normalized['coverages']
@@ -186,31 +177,21 @@ class PolicyService:
         return self.create_policy_from_dict(flat_data)
 
     def save_policy_from_extraction(self, extraction_result):
-        # 1. Create Transient Policy Object
         new_policy = self._create_policy_instance(extraction_result)
         
-        # 2. Check for Existing
         existing = self.get_policy_by_number(new_policy.policy_number)
         
         if existing:
-            # UPDATE LOGIC WITH HISTORY
             from .history_service import HistoryService
             history_svc = HistoryService(self.session)
-            
-            # Use strict diff
-            # I will USE THE HELPERS I WROTE: compare_and_record(existing, normalized_dict)
             
             normalized = self.normalize_policy_data(extraction_result)
             is_changed, changes, collection_changes = history_svc.compare_and_record(existing, normalized, source="AI_Re-Extraction", event_type="AI_EXTRACTION")
             
             if is_changed:
-                # IMPORTANT: scalar fields were updated by compare_and_record.
-                
-                # Update Collections Atomically if needed
                 if collection_changes["vehicles"]:
                     existing.vehicles.clear()
                     for v in new_policy.vehicles:
-                         # Append Copy (Re-creating objects to ensure no session conflict)
                          existing.vehicles.append(Vehicle(
                                 year=v.year, make=v.make, model=v.model, vin=v.vin,
                                 gvw=v.gvw, vehicle_type=v.vehicle_type, chassis=v.chassis, body=v.body
@@ -269,8 +250,6 @@ class PolicyService:
             return True, "Saved successfully"
 
     def save_policy_object(self, policy: Policy):
-        # Used when constructing object manually in review
-        # Check duplicate
         existing = self.get_policy_by_number(policy.policy_number)
         if existing:
             return False, "Skipped duplicate policy number."
@@ -288,24 +267,18 @@ class PolicyService:
         from .history_service import HistoryService
         history_svc = HistoryService(self.session)
         
-        # Determine payload structure
         if "policy" in updated_data or "vehicles" in updated_data or "drivers" in updated_data:
-             # It is already a structured payload
              final_payload = updated_data
         else:
-             # Legacy: Wrap scalar fields
              final_payload = {"policy": updated_data}
         
         is_changed, changes, collection_changes = history_svc.compare_and_record(policy, final_payload, source="Manual_Edit", event_type="MANUAL_EDIT")
         
         if is_changed:
-            # Apply Collection Updates if flagged
             if collection_changes.get("vehicles"):
                 new_vehs = final_payload.get('vehicles', [])
                 policy.vehicles.clear()
                 for v in new_vehs:
-                    # Reconstruct Vehicle objects
-                    # v is a dict here
                     policy.vehicles.append(Vehicle(
                         year=v.get('year'), make=v.get('make'), model=v.get('model'), 
                         vin=v.get('vin'), gvw=v.get('gvw'), vehicle_type=v.get('type') or v.get('vehicle_type'),
@@ -341,11 +314,9 @@ class PolicyService:
         Handles creating nested objects (Vehicles, Drivers, Coverages, AIs).
         Centralizes data parsing logic.
         """
-        # 1. Parse Dates safely
         effective_dt = pd.to_datetime(data.get('effective_date'), errors='coerce')
         expiration_dt = pd.to_datetime(data.get('expiration_date'), errors='coerce')
         
-        # 2. Create Base Policy
         # Ensure 'status' defaults to Active if missing
         status_val = data.get('status', 'Active')
 
@@ -374,14 +345,12 @@ class PolicyService:
             state=data.get('state'),
             financial_responsibility_name=data.get('financial_responsibility_name'),
             
-            # Account / Type
             account_type=data.get('account_type'),
             policy_type=data.get('policy_type'),
             classification_confidence=data.get('classification_confidence'),
             classification_signals=signals_json,
             status=status_val,
             
-            # Limits (Scalar)
             liability_limit=data.get('liability_limit'),
             general_liability_limit=data.get('general_liability_limit'),
             cargo_limit=data.get('cargo_limit'),
@@ -392,28 +361,21 @@ class PolicyService:
             comp_deductible=data.get('comp_deductible'),
             coll_deductible=data.get('coll_deductible'),
             
-            # Flags
             has_full_collision=data.get('has_full_collision'),
             has_general_liability=data.get('has_general_liability', False),
             has_auto_liability=data.get('has_auto_liability', False)
         )
         
-        # 3. Add Nested Collections
-        
-        # Vehicles
         vehs = data.get('vehicles', [])
-        # Support both list of dicts or list of objects (if reusing internal logic)
+        # Support both list of dicts and list of model objects.
         for v in vehs:
             if isinstance(v, dict):
-                # Check for required Minimums to avoid empty rows
                 if not v.get('vin') and not v.get('make'): continue # Skip empty
                 
-                # Apply Refinement if not already present
                 ref_type = v.get('vehicle_type')
                 if not ref_type:
                      refinement = refine_vehicle_type(v.get('year'), v.get('make'), v.get('model'), v.get('vin'), v.get('type'), gvw=v.get('gvw'))
                      ref_type = refinement.get('final_type')
-                     # Could also refine chassis/body if missing
                 
                 policy.vehicles.append(Vehicle(
                     year=v.get('year'),
@@ -428,7 +390,6 @@ class PolicyService:
             elif isinstance(v, Vehicle):
                 policy.vehicles.append(v) # Allow passing objects directly
 
-        # Drivers
         drvs = data.get('drivers', [])
         for d in drvs:
             if isinstance(d, dict):
@@ -452,13 +413,10 @@ class PolicyService:
             if nv:
                 vin_to_vehicle[nv] = veh
 
-        # Coverages
         covs = data.get('coverages', [])
         for c in covs:
             if isinstance(c, dict):
-                # Handle flattened structure (from Editor) or nested limits (from Extraction)
-
-                # Try flattened first (Editor style)
+                # Handle flattened editor payloads or nested extraction payloads.
                 per_person = c.get('per_person') or c.get('limits', {}).get('per_person')
                 per_accident = c.get('per_accident') or c.get('limits', {}).get('per_accident')
                 per_occ = c.get('per_occurrence') or c.get('limits', {}).get('per_occurrence')
@@ -490,7 +448,6 @@ class PolicyService:
             elif isinstance(c, Coverage):
                 policy.coverages.append(c)
 
-        # Additional Interests
         ais = data.get('additional_interests', [])
         for a in ais:
               if isinstance(a, dict):
@@ -519,8 +476,7 @@ class PolicyService:
             
         client = genai.Client(api_key=api_key)
         
-        # 1. Define Schema Context
-        # We simplify the schema description for the AI to minimize token usage
+        # Keep schema context concise to reduce token usage.
         schema_context = """
         You are a SQLite expert. Convert the user question into a valid SQL query.
         
@@ -579,7 +535,6 @@ class PolicyService:
         """
         
         try:
-            # 2. Generate SQL
             response = client.models.generate_content(
                 model='gemini-2.5-flash', 
                 contents=f"{schema_context}\n\nUser Question: {user_query}\nSQL:",
@@ -589,21 +544,16 @@ class PolicyService:
             )
             generated_sql = response.text.strip()
             
-            # Clean up markdown and trailing semicolon
             generated_sql = generated_sql.replace("```sql", "").replace("```", "").strip()
             if generated_sql.endswith(";"):
                 generated_sql = generated_sql[:-1].strip()
             
-            # Safety: Basic check to prevent destructive queries
             if not generated_sql.lower().startswith("select"):
                 return None, f"Safety Error: Only SELECT queries are allowed. Generated: {generated_sql}"
             if ";" in generated_sql:
                 return None, f"Safety Error: Multiple statements (;) are not allowed. Generated: {generated_sql}"
             
-            # 3. Execute
-            # Use session.execute to keep the connection alive for the rest of the request
             result = self.session.execute(text(generated_sql))
-            # Convert to list of dicts
             columns = result.keys()
             rows = [dict(zip(columns, row)) for row in result.fetchall()]
             
@@ -641,7 +591,6 @@ class COIService:
             "driver_list_str": ""
         }
         
-        # Descriptions logic
         desc_lines = []
         if p.vehicles:
             v_str = " ".join([f"[{v.year} {v.make} {v.vin}]" for v in p.vehicles])

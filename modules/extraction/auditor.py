@@ -23,11 +23,9 @@ class Auditor:
         errors = []
         policy = data.get("policy", {})
         
-        # 1. Critical Policy Fields
         if not policy.get("policy_number"):
             errors.append("Missing Policy Number")
         
-        # 2. Insured Info (Specific to the "Target Memo" issue)
         if not policy.get("insured_name"):
              errors.append("Missing Insured Name")
         
@@ -36,13 +34,10 @@ class Auditor:
         if addr and len(addr) < 5:
              errors.append("Insured Address seems invalid or too short")
 
-        # 3. Dates
         eff = policy.get("effective_date")
         curr_year = datetime.now().year
         if eff:
             try:
-                # Basic sanity check (Are we extracting a year 1900 or 2100?)
-                # Assuming YYYY-MM-DD
                 year = int(eff.split("-")[0])
                 if year < 2000 or year > (curr_year + 5):
                     errors.append(f"Suspicious Effective Year: {year}")
@@ -51,7 +46,6 @@ class Auditor:
         else:
              errors.append("Missing Effective Date")
 
-        # 4. Coverages (Logical Consistency)
         # If policy type is Auto, we EXPECT Auto Liability
         p_type = data.get("classification", {}).get("policy_type", "unknown")
         if "auto" in p_type:
@@ -59,8 +53,6 @@ class Auditor:
             if not has_al:
                  errors.append("Auto Policy missing Auto Liability Coverage")
 
-        # 5. Vehicles (Validation)
-        # If we have vehicles, check VIN structure
         for v in data.get("vehicles", []):
             vin = v.get("vin")
             if vin:

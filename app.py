@@ -6,13 +6,11 @@ from core.services import UsageService
 from streamlit_option_menu import option_menu
 from core.constants import DEFAULT_DAILY_BUDGET, APP_DISPLAY_TAGLINE
 
-# Import Views
 from views.dashboard import page_dashboard
 from views.process_policies import page_process_policies
 from views.database_page import page_database
 from views.create_coi import page_create_coi
 
-# Page Config
 st.set_page_config(
     page_title="Insurance Doc Intelligence", 
     page_icon="assets/browsericon.ico",
@@ -20,7 +18,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Load External CSS
 def load_css(file_name):
     if os.path.exists(file_name):
         with open(file_name) as f:
@@ -28,11 +25,9 @@ def load_css(file_name):
 
 load_css("assets/style.css")
 
-# Initialize DB
 if 'db_engine' not in st.session_state:
     st.session_state.db_engine = init_db()
 
-# --- Global Logic / Settings Helper ---
 api_key = st.session_state.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
 
 if not api_key:
@@ -43,7 +38,6 @@ if not api_key:
     except:
         pass
 
-# --- Settings Dialog ---
 @st.dialog("⚙️ Application Settings")
 def settings_modal():
     st.write("Configure your application settings below.")
@@ -71,7 +65,6 @@ def settings_modal():
         else:
             st.error(f"Error: {msg}")
 
-# --- Sidebar Navigation ---
 with st.sidebar:
     if os.path.exists("assets/logo.png"):
         st.image("assets/logo.png", width=150)
@@ -128,7 +121,6 @@ with st.sidebar:
     if api_key:
         st.success("API Active", icon="✅")
         
-        # --- LIVE COST MONITOR ---
         try:
             from core.services import UsageService
             import pandas as pd
@@ -138,12 +130,10 @@ with st.sidebar:
             budget_limit = DEFAULT_DAILY_BUDGET
             progress = min(daily_spend / budget_limit, 1.0)
             
-            # 1. Main Budget Card
             st.markdown("---")
             st.markdown("### 📊 Cost Monitor")
             
             with st.container():
-                # Progress Bar & Metric
                 col_a, col_b = st.columns([2, 1])
                 with col_a:
                     st.metric("Today's Spend", f"${daily_spend:.4f}")
@@ -154,7 +144,6 @@ with st.sidebar:
                 if daily_spend >= budget_limit:
                     st.error("Quota Exceeded! 🛑")
 
-            # 2. Token Details (Collapsible)
             with st.expander("Details", expanded=True):
                 in_tok, out_tok = usage_service.get_todays_token_stats()
                 st.markdown(f"""
@@ -165,12 +154,10 @@ with st.sidebar:
                 </div>
                 """, unsafe_allow_html=True)
 
-            # 3. Recent Activity Stream (Mini-Log)
             st.markdown("##### Recent Activity")
             recent_logs = usage_service.get_recent_usage(limit=5)
             if recent_logs:
                 for log in recent_logs:
-                     # Compact log item
                      st.markdown(f"""
                      <div style="
                         background: #f8f9fa; 
@@ -196,7 +183,6 @@ with st.sidebar:
     else:
         st.warning("API Missing", icon="⚠️")
 
-# --- Main Routing ---
 if selected == "Dashboard":
     page_dashboard()
 elif selected == "Process Policies":

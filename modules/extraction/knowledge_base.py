@@ -4,7 +4,6 @@ import os
 from typing import Dict, List
 from core.logger import logger
 
-# Simple JSON store for now. Can migrate to DB later.
 DEFAULT_HINTS = {
     "GEICO": [
         "Effective dates for GEICO are often found on the top right corner of the 'Declarations' page.",
@@ -48,7 +47,6 @@ class CarrierKnowledgeBase:
         if not carrier_name:
             return ""
             
-        # Basic fuzzy match (case insensitive)
         normalized_target = carrier_name.lower()
         
         found_hints = []

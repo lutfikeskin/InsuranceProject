@@ -1,6 +1,5 @@
 
 NAIC_MAPPINGS = {
-    # Progressive Companies
     "PROGRESSIVE CASUALTY INS CO": "24260",
     "PROGRESSIVE AMERICAN INS CO": "24252",
     "PROGRESSIVE SPECIALTY INS CO": "32786",
@@ -38,7 +37,6 @@ NAIC_MAPPINGS = {
     "PROGRESSIVE FREEDOM INS CO": "12302",
     "PROGRESSIVE GARDEN STATE INS CO": "12301",
     
-    # GEICO
     "GEICO": "37923",
     "GOVERNMENT EMPLOYEES INSURANCE COMPANY": "22063", # General GEICO NAIC just in case
     "GEICO GENERAL INSURANCE COMPANY": "35882",
@@ -56,13 +54,11 @@ def get_naic_for_carrier(carrier_name):
         
     c_upper = carrier_name.upper().strip()
     
-    # Normalize common abbreviations for better matching
     def normalize(name):
         return name.replace("INSURANCE", "INS").replace("COMPANY", "CO").replace("CORP", "CO").replace(".", "").replace(",", "").strip()
 
     c_norm = normalize(c_upper)
     
-    # Check mappings after normalization
     for k, v in NAIC_MAPPINGS.items():
         k_norm = normalize(k)
         if k_norm in c_norm or c_norm in k_norm:

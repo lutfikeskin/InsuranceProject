@@ -26,10 +26,8 @@ def _coverage_limit_display(c) -> str:
 def edit_policy_dialog(policy, service: PolicyService):
     st.write(f"Editing Policy: **{policy.policy_number}**")
     
-    # Define Tabs
     tab_details, tab_covs, tab_vehs, tab_drvs, tab_ais, tab_history = st.tabs(["📝 Details", "🛡️ Coverages", "🚙 Vehicles", "👤 Drivers", "🏢 Add'l Interests", "📜 History"])
     
-    # --- Tab 1: Details (Scalar Fields) ---
     with tab_details:
         with st.form("edit_details_form"):
             col1, col2 = st.columns(2)
@@ -50,7 +48,6 @@ def edit_policy_dialog(policy, service: PolicyService):
                 curr_conf = policy.classification_confidence if policy.classification_confidence in CONFIDENCE_OPTIONS else "low"
                 new_conf = st.selectbox("Confidence", options=CONFIDENCE_OPTIONS, index=CONFIDENCE_OPTIONS.index(curr_conf))
                 
-                # Status Field
                 curr_status = policy.status if policy.status in STATUS_OPTIONS else "Active"
                 new_status = st.selectbox("Status", options=STATUS_OPTIONS, index=STATUS_OPTIONS.index(curr_status))
 
@@ -108,9 +105,6 @@ def edit_policy_dialog(policy, service: PolicyService):
                     "status": new_status
                 }
                 
-                # Pass directly (wrapped implicitly by logic or explicit wrap check in logic)
-                # Logic: if 'vehicles' not in dict, history_svc ignores collection change. Correct.
-                
                 result = service.update_policy(policy, updated_data)
                 
                 if isinstance(result, tuple): success, msg = result
@@ -124,11 +118,9 @@ def edit_policy_dialog(policy, service: PolicyService):
                     
                     st.error(msg)
                     
-    # --- Tab 2: Coverages (New) ---
     with tab_covs:
         st.subheader("🛡️ Policy Coverages")
         
-        # Split coverages
         global_covs = [c for c in policy.coverages if not c.vehicle_id]
         
         st.markdown(f"**Global / Policy-Level ({len(global_covs)})**")
@@ -149,7 +141,6 @@ def edit_policy_dialog(policy, service: PolicyService):
         st.divider()
         st.subheader("🚙 Vehicle-Specific Coverages")
         
-        # vehicle-level
         has_veh_covs = False
         for v in policy.vehicles:
             if v.coverages:
@@ -175,7 +166,6 @@ def edit_policy_dialog(policy, service: PolicyService):
              st.info("No vehicle-specific coverages found (e.g. Comp/Coll might be global or missing).")
     with tab_vehs:
         st.subheader("Manage Vehicles")
-        # Prepare Data
         v_data = [{"year": v.year, "make": v.make, "model": v.model, "vin": v.vin, "type": v.vehicle_type, "gvw": v.gvw, "chassis": v.chassis, "body": v.body} for v in policy.vehicles]
         v_df = pd.DataFrame(v_data)
         if v_df.empty: v_df = pd.DataFrame(columns=["year", "make", "model", "vin", "type", "gvw", "chassis", "body"])
@@ -211,7 +201,6 @@ def edit_policy_dialog(policy, service: PolicyService):
                          "chassis": row.get('chassis'), "body": row.get('body')
                      })
                  
-                 # Send Payload
                  payload = {"vehicles": new_vehs_list}
                  result = service.update_policy(policy, payload)
                  if isinstance(result, tuple): success, msg = result
@@ -221,7 +210,6 @@ def edit_policy_dialog(policy, service: PolicyService):
                      st.rerun()
                  else: st.error(msg)
 
-    # --- Tab 3: Drivers ---
     with tab_drvs:
         st.subheader("Manage Drivers")
         d_data = [{"full_name": d.full_name, "license_number": d.license_number, "is_excluded": d.is_excluded} for d in policy.drivers]
@@ -260,7 +248,6 @@ def edit_policy_dialog(policy, service: PolicyService):
                      st.rerun()
                   else: st.error(msg)
 
-    # --- Tab 4: Additional Interests ---
     with tab_ais:
         st.subheader("Manage Additional Interests")
         ai_data = [{"name": a.name, "address": a.address, "interest_type": a.interest_type} for a in policy.additional_interests]
@@ -302,7 +289,6 @@ def edit_policy_dialog(policy, service: PolicyService):
                      st.rerun()
                  else: st.error(msg)
 
-    # --- Tab 5: History ---
     with tab_history:
         st.subheader("Changes Timeline")
         if not policy.history:

@@ -1,6 +1,4 @@
 
-# --- SCHEMAS ---
-
 CLASSIFICATION_SCHEMA = {
     "type": "OBJECT",
     "properties": {

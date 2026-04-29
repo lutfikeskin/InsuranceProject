@@ -6,7 +6,6 @@ def parse_currency(val):
     if not val:
         return 0.0
     
-    # Handle already numeric input
     if isinstance(val, (int, float)):
         return float(val)
 
@@ -16,9 +15,7 @@ def parse_currency(val):
     if 'k' in s: multiplier = 1000.0
     elif 'm' in s: multiplier = 1000000.0
     
-    # Remove common currency symbols and whitespace
     import re
-    # Keep digits and dots
     clean = re.sub(r'[^\d.]', '', s)
     
     try:
@@ -39,7 +36,6 @@ def normalize_string(val):
     if val is None:
         return None
     
-    # Check for booelans
     if isinstance(val, bool):
         return val
 

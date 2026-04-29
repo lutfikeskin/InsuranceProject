@@ -12,9 +12,6 @@ from utils.naic_utils import get_naic_for_carrier
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from streamlit_pdf_viewer import pdf_viewer
 
-# Highlights disabled for performance
-
-
 def _friendly_extraction_error(message: str | None) -> str:
     if not message:
         return "Extraction failed with no detail. Try Force Refresh or a different PDF."
@@ -64,13 +61,9 @@ def page_process_policies(api_key):
         if not field_locations:
             return None
         formatted_key = field_name
-        # Map simple keys to field_locations keys if different
-        # Currently the pipeline saves keys like "premium", "policy_number" directly.
-        
         for loc in field_locations:
              if loc.get("field") == field_name:
                  page = loc.get("page_number")
-                 # bbox = loc.get("bbox") # Optional: Add bbox details if valuable
                  return f"Found on Page {page}"
         return None
 
@@ -238,7 +231,6 @@ def page_process_policies(api_key):
                             key="batch_report_csv",
                         )
 
-        # Decision Section (Inside Tab 1)
         if st.session_state["temp_extracted"]:
             st.divider()
             st.subheader(f"Extraction Complete ({len(st.session_state['temp_extracted'])} files)")
@@ -260,7 +252,6 @@ def page_process_policies(api_key):
                 
                 try:
                     for item in st.session_state["temp_extracted"]:
-                        # Check for duplicates before saving
                         pol_num = item['data'].get('policy', {}).get('policy_number', '')
                         existing = service.check_duplicate(pol_num) if pol_num else None
                         
@@ -275,7 +266,6 @@ def page_process_policies(api_key):
                             skipped_count += 1
                             st.toast(msg, icon="⚠️")
                     
-                    # Summary message
                     parts = []
                     if processed_count:
                         parts.append(f"**{processed_count}** new {'policy' if processed_count == 1 else 'policies'} saved")
@@ -326,7 +316,6 @@ def page_process_policies(api_key):
             m_cargo = l3.text_input("Cargo Limit")
             m_cargo_ded = l4.text_input("Cargo Deductible")
             
-            # New Manual Inputs
             n1, n2, n3, n4, n5 = st.columns(5)
             m_um = n1.text_input("UM/UIM")
             m_med = n2.text_input("Med Pay")
@@ -349,7 +338,6 @@ def page_process_policies(api_key):
                     session = get_session(st.session_state.db_engine)
                     service = PolicyService(session)
                     try:
-                        # Determine Account Type logic matches service
                         from core.services import ACCOUNT_TYPE_BY_POLICY
                         acc_type = ACCOUNT_TYPE_BY_POLICY.get(m_type, "Commercial")
                         
@@ -388,8 +376,6 @@ def page_process_policies(api_key):
                         success, msg = service.save_policy_object(policy)
                         if success:
                             st.toast(f"Policy {m_pol_num} saved successfully!", icon="✅")
-                            # We can't easily clear the form without rerun, but rerun clears the toast.
-                            # Just show success.
                         else:
                             st.error(f"Error: {msg}")
                             
@@ -398,7 +384,6 @@ def page_process_policies(api_key):
                     finally:
                         session.close()
 
-    # Review Section
     if st.session_state["review_queue"]:
         st.divider()
         st.subheader(f"Step 2: Review & Save ({len(st.session_state['review_queue'])} remaining)")
@@ -411,7 +396,6 @@ def page_process_policies(api_key):
         
         with c_pdf:
             st.markdown(f"**Viewing:** `{fname}`")
-            # Highlights Toggle
             show_highlights = st.toggle("✨ Show Field Locations", value=False, help="Highlight extracted fields on the PDF. May affect performance.")
             
             annotations = []
@@ -422,12 +406,6 @@ def page_process_policies(api_key):
                     bbox = loc.get('bbox') # [ymin, xmin, ymax, xmax] 0-1000 scale
                     
                     if bbox and len(bbox) == 4:
-                        # Streamlit PDF Viewer expects [x, y, width, height] in some versions or direct PDF coords?
-                        # The standard format for many PDF tools is [x, y, width, height].
-                        # Gemini returns [ymin, xmin, ymax, xmax] on 1000x1000 scale.
-                        # We need to map this. For now, we will try a simple red rectangle wrapper.
-                        # Note: st_pdf_viewer annotations support might differ. 
-                        # Assuming simple rectangular highlight support:
                         annotations.append({
                             "page": page,
                             "x": bbox[1], # xmin
@@ -445,13 +423,11 @@ def page_process_policies(api_key):
             with st.form(key=f"review_form_{fname}"):
                 c1, c2 = st.columns(2)
                 
-                # Metadata for Tooltips (Global fetch inside form)
                 locs = p.get('field_locations', [])
                 
                 r_carrier = c1.text_input("Carrier", value=p.get('carrier_name', ''), help=get_source_help("carrier_name", locs))
                 r_pol_num = c2.text_input("Policy Number", value=p.get('policy_number', ''), help=get_source_help("policy_number", locs))
                 
-                # Show Classification Info
                 classification = current_item['data'].get('classification', {})
                 cc1, cc2 = st.columns(2)
                 r_type = cc1.text_input("Policy Type", value=classification.get('policy_type', ''), disabled=True)
@@ -459,21 +435,17 @@ def page_process_policies(api_key):
                 
                 c3, c4 = st.columns(2)
                 
-                # Auto-fill NAIC if missing
                 current_naic = p.get('naic_number', '')
                 if not current_naic:
                     current_naic = get_naic_for_carrier(p.get('carrier_name', ''))
                 
-                # Metadata for Tooltips
                 locs = p.get('field_locations', [])
                 
                 r_naic = c3.text_input("NAIC Code", value=current_naic)
                 
-                # Premium with Audit & Tooltip
                 prem_help = get_source_help("premium", locs)
                 audit_meta = p.get("premium_audit", {})
                 
-                # Premium Label with Indicator
                 prem_label = "Premium"
                 if audit_meta.get("confidence") == "low":
                     prem_label += " ⚠️ (Check Split/Installment)"
@@ -501,7 +473,6 @@ def page_process_policies(api_key):
                 r_cargo = st.text_input("Cargo Limit", value=p.get('cargo_limit', ''))
                 r_cargo_ded = st.text_input("Cargo Ded", value=p.get('cargo_deductible', ''))
                 
-                # New Review Inputs
                 st.markdown("##### Additional Coverages")
                 rc1, rc2, rc3, rc4, rc5 = st.columns(5)
                 r_um = rc1.text_input("UM/UIM", value=p.get('um_uim_limit', ''))
@@ -521,7 +492,6 @@ def page_process_policies(api_key):
                 with t1:
                     v_data = current_item['data'].get('vehicles', [])
                     v_df = pd.DataFrame(v_data)
-                    # Helper to ensures columns exist
                     for col in ["year", "make", "model", "vin", "type", "gvw"]:
                         if col not in v_df.columns: v_df[col] = None
                     
@@ -560,7 +530,6 @@ def page_process_policies(api_key):
                 
                 with t3:
                     c_data = current_item['data'].get('coverages', [])
-                    # Flatten current extracted limits for editor if needed or present as is
                     c_rows = []
                     for c in c_data:
                          row = {
@@ -615,7 +584,6 @@ def page_process_policies(api_key):
 
                 st.markdown("---")
                 
-                # Duplicate detection warning
                 b_col_warn = st.container()
                 
                 b_col1, b_col2, b_col3 = st.columns([1, 1, 1])
@@ -627,7 +595,6 @@ def page_process_policies(api_key):
                     session = get_session(st.session_state.db_engine)
                     service = PolicyService(session)
                     try:
-                        # Check for duplicate before saving
                         existing = service.check_duplicate(r_pol_num)
                         if existing:
                             b_col_warn.warning(
@@ -636,7 +603,6 @@ def page_process_policies(api_key):
                                 f"Saving will **update** the existing record."
                             )
                         
-                        # Construct flattened dictionary for factory
                         policy_payload = {
                             "carrier_name": r_carrier,
                             "naic_number": r_naic,
@@ -669,7 +635,6 @@ def page_process_policies(api_key):
                             "has_full_collision": p.get('has_full_collision'),
                             "status": r_status,
                             
-                            # Collections (Editor DFs converted to list of dicts)
                             "vehicles": edited_v.to_dict('records') if not edited_v.empty else [],
                             "drivers": edited_d.to_dict('records') if not edited_d.empty else [],
                             "coverages": edited_c.to_dict('records') if not edited_c.empty else [],
@@ -678,7 +643,6 @@ def page_process_policies(api_key):
                         
                         policy = service.create_policy_from_dict(policy_payload)
 
-                        # We should use service.save_policy_object
                         success, msg = service.save_policy_object(policy)
                         
                         if success:
@@ -687,8 +651,6 @@ def page_process_policies(api_key):
                             st.rerun()
                         else:
                             st.toast(f"⚠️ Could not save: {msg}", icon="⚠️")
-                            # If individual save (not next), maybe we show error persistent? 
-                            # Toast is fine for now as it doesn't block flow.
                         
                     except Exception as e:
                         st.toast(f"❌ Save failed: {e}", icon="❌")

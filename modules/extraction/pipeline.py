@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Any
 from functools import lru_cache
 
-# Internal Modules
 from core.logger import logger
 from core.constants import DEFAULT_DAILY_BUDGET
 from .pdf_ops import PdfProcessor
@@ -34,7 +33,6 @@ from core.services import UsageService
 
 from .knowledge_base import CarrierKnowledgeBase
 
-# Import schemas and prompts
 from .schemas import (
     CLASSIFICATION_SCHEMA,
     DECLARATIONS_SCHEMA,
@@ -48,8 +46,6 @@ from .prompts import (
     CLASSIFY_POLICY_PROMPT,
     get_extract_all_prompt
 )
-
-# --- HELPERS ---
 
 @lru_cache(maxsize=16)
 def get_cached_registry_json(policy_type: str) -> str:
@@ -77,13 +73,10 @@ def get_cached_registry_json(policy_type: str) -> str:
                 
     return json.dumps(filtered_registry, separators=(',', ':')) # Compact JSON
 
-# --- CONFIGURATION ---
 ROUTING_MODEL = "gemini-2.5-flash"
 EXTRACTION_MODEL = "gemini-2.5-flash"
 CACHE_VERSION = "v11_turbo" # Bumped for new Architecture + Short Doc Strategy
 
-
-# --- STATE MANAGEMENT ---
 
 @dataclass
 class ExtractionContext:
@@ -94,7 +87,6 @@ class ExtractionContext:
     classification: dict = field(default_factory=dict)
     extracted_data: dict = field(default_factory=dict) # Raw API responses
     
-    # Normalized Results
     final_policy: dict = field(default_factory=dict)
     final_coverages: list = field(default_factory=list)
     final_vehicles: list = field(default_factory=list)
@@ -113,9 +105,6 @@ class ExtractionContext:
         return self.classification.get('confidence', 'unknown')
 
 
-# --- PIPELINE CLASS ---
-
-# --- CACHING ---
 class ExtractionCache:
     def __init__(self, cache_dir=".cache/extraction_cache"):
         self.cache_dir = cache_dir
@@ -131,7 +120,6 @@ class ExtractionCache:
                 json.dump({}, f)
 
     def get(self, file_hash: str) -> Optional[dict]:
-        # Versioned Key
         key = f"{CACHE_VERSION}_{file_hash}"
         try:
             cache_path = os.path.join(self.cache_dir, f"{key}.json")
@@ -156,7 +144,6 @@ class ExtractionCache:
 class GeminiExtractionPipeline:
     def __init__(self, api_key: str):
         self.client = genai.Client(api_key=api_key)
-        # Initialize usage tracking
         self.engine = create_engine("sqlite:///insurance_data.db")
         self.session = get_session(self.engine)
         self.usage_service = UsageService(self.session)
@@ -170,14 +157,12 @@ class GeminiExtractionPipeline:
         Main Entry Point.
         Returns: (data, usage, error_message)
         """
-        # 1. Initialize Context & Tools
         processor = PdfProcessor(file_bytes)
         ctx = ExtractionContext(
             file_bytes=file_bytes,
             file_hash=processor.get_hash()
         )
         
-        # 2. Local Cache Check
         cache_system = ExtractionCache()
         cached_result = cache_system.get(ctx.file_hash)
         if cached_result and not force_refresh:
@@ -186,7 +171,6 @@ class GeminiExtractionPipeline:
         uploaded_file = None
         
         try:
-            # 3. Upload to Gemini File API
             logger.info("Uploading to Gemini File API...")
             if status_callback: status_callback(" Reading the Document...")
             
@@ -196,31 +180,25 @@ class GeminiExtractionPipeline:
         except Exception as e:
             return None, None, f"Initialization Error: {str(e)}"
             
-        # 4. Extraction (Universal One-Shot)
         active_cache = None
         try:
-            # --- CACHE CREATION (Always attempt for One-Shot) ---
             if uploaded_file:
                 if status_callback: status_callback(" Creating Context Cache...")
                 active_cache = self._create_cache(uploaded_file)
             
-            # Use Cache Name if valid, otherwise fallback to uploaded_file object
             final_content_reference = active_cache.name if active_cache else uploaded_file
 
             if status_callback: status_callback(" 🧠 Performing Deep Extraction (Universal One-Shot)...")
             
-            # Generate Dynamic Registry Prompt (Full Registry for Universal Call)
             registry_json = get_cached_registry_json(None) 
             prompt = get_extract_all_prompt(registry_json)
 
-            # --- SINGLE MEGA-CALL ---
             config = types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=COMPLETE_POLICY_SCHEMA,
                 thinking_config=types.ThinkingConfig(thinking_budget=0)
             )
             
-            # If using cache, we pass the cache name in the config
             contents = [prompt]
             if active_cache:
                 config.cached_content = active_cache.name
@@ -237,7 +215,6 @@ class GeminiExtractionPipeline:
 
             raw_data = self._parse_json_response(response.text, ctx)
             
-            # --- MAP TO CONTEXT ---
             ctx.classification = raw_data.get("classification", {})
             ctx.extracted_data["policy"] = raw_data.get("policy", {})
             ctx.extracted_data["coverages"] = {"coverages": raw_data.get("coverages", [])}
@@ -253,7 +230,6 @@ class GeminiExtractionPipeline:
             return None, None, f"Extraction Error: {str(e)}"
         
         finally:
-            # Cleanup Cache explicitly if we finished
              if active_cache:
                 try:
                     self.client.caches.delete(name=active_cache.name)
@@ -261,7 +237,6 @@ class GeminiExtractionPipeline:
                 except:
                     pass
              
-             # Cleanup File if it exists (and we aren't relying on it for a living cache)
              if uploaded_file:
                  try:
                      self.client.files.delete(name=uploaded_file.name)
@@ -269,16 +244,12 @@ class GeminiExtractionPipeline:
             
 
 
-        # 6. Normalize & Validate
         final_result = self._assemble_result(ctx, processor)
         
 
 
 
         
-        # 7. Cache Save
-        # Only save if valid OR if we accept partials (user preference usually valid)
-        # We save anyway but log it.
         try:
             cache_system.save(ctx.file_hash, final_result)
         except Exception as e:
@@ -287,8 +258,6 @@ class GeminiExtractionPipeline:
         return final_result, ctx.usage_metadata, None
 
 
-
-    # --- INTERNAL STEPS ---
 
     def _upload_to_gemini(self, file_bytes):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -320,12 +289,10 @@ class GeminiExtractionPipeline:
     def _call_gemini(self, model: str, contents: list, config: types.GenerateContentConfig, request_type: str = "extraction"):
         """Centralized wrapper to enforce daily budget and log usage."""
         if self.usage_service.is_over_budget(daily_limit=DEFAULT_DAILY_BUDGET):
-             # Hard stop for safety
              raise Exception(
                  f"STOPS: API Daily Quota Exceeded (${DEFAULT_DAILY_BUDGET}). Processing halted to prevent billing."
              )
         
-        # FORCE DETERMINISM: Temperature 0.0
         config.temperature = 0.0
         
         response = self.client.models.generate_content(
@@ -334,7 +301,6 @@ class GeminiExtractionPipeline:
             config=config
         )
         
-        # Log tokens if available
         if response.usage_metadata:
             self.usage_service.log_usage(
                 model_name=model,
@@ -364,7 +330,6 @@ class GeminiExtractionPipeline:
         """Centralized result parser to handle Gemini's list/dict inconsistency recursively."""
         try:
             data = json.loads(text)
-            # Recursively unwrap lists until we find a dict
             while isinstance(data, list):
                 if ctx:
                     # Observability: Track unwraps as signal of model struggle
@@ -388,8 +353,6 @@ class GeminiExtractionPipeline:
 
 
 
-    # --- NORMALIZATION ---
-
     def _clean_coverage_zeros(self, coverages: list) -> list:
         """
         Gemini's structured output fills missing INTEGER fields with 0 instead of null.
@@ -398,32 +361,27 @@ class GeminiExtractionPipeline:
         """
         LIMIT_KEYS = {"per_person", "per_accident", "per_occurrence", "combined_single_limit", "aggregate"}
         for c in coverages:
-            # Clean limits sub-object
             if isinstance(c.get("limits"), dict):
                 for k in LIMIT_KEYS:
                     if c["limits"].get(k) == 0:
                         c["limits"][k] = None
-            # Clean deductible
             if c.get("deductible") == 0:
                 c["deductible"] = None
-            # Clean string "null" values the model sometimes emits
             if c.get("vehicle_vin") in ("null", ""):
                 c["vehicle_vin"] = None
         return coverages
 
     def _assemble_result(self, ctx: ExtractionContext, processor: PdfProcessor) -> dict:
         
-        # 1. Base Policy Data
         final = {
             "policy": ctx.extracted_data.get("policy", {}),
             "coverages": [],
-            "vehicles": [], # Will be populated by 1a
+            "vehicles": [],
             "drivers": ctx.extracted_data.get("drivers", {}).get("drivers", []),
             "classification": ctx.classification,
             "page_dimensions": processor.get_dimensions()
         }
 
-        # 1a. Refine Vehicles (The "Great System")
         raw_vehs = ctx.extracted_data.get("vehicles", {}).get("vehicles", [])
         for v in raw_vehs:
             refined = refine_vehicle_type(
@@ -443,12 +401,10 @@ class GeminiExtractionPipeline:
             v['body'] = refined.get('body') or v.get('body')
             final["vehicles"].append(v)
         
-        # 2. Clean zero-fills from structured output schema enforcement
         raw_covs = self._clean_coverage_zeros(
             ctx.extracted_data.get("coverages", {}).get("coverages", [])
         )
 
-        # 3. Validate Coverages
         for c in raw_covs:
             code = c.get("coverage_code")
             if not code:
@@ -461,10 +417,8 @@ class GeminiExtractionPipeline:
                 final["coverages"].append(c)
 
 
-        # 3. Sanity Checks (CSL vs Split)
         self._apply_auto_liability_rules(final["coverages"], ctx.policy_type)
         
-        # 4. Summarize Limits
         self._compute_summaries(final)
         
         final["policy"]["has_full_collision"] = any(c.get("family") == "physical_damage" for c in final["coverages"])
@@ -486,24 +440,20 @@ class GeminiExtractionPipeline:
             coverages[:] = [c for c in coverages if not (c.get("family") == "auto_liability" and c.get("limit_structure") == "split")]
 
     def _compute_summaries(self, final):
-        # Auto Liab
         raw_summary = summarize_auto_liability(final["coverages"])
         if raw_summary:
             final["policy"]["liability_limit"] = format_liability_limit(raw_summary)
             
-        # GL
         raw_gl = summarize_general_liability(final["coverages"])
         if raw_gl:
             final["policy"]["general_liability_limit"] = format_liability_limit(raw_gl)
             
-        # Cargo
         raw_cargo = summarize_cargo(final["coverages"])
         if raw_cargo:
              final["policy"]["cargo_limit"] = f"${raw_cargo['value']:,}"
              if raw_cargo.get("deductible"):
                   final["policy"]["cargo_deductible"] = str(raw_cargo["deductible"])
         
-        # New Summaries
         covs = final["coverages"]
         
         final["policy"]["um_uim_limit"] = summarize_um_uim(covs)
@@ -515,13 +465,10 @@ class GeminiExtractionPipeline:
             final["policy"]["comp_deductible"] = phys_dam.get("comp")
             final["policy"]["coll_deductible"] = phys_dam.get("coll")
 
-        # Flags
         final["policy"]["has_auto_liability"] = any(c.get("family") == "auto_liability" for c in covs)
         final["policy"]["has_general_liability"] = any(c.get("family") == "general_liability" for c in covs)
         final["policy"]["has_full_collision"] = any(c.get("family") == "physical_damage" for c in covs)
 
-
-# --- WRAPPER FOR BACKWARD COMPATIBILITY ---
 
 def process_pdf(file_bytes, api_key, status_callback=None, force_refresh=False):
     """

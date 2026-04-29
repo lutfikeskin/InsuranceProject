@@ -1,6 +1,3 @@
-# core/constants.py
-
-# Policy Constants
 POLICY_TYPES = [
     "personal_auto", 
     "commercial_auto", 
@@ -16,10 +13,8 @@ STATUS_OPTIONS = ["Active", "Pending", "Quote", "Expired", "Cancelled"]
 
 CONFIDENCE_OPTIONS = ["high", "medium", "low"]
 
-# Vehicle Constants
 VEHICLE_TYPES = ["Private Passenger", "Truck", "Trailer", "Tractor", "Van", "Bus", "Motorcycle", "Unknown"]
 
-# Interest Constants
 INTEREST_TYPES = [
     "Loss Payee", 
     "Additional Insured", 
@@ -29,10 +24,8 @@ INTEREST_TYPES = [
     "Other"
 ]
 
-# Validation Patterns
 VIN_REGEX = "^[A-HJ-NPR-Z0-9]{17}$"
 
-# Application Settings
 DEFAULT_DAILY_BUDGET = 2.5
 
 # Policy list/search (Database, COI, Dashboard)

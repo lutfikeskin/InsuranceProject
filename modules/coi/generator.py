@@ -14,7 +14,6 @@ class COIGenerator:
         import json
         
         try:
-            # Load Mappings
             try:
                 import os
                 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -33,28 +32,24 @@ class COIGenerator:
             page = reader.pages[0]
             writer.add_page(page)
             
-            # Fix: Copy /AcroForm from reader to writer to ensure form fields are recognized
+            # Preserve AcroForm so PDF fields remain writable.
             if "/AcroForm" in reader.trailer["/Root"]:
                 writer.root_object.update({
                     pypdf.generic.NameObject("/AcroForm"): reader.trailer["/Root"]["/AcroForm"]
                 })
 
-            # Helper to format dates
             def fmt_date(d):
                 if not d: return ""
                 if isinstance(d, (datetime, date)):
                     return d.strftime("%m/%d/%Y")
                 return "" # Return empty string for None/Text to let explicit strings pass if needed, or handle elsewhere
             
-            # Helper to clean limits (remove text)
             def clean_limit(val):
                 if not val: return ""
-                # Keep only digits, commas, dots
                 import re
                 cleaned = re.sub(r'[^\d,.]', '', str(val))
                 return f"${cleaned}" if cleaned else ""
 
-            # Logic Flags
             has_gl = policy_data.get('has_general_liability', True) # Default to True if missing to be safe
             has_auto = policy_data.get('has_auto_liability', True)
             gl_occ = clean_limit(policy_data.get('liability_limit', '')) if has_gl else ""
@@ -64,24 +59,15 @@ class COIGenerator:
                 else ""
             )
             
-            # Cargo Handling
             cargo_limit = clean_limit(policy_data.get('cargo_limit', ''))
             cargo_ded = clean_limit(policy_data.get('cargo_deductible', ''))
             has_cargo = bool(cargo_limit)
             
-            # Description Construction
-            # Vehicle List: [Year Model VIN]
-            # Driver List: [Each driver names]
-            # Radius of Operation: Unlimited
-            # Certificate Holder is also listed as an additional insured
-            
             desc_lines = []
             
-            # Vehicles
             if policy_data.get('vehicle_list_str'):
                 desc_lines.append(f"Vehicle List: {policy_data.get('vehicle_list_str')}")
             
-            # Drivers
             if policy_data.get('driver_list_str'):
                 desc_lines.append(f"Driver List: {policy_data.get('driver_list_str')}")
                 
@@ -97,29 +83,14 @@ class COIGenerator:
                 wrapped_lines.extend(line.splitlines() or [line])
             full_description = "\n".join(wrapped_lines)
 
-            # Prepare the data dictionary
-            # We construct the fields dict by looking up the PDF field name in our map
-            
-            # 1. Static/Hardcoded & Conditional "A"s
             fields = {
-                # Document Date -> Current Date
                 "F[0].P1[0].Form_CompletionDate_A[0]": datetime.now().strftime("%m/%d/%Y")
             }
             
-            # Add "A" only if coverage exists, otherwise set to empty string to ensure it's cleared
             fields["F[0].P1[0].GeneralLiability_InsurerLetterCode_A[0]"] = "A" if has_gl else ""
             fields["F[0].P1[0].Vehicle_InsurerLetterCode_A[0]"] = "A" if has_auto else ""
             
-            # Cargo usually falls under "Other"
             fields["F[0].P1[0].OtherPolicy_InsurerLetterCode_A[0]"] = "A" if has_cargo else ""
-            
-            # 2. Dynamic Mapping
-            # (Key in JSON) -> (Value from Data)
-            # 2. Dynamic Mapping
-            # (Key in JSON) -> (Value from Data)
-            
-            # NAIC & Carrier
-            # Assuming Mapping "Insurer_Name_A" -> "Insurer_FullName_A[0]"
             
             data_map = {
                 "Insurer_Name_A": policy_data.get('carrier_name', ''),
@@ -153,7 +124,6 @@ class COIGenerator:
                 "Holder_Zip": holder_data.get('zip', ''),
                 "Holder_Description": full_description,
                 
-                # Cargo Section
                 "Cargo_Box": "Motor Truck Cargo" if has_cargo else "",
                 "Cargo_Limit": f"{cargo_limit} Cargo\n{cargo_ded} Ded" if has_cargo else "",
                 "Cargo_Effective": fmt_date(policy_data.get('effective_date')) if has_cargo else "",
@@ -161,7 +131,6 @@ class COIGenerator:
                 "Cargo_PolicyNumber": policy_data.get('policy_number', '') if has_cargo else ""
             }
             
-            # Apply mappings
             for key, val in data_map.items():
                 pdf_field_name = field_map.get(key)
                 if pdf_field_name:
@@ -173,26 +142,21 @@ class COIGenerator:
             writer.write(output_buffer)
             filled_pdf_bytes = output_buffer.getvalue()
             
-            # 3. Flatten (Bake) the PDF using PyMuPDF (fitz)
             try:
                 import fitz
                 doc = fitz.open("pdf", filled_pdf_bytes)
 
-                # Set font size on the description widget before baking
                 desc_field_key = field_map.get("Holder_Description", "")
                 for page in doc:
                     for widget in page.widgets():
                         wname = widget.field_name or ""
-                        # PyMuPDF may return full path or just terminal segment
                         if wname == desc_field_key or desc_field_key.endswith(wname) or wname.endswith(desc_field_key):
                             widget.text_fontsize = desc_font_size
                             widget.update()
                             break
 
-                # doc.bake() flattens all form fields and annotations across the document
                 doc.bake()
                 
-                # Save to a new buffer
                 flattened_buffer = io.BytesIO()
                 doc.save(flattened_buffer)
                 doc.close()
@@ -202,16 +166,13 @@ class COIGenerator:
                 return filled_pdf_bytes
             except Exception as e:
                 print(f"Error flattening PDF: {e}")
-                # Fallback to filled but not flattened PDF if flattening fails
                 return filled_pdf_bytes
 
         except Exception as e:
-            # Re-raise to let the UI handle it or log it
             print(f"Error generating COI: {e}")
             raise e
 
 if __name__ == "__main__":
-    # Test
     gen = COIGenerator()
     dummy_policy = {
         "policy_number": "TEST-12345", 

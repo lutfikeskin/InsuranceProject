@@ -39,7 +39,6 @@ def page_database(api_key):
             st.info("No records found in database for this search.")
             return
 
-        # --- Chat with Data Feature ---
         with st.expander("💬 Chat with your Data (AI Search)", expanded=False):
             st.info("Ask complex questions like: 'Show me all policies with premium over $5000' or 'List all Mack trucks'.")
             
@@ -49,19 +48,16 @@ def page_database(api_key):
             with c_chat_btn:
                 ask_submitted = st.button("Ask AI", type="secondary", width='stretch')
 
-            # Initialize session state for results if not present
             if "ai_search_results" not in st.session_state:
                 st.session_state.ai_search_results = None
                 st.session_state.ai_debug_sql = None
 
             if ask_submitted and user_question:
-                # Get API Key passed from app loop
                 with st.spinner("Analyzing Database Schema & Generating SQL..."):
                         results, debug_sql = service.ask_your_data(user_question, api_key)
                         st.session_state.ai_search_results = results
                         st.session_state.ai_debug_sql = debug_sql
             
-            # Display results from Session State
             if st.session_state.ai_search_results is not None:
                 results = st.session_state.ai_search_results
                 debug_sql = st.session_state.ai_debug_sql
@@ -69,39 +65,31 @@ def page_database(api_key):
                 if results:
                     st.success(f"Found {len(results)} results")
                     
-                    # Display SQL in a clean expander
                     with st.expander("🛠️ View Generated SQL code"):
                         st.code(debug_sql, language="sql")
 
                     res_df = pd.DataFrame(results)
                     
                     if not res_df.empty:
-                        # Format columns to Title Case
                         res_df.columns = [col.replace('_', ' ').title() for col in res_df.columns]
                         
                         show_all_ai_cols = st.checkbox("Show all raw columns", value=False, key="ai_show_all")
                         
                         display_df = res_df
-                        should_fit_cols = False # Default for raw view
+                        should_fit_cols = False
                         
                         if not show_all_ai_cols:
-                            # Strict Whitelist for Default View
-                            # If the query returns "Policy Number" etc, we show them.
-                            # If it's an aggregate (Count, Sum), we show everything (usually few cols).
-                            
                             whitelist = [
                                 "Policy Number", "Insured Name", "Carrier Name", "Status", 
                                 "Effective Date", "Expiration Date", "Premium", "Liability Limit"
                             ]
                             
-                            # Check if we have at least one whitelist column
                             present_whitelist = [c for c in whitelist if c in res_df.columns]
                             
                             if len(present_whitelist) > 0:
                                 display_df = res_df[present_whitelist]
                                 should_fit_cols = True
                             else:
-                                # Fallback: If no whitelist cols found (e.g. "Select count(*)"), show all but clean up ID
                                 priority_cols = [c for c in res_df.columns if "Id" not in c and "Signal" not in c]
                                 if priority_cols:
                                     display_df = res_df[priority_cols]
@@ -124,19 +112,15 @@ def page_database(api_key):
                     else:
                         st.warning("Query returned empty result.")
                 else:
-                     # Empty list persistence
                      st.warning("Query executed successfully but returned no results.")
                      with st.expander("🛠️ View Generated SQL code"):
                         st.code(debug_sql, language="sql")
             elif ask_submitted:
-                 # Error case where results is None but logic ran? 
-                 # Actually services returns None, debug info if error
                  pass 
 
         
         st.divider()
 
-        # --- Main Data Preparation ---
         data_list = []
         export_data = []
         def parse_limit(val_str):
@@ -271,7 +255,6 @@ def page_database(api_key):
 
         df = pd.DataFrame(data_list)
 
-        # --- Column Visibility Control (Popover) ---
         all_cols = list(df.columns)
         strict_defaults = [
             "Status",
