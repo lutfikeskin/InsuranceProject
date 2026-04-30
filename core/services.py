@@ -9,6 +9,7 @@ from .coverage_ontology import summarize_auto_liability, format_liability_limit
 from utils.vehicle_utils import refine_vehicle_type
 import pandas as pd
 import json
+import re
 
 ACCOUNT_TYPE_BY_POLICY = {
     "personal_auto": "Personal",
@@ -28,6 +29,7 @@ def build_extraction_extras_json(extraction_result: dict) -> str | None:
     fields that are not stored in relational columns.
     """
     comp = dict(extraction_result.get("compliance") or {})
+    policy_data_source = extraction_result.get("policy_data_source")
     pol = extraction_result.get("policy") or {}
     coverages = extraction_result.get("coverages") or []
     vehicles = extraction_result.get("vehicles") or []
@@ -58,12 +60,13 @@ def build_extraction_extras_json(extraction_result: dict) -> str | None:
     def _row_has_values(d: dict) -> bool:
         return any(v not in (None, "", [], {}) for v in d.values())
 
-    has_content = bool(comp) or bool(pol_ont) or any(
+    has_content = bool(comp) or bool(pol_ont) or bool(policy_data_source) or any(
         _row_has_values(d) for d in veh_ont
     ) or any(_row_has_values(d) for d in cov_ont)
     if not has_content:
         return None
     payload = {
+        "policy_data_source": policy_data_source,
         "compliance": comp,
         "policy_ontology": pol_ont,
         "vehicles_ontology": veh_ont,
@@ -129,6 +132,169 @@ Rules:
 """.strip()
 
 class PolicyService:
+    CRITICAL_CONFIDENCE_FIELDS = (
+        "carrier_name",
+        "policy_number",
+        "effective_date",
+        "expiration_date",
+        "liability_limit",
+        "cargo_limit",
+        "premium",
+        "insured_name",
+    )
+
+    REQUIRED_FOR_COI = (
+        "carrier_name",
+        "policy_number",
+        "effective_date",
+        "expiration_date",
+        "insured_name",
+        "liability_limit",
+    )
+    RECOMMENDED_FOR_COI = ("naic_number", "insured_address", "cargo_limit")
+
+    @classmethod
+    def _extract_field_confidences(cls, policy_data: dict) -> dict | None:
+        if not isinstance(policy_data, dict):
+            return None
+        confidences: dict[str, str] = {}
+        for field in cls.CRITICAL_CONFIDENCE_FIELDS:
+            raw_conf = policy_data.get(f"{field}_confidence")
+            conf = cls._clean_text(raw_conf)
+            if conf not in {"high", "medium", "low"}:
+                continue
+            confidences[field] = conf
+        return confidences or None
+
+    @staticmethod
+    def _clean_text(value):
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+        compact = " ".join(value.replace("\u200b", "").split()).strip()
+        if not compact:
+            return None
+        if compact.lower() in {"null", "none", "n/a", "-"}:
+            return None
+        return compact
+
+    @classmethod
+    def _clean_limit_text(cls, value):
+        text = cls._clean_text(value)
+        if text is None:
+            return None
+        # Normalize common OCR split tokens for cargo lines.
+        normalized = text.replace("Cargo w/", "Cargo w /").replace("Deductible", "Deductible")
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        return normalized
+
+    @classmethod
+    def _merge_coi_policy_rows(cls, rows: list[dict]) -> dict:
+        merged: dict = {}
+        merged_limits: dict = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            for key in (
+                "policy_type",
+                "carrier_name",
+                "carrier_name_confidence",
+                "naic_number",
+                "policy_number",
+                "policy_number_confidence",
+                "effective_date",
+                "effective_date_confidence",
+                "expiration_date",
+                "expiration_date_confidence",
+                "insured_name",
+                "insured_name_confidence",
+                "premium",
+                "premium_confidence",
+            ):
+                val = cls._clean_text(row.get(key))
+                if val is not None and merged.get(key) in (None, ""):
+                    merged[key] = val
+            limits = row.get("limits") if isinstance(row.get("limits"), dict) else {}
+            for limit_key, limit_val in limits.items():
+                clean_limit = cls._clean_limit_text(limit_val)
+                if clean_limit is not None and merged_limits.get(limit_key) in (None, ""):
+                    merged_limits[limit_key] = clean_limit
+        merged["limits"] = merged_limits
+        return merged
+
+    def _save_single_extraction_payload(self, extraction_result):
+        new_policy = self._create_policy_instance(extraction_result)
+        existing = self.get_policy_by_number(new_policy.policy_number)
+
+        if existing:
+            from .history_service import HistoryService
+            history_svc = HistoryService(self.session)
+
+            normalized = self.normalize_policy_data(extraction_result)
+            is_changed, changes, collection_changes = history_svc.compare_and_record(
+                existing, normalized, source="AI_Re-Extraction", event_type="AI_EXTRACTION"
+            )
+
+            if is_changed:
+                if collection_changes["vehicles"]:
+                    existing.vehicles.clear()
+                    for v in new_policy.vehicles:
+                        existing.vehicles.append(Vehicle(
+                            year=v.year, make=v.make, model=v.model, vin=v.vin,
+                            gvw=v.gvw, vehicle_type=v.vehicle_type, chassis=v.chassis, body=v.body
+                        ))
+
+                if collection_changes["coverages"]:
+                    existing.coverages.clear()
+                    vin_map_existing = {
+                        str(v.vin).strip().upper(): v
+                        for v in existing.vehicles
+                        if getattr(v, "vin", None)
+                    }
+                    for c in new_policy.coverages:
+                        matched_ev = None
+                        if c.vehicle is not None and getattr(c.vehicle, "vin", None):
+                            matched_ev = vin_map_existing.get(str(c.vehicle.vin).strip().upper())
+                        existing.coverages.append(
+                            Coverage(
+                                type=c.type,
+                                coverage_code=c.coverage_code,
+                                family=c.family,
+                                per_person=c.per_person,
+                                per_accident=c.per_accident,
+                                per_occurrence=c.per_occurrence,
+                                combined_single_limit=c.combined_single_limit,
+                                aggregate=c.aggregate,
+                                limit_per_person=c.limit_per_person,
+                                limit_per_accident=c.limit_per_accident,
+                                limit_property_damage=c.limit_property_damage,
+                                deductible=c.deductible,
+                                vehicle=matched_ev,
+                            )
+                        )
+
+                if collection_changes["drivers"]:
+                    existing.drivers.clear()
+                    for d in new_policy.drivers:
+                        existing.drivers.append(Driver(full_name=d.full_name, license_number=d.license_number, is_excluded=d.is_excluded))
+
+                if collection_changes["additional_interests"]:
+                    existing.additional_interests.clear()
+                    for a in new_policy.additional_interests:
+                        from .database import AdditionalInterest
+                        existing.additional_interests.append(AdditionalInterest(
+                            name=a.name, address=a.address, interest_type=a.interest_type
+                        ))
+
+                self.session.commit()
+                return True, f"Updated existing policy. {len(changes)} changes logged (Version updated)."
+            return False, "No changes detected."
+
+        self.session.add(new_policy)
+        self.session.commit()
+        return True, "Saved successfully"
+
     def __init__(self, session: Session):
         self.session = session
 
@@ -263,6 +429,7 @@ class PolicyService:
         policy_data['document_type'] = classification.get('document_type')
         policy_data['classification_confidence'] = classification.get('confidence')
         policy_data['classification_signals'] = json.dumps(classification.get('signals', []))
+        policy_data['field_confidences'] = self._extract_field_confidences(policy_data)
         
         return {
             "policy": policy_data,
@@ -270,6 +437,7 @@ class PolicyService:
             "coverages": extraction_result.get('coverages', []),
             "drivers": extraction_result.get('drivers', []),
             "additional_interests": extraction_result.get('additional_interests', []),
+            "policy_data_source": extraction_result.get('policy_data_source'),
             "extraction_extras": build_extraction_extras_json(extraction_result),
         }
 
@@ -282,83 +450,114 @@ class PolicyService:
         flat_data['coverages'] = normalized['coverages']
         flat_data['drivers'] = normalized['drivers']
         flat_data['additional_interests'] = normalized['additional_interests']
+        if normalized.get("policy_data_source"):
+            flat_data["policy_data_source"] = normalized["policy_data_source"]
         if normalized.get("extraction_extras"):
             flat_data["extraction_extras"] = normalized["extraction_extras"]
         
         return self.create_policy_from_dict(flat_data)
 
     def save_policy_from_extraction(self, extraction_result):
-        new_policy = self._create_policy_instance(extraction_result)
-        
-        existing = self.get_policy_by_number(new_policy.policy_number)
-        
-        if existing:
-            from .history_service import HistoryService
-            history_svc = HistoryService(self.session)
-            
-            normalized = self.normalize_policy_data(extraction_result)
-            is_changed, changes, collection_changes = history_svc.compare_and_record(existing, normalized, source="AI_Re-Extraction", event_type="AI_EXTRACTION")
-            
-            if is_changed:
-                if collection_changes["vehicles"]:
-                    existing.vehicles.clear()
-                    for v in new_policy.vehicles:
-                         existing.vehicles.append(Vehicle(
-                                year=v.year, make=v.make, model=v.model, vin=v.vin,
-                                gvw=v.gvw, vehicle_type=v.vehicle_type, chassis=v.chassis, body=v.body
-                         ))
+        if extraction_result.get("policy_data_source") == "coi_summary" and extraction_result.get("coi_summary", {}).get("policies"):
+            return self._save_policies_from_coi_summary(extraction_result)
+        return self._save_single_extraction_payload(extraction_result)
 
-                if collection_changes["coverages"]:
-                    existing.coverages.clear()
-                    vin_map_existing = {
-                        str(v.vin).strip().upper(): v
-                        for v in existing.vehicles
-                        if getattr(v, "vin", None)
-                    }
-                    for c in new_policy.coverages:
-                        matched_ev = None
-                        if c.vehicle is not None and getattr(c.vehicle, "vin", None):
-                            matched_ev = vin_map_existing.get(str(c.vehicle.vin).strip().upper())
-                        existing.coverages.append(
-                            Coverage(
-                                type=c.type,
-                                coverage_code=c.coverage_code,
-                                family=c.family,
-                                per_person=c.per_person,
-                                per_accident=c.per_accident,
-                                per_occurrence=c.per_occurrence,
-                                combined_single_limit=c.combined_single_limit,
-                                aggregate=c.aggregate,
-                                limit_per_person=c.limit_per_person,
-                                limit_per_accident=c.limit_per_accident,
-                                limit_property_damage=c.limit_property_damage,
-                                deductible=c.deductible,
-                                vehicle=matched_ev,
-                            )
-                        )
+    @classmethod
+    def compute_completeness_score(cls, policy_data, document_type):
+        payload = policy_data if isinstance(policy_data, dict) else {}
 
-                if collection_changes["drivers"]:
-                    existing.drivers.clear()
-                    for d in new_policy.drivers:
-                        existing.drivers.append(Driver(full_name=d.full_name, license_number=d.license_number, is_excluded=d.is_excluded))
-                
-                if collection_changes["additional_interests"]:
-                    existing.additional_interests.clear()
-                    for a in new_policy.additional_interests:
-                        from .database import AdditionalInterest
-                        existing.additional_interests.append(AdditionalInterest(
-                            name=a.name, address=a.address, interest_type=a.interest_type
-                        ))
-                
-                self.session.commit()
-                return True, f"Updated existing policy. {len(changes)} changes logged (Version updated)."
+        def _is_missing(field_name: str) -> bool:
+            value = payload.get(field_name)
+            clean = cls._clean_text(value)
+            return clean in (None, "")
+
+        missing_required = [field for field in cls.REQUIRED_FOR_COI if _is_missing(field)]
+        missing_recommended = [field for field in cls.RECOMMENDED_FOR_COI if _is_missing(field)]
+        raw_score = 100 - (20 * len(missing_required)) - (5 * len(missing_recommended))
+        score = max(0, raw_score)
+        return {
+            "score": score,
+            "coi_ready": len(missing_required) == 0,
+            "missing_required": missing_required,
+            "missing_recommended": missing_recommended,
+            "document_type": document_type,
+        }
+
+    def _save_policies_from_coi_summary(self, extraction_result):
+        summary = extraction_result.get("coi_summary") or {}
+        policies = summary.get("policies") or []
+        saved_count = 0
+        updated_count = 0
+        skipped_count = 0
+
+        grouped: dict[str, list[dict]] = {}
+        for row in policies:
+            if not isinstance(row, dict):
+                continue
+            policy_number = self._clean_text(row.get("policy_number"))
+            if not policy_number:
+                skipped_count += 1
+                continue
+            grouped.setdefault(policy_number, []).append(row)
+
+        for policy_number, rows in grouped.items():
+            merged_row = self._merge_coi_policy_rows(rows)
+            limits = merged_row.get("limits") if isinstance(merged_row.get("limits"), dict) else {}
+
+            policy_payload = {
+                "policy": {
+                    "carrier_name": merged_row.get("carrier_name"),
+                    "carrier_name_confidence": merged_row.get("carrier_name_confidence"),
+                    "naic_number": merged_row.get("naic_number"),
+                    "policy_number": policy_number,
+                    "policy_number_confidence": merged_row.get("policy_number_confidence"),
+                    "effective_date": merged_row.get("effective_date"),
+                    "effective_date_confidence": merged_row.get("effective_date_confidence"),
+                    "expiration_date": merged_row.get("expiration_date"),
+                    "expiration_date_confidence": merged_row.get("expiration_date_confidence"),
+                    "insured_name": self._clean_text(merged_row.get("insured_name")) or self._clean_text((summary.get("insured") or {}).get("name")),
+                    "insured_name_confidence": merged_row.get("insured_name_confidence"),
+                    "insured_address": self._clean_text((summary.get("insured") or {}).get("address")),
+                    "premium": self._clean_text(merged_row.get("premium")),
+                    "premium_confidence": merged_row.get("premium_confidence"),
+                    "financial_responsibility_name": self._clean_text((summary.get("producer") or {}).get("name")),
+                    "liability_limit": self._clean_limit_text(limits.get("liability_limit")),
+                    "liability_limit_confidence": self._clean_text(limits.get("liability_limit_confidence")),
+                    "general_liability_limit": self._clean_limit_text(limits.get("general_liability_limit")),
+                    "cargo_limit": self._clean_limit_text(limits.get("cargo_limit")),
+                    "cargo_limit_confidence": self._clean_text(limits.get("cargo_limit_confidence")),
+                    "cargo_deductible": self._clean_limit_text(limits.get("cargo_deductible")),
+                    "um_uim_limit": self._clean_limit_text(limits.get("um_uim_limit")),
+                    "med_pay_limit": self._clean_limit_text(limits.get("med_pay_limit")),
+                    "pip_limit": self._clean_limit_text(limits.get("pip_limit")),
+                    "comp_deductible": self._clean_limit_text(limits.get("comp_deductible")),
+                    "coll_deductible": self._clean_limit_text(limits.get("coll_deductible")),
+                    "policy_type": merged_row.get("policy_type") or extraction_result.get("classification", {}).get("policy_type") or "unknown",
+                    "document_type": extraction_result.get("classification", {}).get("document_type"),
+                    "classification_confidence": extraction_result.get("classification", {}).get("confidence"),
+                    "classification_signals": extraction_result.get("classification", {}).get("signals", []),
+                },
+                "vehicles": extraction_result.get("vehicles", []),
+                "drivers": extraction_result.get("drivers", []),
+                "coverages": extraction_result.get("coverages", []),
+                "additional_interests": extraction_result.get("additional_interests", []),
+                "policy_data_source": "coi_summary",
+                "compliance": extraction_result.get("compliance") or {},
+                "coi_summary": {**summary, "merged_row_count": len(rows)},
+            }
+            success, msg = self._save_single_extraction_payload(policy_payload)
+            if success and msg.startswith("Updated"):
+                updated_count += 1
+            elif success:
+                saved_count += 1
             else:
-                 return False, "No changes detected."
+                skipped_count += 1
 
-        else:
-            self.session.add(new_policy)
-            self.session.commit()
-            return True, "Saved successfully"
+        if saved_count == 0 and updated_count == 0:
+            return False, f"COI summary save skipped. {skipped_count} entries skipped."
+        return True, (
+            f"COI summary processed: {saved_count} new, {updated_count} updated, {skipped_count} skipped."
+        )
 
     def save_policy_object(self, policy: Policy):
         existing = self.get_policy_by_number(policy.policy_number)
@@ -378,7 +577,7 @@ class PolicyService:
         from .history_service import HistoryService
         history_svc = HistoryService(self.session)
         
-        if "policy" in updated_data or "vehicles" in updated_data or "drivers" in updated_data:
+        if any(k in updated_data for k in ("policy", "vehicles", "drivers", "coverages", "additional_interests")):
              final_payload = updated_data
         else:
              final_payload = {"policy": updated_data}
@@ -458,6 +657,8 @@ class PolicyService:
             
             account_type=data.get('account_type'),
             document_type=data.get('document_type'),
+            policy_data_source=data.get('policy_data_source'),
+            field_confidences=data.get('field_confidences'),
             policy_type=data.get('policy_type'),
             classification_confidence=data.get('classification_confidence'),
             classification_signals=signals_json,

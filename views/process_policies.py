@@ -115,6 +115,29 @@ def page_process_policies(api_key):
                  return f"Found on Page {page}"
         return None
 
+    def _build_confidence_map(policy_payload: dict, fallback_map: dict | None = None) -> dict[str, str]:
+        confidence_map: dict[str, str] = {}
+        source_map = fallback_map if isinstance(fallback_map, dict) else {}
+        for key, value in source_map.items():
+            if value in {"high", "medium", "low"}:
+                confidence_map[str(key)] = value
+        if isinstance(policy_payload, dict):
+            for key, value in policy_payload.items():
+                if not key.endswith("_confidence"):
+                    continue
+                base_key = key[:-11]
+                if value in {"high", "medium", "low"}:
+                    confidence_map[base_key] = value
+        return confidence_map
+
+    def _confidence_label(base_label: str, field_name: str, confidence_map: dict[str, str]) -> str:
+        conf = confidence_map.get(field_name, "high")
+        if conf == "low":
+            return f"⚠️ {base_label}"
+        if conf == "medium":
+            return f"◐ {base_label}"
+        return base_label
+
     with tab_upload:
         expanded_upload = not (bool(st.session_state["review_queue"]) or bool(st.session_state["temp_extracted"]))
         
@@ -652,12 +675,38 @@ def page_process_policies(api_key):
                 )
 
             with st.form(key=f"review_form_{fname}"):
+                confidence_map = _build_confidence_map(
+                    p,
+                    p.get("field_confidences")
+                    or current_item["data"].get("field_confidences")
+                    or current_item["data"].get("policy", {}).get("field_confidences"),
+                )
+                low_fields = [k for k, v in confidence_map.items() if v == "low"]
+                medium_fields = [k for k, v in confidence_map.items() if v == "medium"]
+                if low_fields:
+                    st.markdown(
+                        "<div style='background-color:#fff7d6;padding:8px 10px;border-radius:6px;border:1px solid #f0d77a;'>"
+                        "⚠️ <b>Low-confidence fields detected.</b> Please verify highlighted values before saving."
+                        "</div>",
+                        unsafe_allow_html=True,
+                    )
+                elif medium_fields:
+                    st.caption("◐ Some fields are medium confidence. Verify if ambiguous.")
+
+                completeness = PolicyService.compute_completeness_score(p, document_type)
+                coi_badge = "✅ COI Ready" if completeness["coi_ready"] else "⚠️ COI Needs Review"
+                st.caption(
+                    f"Completeness Score: **{completeness['score']}** | {coi_badge} | "
+                    f"Missing required: {len(completeness['missing_required'])} | "
+                    f"Missing recommended: {len(completeness['missing_recommended'])}"
+                )
+
                 c1, c2 = st.columns(2)
                 
                 locs = p.get('field_locations', [])
                 
-                r_carrier = c1.text_input("Carrier", value=p.get('carrier_name', ''), help=get_source_help("carrier_name", locs))
-                r_pol_num = c2.text_input("Policy Number", value=p.get('policy_number', ''), help=get_source_help("policy_number", locs))
+                r_carrier = c1.text_input(_confidence_label("Carrier", "carrier_name", confidence_map), value=p.get('carrier_name', ''), help=get_source_help("carrier_name", locs))
+                r_pol_num = c2.text_input(_confidence_label("Policy Number", "policy_number", confidence_map), value=p.get('policy_number', ''), help=get_source_help("policy_number", locs))
                 
                 cc1, cc2 = st.columns(2)
                 r_type = cc1.text_input("Policy Type", value=classification.get('policy_type', ''), disabled=True)
@@ -676,7 +725,7 @@ def page_process_policies(api_key):
                 prem_help = get_source_help("premium", locs)
                 audit_meta = p.get("premium_audit", {})
                 
-                prem_label = "Premium"
+                prem_label = _confidence_label("Premium", "premium", confidence_map)
                 if audit_meta.get("confidence") == "low":
                     prem_label += " ⚠️ (Check Split/Installment)"
                 elif audit_meta.get("confidence") == "high":
@@ -686,11 +735,11 @@ def page_process_policies(api_key):
                 
                 if audit_meta and audit_meta.get("confidence") == "low":
                     st.caption(f"**Audit Flag:** {audit_meta.get('flag')}")
-                r_eff = c4.text_input("Effective Date", value=p.get('effective_date', ''), help=get_source_help("effective_date", locs))
-                r_exp = c4.text_input("Expiration Date", value=p.get('expiration_date', ''), help=get_source_help("expiration_date", locs))
+                r_eff = c4.text_input(_confidence_label("Effective Date", "effective_date", confidence_map), value=p.get('effective_date', ''), help=get_source_help("effective_date", locs))
+                r_exp = c4.text_input(_confidence_label("Expiration Date", "expiration_date", confidence_map), value=p.get('expiration_date', ''), help=get_source_help("expiration_date", locs))
                 
                 st.divider()
-                r_ins_name = st.text_input("Insured Name", value=p.get('insured_name', ''))
+                r_ins_name = st.text_input(_confidence_label("Insured Name", "insured_name", confidence_map), value=p.get('insured_name', ''))
                 r_ins_addr = st.text_input("Insured Address", value=p.get('insured_address', ''))
                 ic1, ic2, ic3 = st.columns(3)
                 r_ins_city = ic1.text_input("City", value=p.get('insured_city', ''))
@@ -698,9 +747,9 @@ def page_process_policies(api_key):
                 r_ins_zip = ic3.text_input("Zip", value=p.get('insured_zip', ''))
                 
                 st.divider()
-                r_liab = st.text_input("Auto Liability Limit", value=p.get('liability_limit', ''))
+                r_liab = st.text_input(_confidence_label("Auto Liability Limit", "liability_limit", confidence_map), value=p.get('liability_limit', ''))
                 r_gl_limit = st.text_input("GL Limit", value=p.get('general_liability_limit', ''))
-                r_cargo = st.text_input("Cargo Limit", value=p.get('cargo_limit', ''))
+                r_cargo = st.text_input(_confidence_label("Cargo Limit", "cargo_limit", confidence_map), value=p.get('cargo_limit', ''))
                 r_cargo_ded = st.text_input("Cargo Ded", value=p.get('cargo_deductible', ''))
                 
                 st.markdown("##### Additional Coverages")
@@ -878,6 +927,7 @@ def page_process_policies(api_key):
                             "classification_confidence": classification.get('confidence'),
                             "classification_signals": classification.get('signals', []),
                             "policy_data_source": current_item['data'].get("policy_data_source"),
+                            "field_confidences": confidence_map,
                             "business_name": p.get('business_name'),
                             "premium": r_premium,
                             "financial_responsibility_name": p.get('financial_responsibility_name'),

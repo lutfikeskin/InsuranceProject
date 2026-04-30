@@ -90,11 +90,30 @@ def get_extract_all_prompt(
     - Fields: Carrier Name, NAIC, Policy #, Effective/Expiration Dates, Insured Name, Address, City, State, Zip, Business Name, Premium (GRAND TOTAL).
     """
 
+    confidence_block = """
+    --- FIELD CONFIDENCE ---
+    For each critical field below, also return a sibling <fieldname>_confidence value:
+    - policy_number
+    - effective_date
+    - expiration_date
+    - liability_limit
+    - cargo_limit
+    - premium
+    - insured_name
+    - carrier_name
+    Confidence scale:
+    - high: value is clearly stated and unambiguous
+    - medium: value is present but partial, abbreviated, or required interpretation
+    - low: value is implied, inferred, or you are uncertain
+    If the value is null/absent, set confidence to "low". Do not fabricate values.
+    """
+
     core = GLOBAL_EXTRACTION_PRINCIPLES + f"""
     You are an expert insurance underwriter and data extraction specialist.
     Extract the COMPLETE policy information from the provided document in a single pass.
     {classification_block}
     {declarations_block}
+    {confidence_block}
     --- VEHICLES ---
     - Extract ALL vehicles (VIN, Year, Make, Model, GVW, Type).
     - Look for explicit schedules and vehicles mentioned in prose.
@@ -121,6 +140,76 @@ def get_extract_all_prompt(
     OUTPUT: Return a single JSON object with exactly these top-level keys:
     classification, policy, compliance, coverages, vehicles, drivers
     Use "compliance": {{}} if nothing applies.
+    """
+    suffix = (carrier_hints_suffix or "").strip()
+    if suffix:
+        return core + "\n" + suffix + "\n"
+    return core
+
+
+def get_extract_coi_prompt(
+    user_policy_type: Optional[str] = None,
+    carrier_hints_suffix: str = "",
+) -> str:
+    if user_policy_type:
+        classification_block = f"""
+    --- CLASSIFICATION ---
+    policy_type is FIXED to "{user_policy_type}" (user or system). Set classification.policy_type to exactly this string,
+    confidence to "high", and include "user_selected" in classification.signals. Do not output a different policy_type.
+    """
+    else:
+        classification_block = """
+    --- CLASSIFICATION ---
+    Keep document_type from routing context and classify policy_type from explicit wording only.
+    """
+
+    core = GLOBAL_EXTRACTION_PRINCIPLES + f"""
+    You are an expert insurance document extraction specialist.
+    This is a COI or memorandum summary document for third-party evidence of coverage.
+    Extract only explicitly visible information.
+
+    {classification_block}
+    --- FIELD CONFIDENCE ---
+    For each critical field below, also return a sibling <fieldname>_confidence value:
+    - policy_number
+    - effective_date
+    - expiration_date
+    - liability_limit
+    - cargo_limit
+    - premium
+    - insured_name
+    - carrier_name
+    Confidence scale:
+    - high: value is clearly stated and unambiguous
+    - medium: value is present but partial, abbreviated, or required interpretation
+    - low: value is implied, inferred, or you are uncertain
+    If the value is null/absent, set confidence to "low". Do not fabricate values.
+
+    --- CERTIFICATE FIELDS ---
+    - certificate_holder: name and address.
+    - insured: name and address.
+    - producer: name, address, and phone if shown.
+    - additional_insured_text: copy exact wording when present.
+    - cancellation_notice_days: extract integer days if stated.
+    - description_of_operations: copy exact text block if present.
+
+    --- POLICIES ARRAY ---
+    - Extract every policy row shown in the certificate/memorandum.
+    - For each policy include:
+      policy_type, carrier_name, naic_number, policy_number, effective_date, expiration_date, limits.
+    - For each critical policy field, include sibling confidence values:
+      carrier_name_confidence, policy_number_confidence, effective_date_confidence, expiration_date_confidence, insured_name_confidence, premium_confidence.
+    - For limits include liability_limit_confidence and cargo_limit_confidence.
+    - limits should include only visible limit fields; keep missing limit fields null.
+
+    --- VEHICLES / DRIVERS ---
+    - Extract vehicle and driver schedules if present.
+    - Some formats (e.g., ACORD 25) may not include this detail; return null for vehicles/drivers in that case.
+    - Never invent vehicle or driver data.
+
+    OUTPUT: Return one JSON object with top-level keys:
+    classification, certificate_holder, insured, producer, policies,
+    additional_insured_text, cancellation_notice_days, description_of_operations, vehicles, drivers
     """
     suffix = (carrier_hints_suffix or "").strip()
     if suffix:

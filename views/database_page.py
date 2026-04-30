@@ -140,6 +140,20 @@ def page_database(api_key):
                 return 0.0
 
         for p in policies:
+            completeness = PolicyService.compute_completeness_score(
+                {
+                    "carrier_name": p.carrier_name,
+                    "policy_number": p.policy_number,
+                    "effective_date": str(p.effective_date) if p.effective_date else None,
+                    "expiration_date": str(p.expiration_date) if p.expiration_date else None,
+                    "insured_name": p.insured_name,
+                    "liability_limit": p.liability_limit,
+                    "naic_number": p.naic_number,
+                    "insured_address": p.insured_address,
+                    "cargo_limit": p.cargo_limit,
+                },
+                p.document_type,
+            )
             eligibility_status = "✅ Eligible"
             eligibility_text = "Eligible"
             liab_val = parse_limit(p.liability_limit)
@@ -190,6 +204,7 @@ def page_database(api_key):
                 "Eligibility": eligibility_text,
                 "Type": p.policy_type,
                 "Confidence": p.classification_confidence,
+                "Completeness": f"{completeness['score']} ({'ready' if completeness['coi_ready'] else 'review'})",
             })
 
             dict_data = {

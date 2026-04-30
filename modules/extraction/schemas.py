@@ -34,20 +34,30 @@ DECLARATIONS_SCHEMA = {
     "type": "OBJECT",
     "properties": {
         "carrier_name": {"type": "STRING"},
+        "carrier_name_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
         "naic_number": {"type": "STRING"},
         "policy_number": {"type": "STRING"},
+        "policy_number_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
         "effective_date": {"type": "STRING"},
+        "effective_date_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
         "expiration_date": {"type": "STRING"},
+        "expiration_date_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
         "account_type": {"type": "STRING"},
         "insured_name": {"type": "STRING"},
+        "insured_name_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
         "insured_address": {"type": "STRING"},
         "insured_city": {"type": "STRING"},
         "insured_state_code": {"type": "STRING"},
         "insured_zip": {"type": "STRING"},
         "business_name": {"type": "STRING"},
         "premium": {"type": "STRING"},
+        "premium_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
         "financial_responsibility_name": {"type": "STRING"},
         "state": {"type": "STRING"},
+        "liability_limit": {"type": "STRING"},
+        "liability_limit_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
+        "cargo_limit": {"type": "STRING"},
+        "cargo_limit_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
         "mcs90_noted": {
             "type": "STRING",
             "description": "yes if MCS-90 endorsement mentioned; else null."
@@ -58,7 +68,17 @@ DECLARATIONS_SCHEMA = {
             "type": "STRING",
             "description": "DOC / CA 99 10: named individuals if present."
         }
-    }
+    },
+    "required": [
+        "carrier_name_confidence",
+        "policy_number_confidence",
+        "effective_date_confidence",
+        "expiration_date_confidence",
+        "liability_limit_confidence",
+        "cargo_limit_confidence",
+        "premium_confidence",
+        "insured_name_confidence",
+    ],
 }
 
 COMPLIANCE_SCHEMA = {
@@ -227,4 +247,99 @@ COMPLETE_POLICY_SCHEMA = {
         "drivers": DRIVER_SCHEMA["properties"]["drivers"]
     },
     "required": ["classification", "policy", "compliance", "coverages", "vehicles", "drivers"]
+}
+
+
+COI_SUMMARY_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "classification": CLASSIFICATION_SCHEMA,
+        "certificate_holder": {
+            "type": "OBJECT",
+            "properties": {
+                "name": {"type": "STRING"},
+                "address": {"type": "STRING"},
+            },
+        },
+        "insured": {
+            "type": "OBJECT",
+            "properties": {
+                "name": {"type": "STRING"},
+                "address": {"type": "STRING"},
+            },
+        },
+        "producer": {
+            "type": "OBJECT",
+            "properties": {
+                "name": {"type": "STRING"},
+                "address": {"type": "STRING"},
+                "phone": {"type": "STRING"},
+            },
+        },
+        "policies": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "policy_type": {"type": "STRING"},
+                    "carrier_name": {"type": "STRING"},
+                    "carrier_name_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
+                    "naic_number": {"type": "STRING"},
+                    "policy_number": {"type": "STRING"},
+                    "policy_number_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
+                    "effective_date": {"type": "STRING"},
+                    "effective_date_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
+                    "expiration_date": {"type": "STRING"},
+                    "expiration_date_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
+                    "insured_name": {"type": "STRING"},
+                    "insured_name_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
+                    "premium": {"type": "STRING"},
+                    "premium_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
+                    "limits": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "liability_limit": {"type": "STRING"},
+                            "liability_limit_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
+                            "general_liability_limit": {"type": "STRING"},
+                            "cargo_limit": {"type": "STRING"},
+                            "cargo_limit_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
+                            "cargo_deductible": {"type": "STRING"},
+                            "um_uim_limit": {"type": "STRING"},
+                            "med_pay_limit": {"type": "STRING"},
+                            "pip_limit": {"type": "STRING"},
+                            "comp_deductible": {"type": "STRING"},
+                            "coll_deductible": {"type": "STRING"},
+                        },
+                        "required": [
+                            "liability_limit_confidence",
+                            "cargo_limit_confidence",
+                        ],
+                    },
+                },
+                "required": [
+                    "carrier_name_confidence",
+                    "policy_number_confidence",
+                    "effective_date_confidence",
+                    "expiration_date_confidence",
+                    "insured_name_confidence",
+                    "premium_confidence",
+                    "limits",
+                ],
+            },
+        },
+        "additional_insured_text": {"type": "STRING", "nullable": True},
+        "cancellation_notice_days": {"type": "INTEGER", "nullable": True},
+        "description_of_operations": {"type": "STRING", "nullable": True},
+        "vehicles": {
+            "type": "ARRAY",
+            "nullable": True,
+            "items": VEHICLE_SCHEMA["properties"]["vehicles"]["items"],
+        },
+        "drivers": {
+            "type": "ARRAY",
+            "nullable": True,
+            "items": DRIVER_SCHEMA["properties"]["drivers"]["items"],
+        },
+    },
+    "required": ["classification", "certificate_holder", "insured", "producer", "policies"],
 }

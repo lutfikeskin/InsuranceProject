@@ -7,7 +7,7 @@
 - [x] Phase 3: Document Taxonomy
 - [x] Phase 4: COI Summary Extraction
 - [x] Phase 5: Variant Tracker
-- [ ] Phase 6: Field Confidence Scoring
+- [x] Phase 6: Field Confidence Scoring
 - [ ] Phase 7: Premium Sanity Audit
 - [ ] Phase 8: Customer Resolver
 - [ ] Phase 9: Policy Relationship Detection
