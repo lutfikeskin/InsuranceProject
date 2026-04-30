@@ -15,6 +15,7 @@ from core.logger import logger
 from core.constants import DEFAULT_DAILY_BUDGET
 from .pdf_ops import PdfProcessor
 from utils.vehicle_utils import refine_vehicle_type
+from utils.premium_audit import audit_premium_vs_fleet
 
 from core.coverage_ontology import (
     COVERAGE_REGISTRY, 
@@ -878,6 +879,7 @@ class GeminiExtractionPipeline:
             "coverages": [],
             "vehicles": [],
             "drivers": ctx.extracted_data.get("drivers", {}).get("drivers", []),
+            "audits": {},
             "classification": ctx.classification,
             "page_dimensions": processor.get_dimensions(),
             "extraction_audit": {
@@ -951,6 +953,11 @@ class GeminiExtractionPipeline:
         enrich_statutory_policy_display(final)
 
         final["policy"]["has_full_collision"] = any(c.get("family") == "physical_damage" for c in final["coverages"])
+        final["audits"]["premium"] = audit_premium_vs_fleet(
+            premium_str=final["policy"].get("premium"),
+            vehicle_count=len(final["vehicles"]),
+            policy_type=ctx.policy_type,
+        )
 
 
         return final

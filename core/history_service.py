@@ -63,6 +63,7 @@ class HistoryService:
             'insured_name': 'insured_name',
             'insured_address': 'insured_address',
             'document_type': 'document_type',
+            'premium_audit_flag': 'premium_audit_flag',
             'status': 'status' # New Field
         }
 
@@ -115,14 +116,36 @@ class HistoryService:
 
         if 'coverages' in new_data:
             new_covs = new_data.get('coverages', [])
-            old_codes = {c.coverage_code for c in policy.coverages if c.coverage_code}
-            new_codes = {c.get('coverage_code') for c in new_covs if c.get('coverage_code')}
-            
-            if old_codes != new_codes:
+            def _cov_sig_dict(cov):
+                if isinstance(cov, dict):
+                    limits = cov.get("limits") if isinstance(cov.get("limits"), dict) else {}
+                    return (
+                        cov.get("coverage_code"),
+                        cov.get("per_person") if cov.get("per_person") is not None else limits.get("per_person"),
+                        cov.get("per_accident") if cov.get("per_accident") is not None else limits.get("per_accident"),
+                        cov.get("per_occurrence") if cov.get("per_occurrence") is not None else limits.get("per_occurrence"),
+                        cov.get("combined_single_limit") if cov.get("combined_single_limit") is not None else limits.get("combined_single_limit"),
+                        cov.get("aggregate") if cov.get("aggregate") is not None else limits.get("aggregate"),
+                        cov.get("deductible"),
+                    )
+                return (
+                    getattr(cov, "coverage_code", None),
+                    getattr(cov, "per_person", None),
+                    getattr(cov, "per_accident", None),
+                    getattr(cov, "per_occurrence", None),
+                    getattr(cov, "combined_single_limit", None),
+                    getattr(cov, "aggregate", None),
+                    getattr(cov, "deductible", None),
+                )
+
+            old_cov_sigs = {_cov_sig_dict(c) for c in policy.coverages}
+            new_cov_sigs = {_cov_sig_dict(c) for c in new_covs}
+
+            if old_cov_sigs != new_cov_sigs:
                 changes.append({
                     "field": "coverages",
-                    "old_value": list(sorted(old_codes)),
-                    "new_value": list(sorted(new_codes))
+                    "old_value": list(sorted(old_cov_sigs)),
+                    "new_value": list(sorted(new_cov_sigs))
                 })
                 collection_changes["coverages"] = True
 

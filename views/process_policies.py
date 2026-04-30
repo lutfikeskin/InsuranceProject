@@ -723,18 +723,34 @@ def page_process_policies(api_key):
                 r_naic = c3.text_input("NAIC Code", value=current_naic)
                 
                 prem_help = get_source_help("premium", locs)
-                audit_meta = p.get("premium_audit", {})
+                premium_audit = (
+                    (current_item["data"].get("audits") or {}).get("premium")
+                    or {}
+                )
                 
                 prem_label = _confidence_label("Premium", "premium", confidence_map)
-                if audit_meta.get("confidence") == "low":
-                    prem_label += " ⚠️ (Check Split/Installment)"
-                elif audit_meta.get("confidence") == "high":
+                audit_flag = premium_audit.get("flag")
+                if audit_flag == "PLAUSIBLE":
                     prem_label += " ✅"
+                elif audit_flag in {"POSSIBLE_INSTALLMENT", "UNUSUALLY_HIGH"}:
+                    prem_label += " ⚠️"
 
                 r_premium = c3.text_input(prem_label, value=p.get('premium', ''), help=prem_help)
                 
-                if audit_meta and audit_meta.get("confidence") == "low":
-                    st.caption(f"**Audit Flag:** {audit_meta.get('flag')}")
+                if audit_flag == "PLAUSIBLE":
+                    st.success(
+                        f"Premium audit: PLAUSIBLE ({premium_audit.get('per_vehicle', 'n/a')} per vehicle)"
+                    )
+                elif audit_flag in {"POSSIBLE_INSTALLMENT", "UNUSUALLY_HIGH"}:
+                    st.warning(
+                        premium_audit.get("reason")
+                        or f"Premium audit warning: {audit_flag}"
+                    )
+                elif audit_flag in {"MISSING_DATA", "SKIP"}:
+                    st.caption(
+                        premium_audit.get("reason")
+                        or f"Premium audit: {audit_flag}"
+                    )
                 r_eff = c4.text_input(_confidence_label("Effective Date", "effective_date", confidence_map), value=p.get('effective_date', ''), help=get_source_help("effective_date", locs))
                 r_exp = c4.text_input(_confidence_label("Expiration Date", "expiration_date", confidence_map), value=p.get('expiration_date', ''), help=get_source_help("expiration_date", locs))
                 
@@ -928,6 +944,7 @@ def page_process_policies(api_key):
                             "classification_signals": classification.get('signals', []),
                             "policy_data_source": current_item['data'].get("policy_data_source"),
                             "field_confidences": confidence_map,
+                            "premium_audit_flag": audit_flag,
                             "business_name": p.get('business_name'),
                             "premium": r_premium,
                             "financial_responsibility_name": p.get('financial_responsibility_name'),

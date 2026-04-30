@@ -33,6 +33,7 @@ def build_extraction_extras_json(extraction_result: dict) -> str | None:
     pol = extraction_result.get("policy") or {}
     coverages = extraction_result.get("coverages") or []
     vehicles = extraction_result.get("vehicles") or []
+    audits = extraction_result.get("audits") or {}
     pol_ont = {k: pol.get(k) for k in (
         "um_stacked_effective_limit",
         "statutory_auto_liability_display",
@@ -60,7 +61,7 @@ def build_extraction_extras_json(extraction_result: dict) -> str | None:
     def _row_has_values(d: dict) -> bool:
         return any(v not in (None, "", [], {}) for v in d.values())
 
-    has_content = bool(comp) or bool(pol_ont) or bool(policy_data_source) or any(
+    has_content = bool(comp) or bool(pol_ont) or bool(policy_data_source) or bool(audits) or any(
         _row_has_values(d) for d in veh_ont
     ) or any(_row_has_values(d) for d in cov_ont)
     if not has_content:
@@ -68,6 +69,7 @@ def build_extraction_extras_json(extraction_result: dict) -> str | None:
     payload = {
         "policy_data_source": policy_data_source,
         "compliance": comp,
+        "audits": audits,
         "policy_ontology": pol_ont,
         "vehicles_ontology": veh_ont,
         "coverages_ontology": cov_ont,
@@ -430,6 +432,9 @@ class PolicyService:
         policy_data['classification_confidence'] = classification.get('confidence')
         policy_data['classification_signals'] = json.dumps(classification.get('signals', []))
         policy_data['field_confidences'] = self._extract_field_confidences(policy_data)
+        policy_data['premium_audit_flag'] = (
+            (extraction_result.get("audits") or {}).get("premium", {}).get("flag")
+        )
         
         return {
             "policy": policy_data,
@@ -659,6 +664,7 @@ class PolicyService:
             document_type=data.get('document_type'),
             policy_data_source=data.get('policy_data_source'),
             field_confidences=data.get('field_confidences'),
+            premium_audit_flag=data.get('premium_audit_flag'),
             policy_type=data.get('policy_type'),
             classification_confidence=data.get('classification_confidence'),
             classification_signals=signals_json,

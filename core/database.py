@@ -92,7 +92,9 @@ class Policy(Base):
     policy_status = Column(String, default='active')
     replaced_by_policy_id = Column(Integer, ForeignKey('policies.id'), nullable=True)
     field_confidences = Column(JSON, nullable=True)
+    premium_audit_flag = Column(String, nullable=True)
     document_type = Column(String, nullable=True)
+    policy_data_source = Column(String, nullable=True)
     layout_fingerprint = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow) # New Timestamp Field
 
