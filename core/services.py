@@ -21,6 +21,113 @@ ACCOUNT_TYPE_BY_POLICY = {
     "unknown": "Commercial" # Default to Commercial for unknown if we somehow get here
 }
 
+
+def build_extraction_extras_json(extraction_result: dict) -> str | None:
+    """
+    JSON blob for compliance, statutory/UM policy annotations, and per-row vehicle/coverage
+    fields that are not stored in relational columns.
+    """
+    comp = dict(extraction_result.get("compliance") or {})
+    pol = extraction_result.get("policy") or {}
+    coverages = extraction_result.get("coverages") or []
+    vehicles = extraction_result.get("vehicles") or []
+    pol_ont = {k: pol.get(k) for k in (
+        "um_stacked_effective_limit",
+        "statutory_auto_liability_display",
+        "statutory_auto_liability_resolved",
+    ) if pol.get(k) is not None}
+    veh_ont = [
+        {
+            "vin": v.get("vin"),
+            "covered_auto_symbols": v.get("covered_auto_symbols"),
+            "radius_of_operation": v.get("radius_of_operation"),
+            "business_use_class": v.get("business_use_class"),
+        }
+        for v in vehicles
+    ]
+    cov_ont = [
+        {
+            "coverage_code": c.get("coverage_code"),
+            "vehicle_vin": c.get("vehicle_vin"),
+            "hnoa_basis": c.get("hnoa_basis"),
+            "hnoa_attached_to": c.get("hnoa_attached_to"),
+        }
+        for c in coverages
+    ]
+
+    def _row_has_values(d: dict) -> bool:
+        return any(v not in (None, "", [], {}) for v in d.values())
+
+    has_content = bool(comp) or bool(pol_ont) or any(
+        _row_has_values(d) for d in veh_ont
+    ) or any(_row_has_values(d) for d in cov_ont)
+    if not has_content:
+        return None
+    payload = {
+        "compliance": comp,
+        "policy_ontology": pol_ont,
+        "vehicles_ontology": veh_ont,
+        "coverages_ontology": cov_ont,
+    }
+    return json.dumps(payload, sort_keys=True, default=str)
+
+SQL_SCHEMA_CONTEXT = """
+You are a SQLite expert. Convert the user question into a valid SQL query.
+
+Database Schema:
+Table 'policies':
+  - id (int)
+  - carrier_name (text)
+  - policy_number (text)
+  - effective_date (date YYYY-MM-DD)
+  - expiration_date (date YYYY-MM-DD)
+  - liability_limit (text, e.g. '$1,000,000')
+  - general_liability_limit (text, e.g. '$1,000,000 Occ')
+  - insured_name (text)
+  - premium (text)
+  - has_full_collision (bool)
+  - policy_type (text, e.g. 'personal_auto', 'commercial_auto', 'general_liability')
+  - account_type (text, e.g. 'Personal', 'Commercial')
+  - has_auto_liability (bool)
+  - has_general_liability (bool)
+
+Table 'vehicles':
+  - policy_id (fk to policies.id)
+  - year (int)
+  - make (text)
+  - model (text)
+  - vin (text)
+  - gvw (int)
+  - vehicle_type (text, e.g. 'Straight Truck', 'Tractor', 'Cargo Van')
+  - chassis (text, e.g. 'Cab Chassis', 'Pickup')
+  - body (text, e.g. 'Box', 'Dump')
+
+Table 'drivers':
+  - policy_id (fk to policies.id)
+  - full_name (text)
+  - license_number (text)
+  - is_excluded (bool)
+
+Table 'coverages':
+  - policy_id (fk to policies.id)
+  - coverage_code (text, e.g. 'AUTO_LIAB_BI', 'GL_OCCURRENCE')
+  - family (text, e.g. 'auto_liability', 'general_liability')
+  - per_person (int)
+  - per_accident (int)
+  - per_occurrence (int)
+  - combined_single_limit (int)
+  - aggregate (int)
+  - deductible (int)
+  - type (text, display name)
+
+Rules:
+1. Return ONLY the raw SQL query. No markdown, no explanations.
+2. DO NOT include semicolons (;) at the end of the query.
+3. Use LIKE for text searching (case insensitive).
+4. Handle currency strings in 'liability_limit' or 'premium' by stripping '$' and ',' if mathematical comparison is needed (e.g. CAST(REPLACE(REPLACE(premium, '$', ''), ',', '') AS FLOAT)).
+5. If asking for specific coverages like "Comp/Coll", check 'has_full_collision' or join with coverages table if needed (but currently simplified to boolean flags on policy).
+""".strip()
+
 class PolicyService:
     def __init__(self, session: Session):
         self.session = session
@@ -153,6 +260,7 @@ class PolicyService:
         policy_data['account_type'] = account_type
         
         policy_data['policy_type'] = policy_type
+        policy_data['document_type'] = classification.get('document_type')
         policy_data['classification_confidence'] = classification.get('confidence')
         policy_data['classification_signals'] = json.dumps(classification.get('signals', []))
         
@@ -161,7 +269,8 @@ class PolicyService:
             "vehicles": extraction_result.get('vehicles', []),
             "coverages": extraction_result.get('coverages', []),
             "drivers": extraction_result.get('drivers', []),
-            "additional_interests": extraction_result.get('additional_interests', [])
+            "additional_interests": extraction_result.get('additional_interests', []),
+            "extraction_extras": build_extraction_extras_json(extraction_result),
         }
 
     def _create_policy_instance(self, extraction_result):
@@ -173,6 +282,8 @@ class PolicyService:
         flat_data['coverages'] = normalized['coverages']
         flat_data['drivers'] = normalized['drivers']
         flat_data['additional_interests'] = normalized['additional_interests']
+        if normalized.get("extraction_extras"):
+            flat_data["extraction_extras"] = normalized["extraction_extras"]
         
         return self.create_policy_from_dict(flat_data)
 
@@ -346,6 +457,7 @@ class PolicyService:
             financial_responsibility_name=data.get('financial_responsibility_name'),
             
             account_type=data.get('account_type'),
+            document_type=data.get('document_type'),
             policy_type=data.get('policy_type'),
             classification_confidence=data.get('classification_confidence'),
             classification_signals=signals_json,
@@ -363,7 +475,8 @@ class PolicyService:
             
             has_full_collision=data.get('has_full_collision'),
             has_general_liability=data.get('has_general_liability', False),
-            has_auto_liability=data.get('has_auto_liability', False)
+            has_auto_liability=data.get('has_auto_liability', False),
+            extraction_extras=data.get('extraction_extras'),
         )
         
         vehs = data.get('vehicles', [])
@@ -476,72 +589,26 @@ class PolicyService:
             
         client = genai.Client(api_key=api_key)
         
-        # Keep schema context concise to reduce token usage.
-        schema_context = """
-        You are a SQLite expert. Convert the user question into a valid SQL query.
-        
-        Database Schema:
-        Table 'policies':
-          - id (int)
-          - carrier_name (text)
-          - policy_number (text)
-          - effective_date (date YYYY-MM-DD)
-          - expiration_date (date YYYY-MM-DD)
-          - liability_limit (text, e.g. '$1,000,000')
-          - general_liability_limit (text, e.g. '$1,000,000 Occ')
-          - insured_name (text)
-          - premium (text)
-          - has_full_collision (bool)
-          - policy_type (text, e.g. 'personal_auto', 'commercial_auto', 'general_liability')
-          - account_type (text, e.g. 'Personal', 'Commercial')
-          - has_auto_liability (bool)
-          - has_general_liability (bool)
-          
-        Table 'vehicles':
-          - policy_id (fk to policies.id)
-          - year (int)
-          - make (text)
-          - model (text)
-          - vin (text)
-          - gvw (int)
-          - vehicle_type (text, e.g. 'Straight Truck', 'Tractor', 'Cargo Van')
-          - chassis (text, e.g. 'Cab Chassis', 'Pickup')
-          - body (text, e.g. 'Box', 'Dump')
-
-        Table 'drivers':
-          - policy_id (fk to policies.id)
-          - full_name (text)
-          - license_number (text)
-          - is_excluded (bool)
-
-        Table 'coverages':
-          - policy_id (fk to policies.id)
-          - coverage_code (text, e.g. 'AUTO_LIAB_BI', 'GL_OCCURRENCE')
-          - family (text, e.g. 'auto_liability', 'general_liability')
-          - per_person (int)
-          - per_accident (int)
-          - per_occurrence (int)
-          - combined_single_limit (int)
-          - aggregate (int)
-          - deductible (int)
-          - type (text, display name)
-          
-        Rules:
-        1. Return ONLY the raw SQL query. No markdown, no explanations.
-        2. DO NOT include semicolons (;) at the end of the query.
-        3. Use LIKE for text searching (case insensitive).
-        3. Handle currency strings in 'liability_limit' or 'premium' by stripping '$' and ',' if mathematical comparison is needed (e.g. CAST(REPLACE(REPLACE(premium, '$', ''), ',', '') AS FLOAT)).
-        4. If asking for specific coverages like "Comp/Coll", check 'has_full_collision' or join with coverages table if needed (but currently simplified to boolean flags on policy).
-        """
-        
         try:
             response = client.models.generate_content(
                 model='gemini-2.5-flash', 
-                contents=f"{schema_context}\n\nUser Question: {user_query}\nSQL:",
+                # Keep prefix stable to maximize implicit cache hits.
+                contents=[
+                    SQL_SCHEMA_CONTEXT,
+                    f"User Question: {user_query}\nSQL:",
+                ],
                 config=types.GenerateContentConfig(
                     thinking_config=types.ThinkingConfig(thinking_budget=0)
                 )
             )
+            usage_md = getattr(response, "usage_metadata", None)
+            if usage_md:
+                UsageService(self.session).log_usage(
+                    model_name="gemini-2.5-flash",
+                    input_tokens=usage_md.prompt_token_count or 0,
+                    output_tokens=usage_md.candidates_token_count or 0,
+                    request_type="query_sql",
+                )
             generated_sql = response.text.strip()
             
             generated_sql = generated_sql.replace("```sql", "").replace("```", "").strip()
@@ -564,6 +631,8 @@ class PolicyService:
 class COIService:
     @staticmethod
     def prepare_coi_data(p: Policy):
+        from reporting.acord_view import build_acord_view_from_orm_policy
+
         cargo_ded_val = p.cargo_deductible if p.cargo_deductible else "1000"
         
         has_gl = p.has_general_liability if p.has_general_liability is not None else True
@@ -595,9 +664,59 @@ class COIService:
         if p.vehicles:
             v_str = " ".join([f"[{v.year} {v.make} {v.vin}]" for v in p.vehicles])
             desc_lines.append(f"Vehicle List: {v_str}")
+            p_data["vehicle_list_str"] = v_str
         if p.drivers:
             d_str = ", ".join([d.full_name for d in p.drivers])
             desc_lines.append(f"Driver List: {d_str}")
+            p_data["driver_list_str"] = d_str
+
+        av = build_acord_view_from_orm_policy(p)
+        comp = av.get("compliance") or {}
+        if comp.get("mcs90"):
+            desc_lines.append(f"MCS-90: {comp.get('mcs90')}")
+        if comp.get("motor_carrier_id"):
+            desc_lines.append(f"MC # / motor carrier: {comp.get('motor_carrier_id')}")
+        if comp.get("dot"):
+            desc_lines.append(f"USDOT: {comp.get('dot')}")
+        for de in (comp.get("doc_endorsements") or []):
+            if not isinstance(de, dict):
+                continue
+            fid = (de.get("form_id") or "").strip()
+            nms = de.get("named_individuals") or []
+            nms_s = ", ".join(str(x) for x in nms) if nms else ""
+            if fid or nms_s:
+                desc_lines.append(
+                    f"Drive Other Car / DOC: {fid or '—'}"
+                    + (f" — named: {nms_s}" if nms_s else "")
+                )
+        st_disp = (av.get("policy_ontology") or {}).get("statutory_auto_liability_display")
+        if st_disp:
+            desc_lines.append(f"State minimum (reference): {st_disp}")
+        for vrow in av.get("acord_127_vehicles") or []:
+            sym = vrow.get("covered_auto_symbols")
+            if sym:
+                vlabel = vrow.get("vin") or "vehicle"
+                desc_lines.append(f"BAP symbols ({vlabel}): {sym}")
+        auto25 = av.get("acord_25_automobile_liability") or {}
+        if auto25.get("um_stacked_effective"):
+            desc_lines.append(f"UM stacked (effective): {auto25.get('um_stacked_effective')}")
+        cbf = av.get("coverages_by_family") or {}
+        hnoa_seen: set[str] = set()
+        for rows in cbf.values():
+            for r in rows or []:
+                hb = r.get("hnoa_basis")
+                ha = r.get("hnoa_attached_to")
+                if not (hb or ha):
+                    continue
+                cc = r.get("coverage_code") or "coverage"
+                sig = f"{cc}|{hb}|{ha}"
+                if sig in hnoa_seen:
+                    continue
+                hnoa_seen.add(sig)
+                msg = f"Hired/Non-Owned ({cc}): {hb or '—'}"
+                if ha:
+                    msg += f" (attached: {ha})"
+                desc_lines.append(msg)
             
         return p_data, desc_lines
 

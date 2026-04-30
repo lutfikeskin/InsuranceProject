@@ -39,6 +39,7 @@ from core.coverage_normalization import (
     enrich_statutory_policy_display,
     enrich_coverage_from_registry,
 )
+from core.document_taxonomy import DOCUMENT_TYPES
 from core.database import get_session, create_engine
 from core.services import UsageService
 
@@ -110,6 +111,12 @@ def _compute_cache_version() -> str:
 
 CACHE_VERSION = f"v_auto_{_compute_cache_version()}"
 logger.info(f"Extraction cache version: {CACHE_VERSION}")
+
+NON_EXTRACTABLE_MESSAGES = {
+    "quote": "This document is a quote/proposal and is not extractable as bound coverage.",
+    "application": "This document is an application and is not extractable as active coverage.",
+    "endorsement": "This endorsement requires a parent policy context and is skipped in Phase 3.",
+}
 
 
 @dataclass
@@ -304,6 +311,7 @@ class GeminiExtractionPipeline:
                 if status_callback:
                     status_callback(" Using user-selected policy type...")
                 ctx.classification = {
+                    "document_type": "unknown",
                     "policy_type": user_policy_type,
                     "confidence": "high",
                     "signals": ["user_selected"],
@@ -328,6 +336,25 @@ class GeminiExtractionPipeline:
                     ctx.policy_type == "unknown" or ctx.confidence == "low"
                 ):
                     scoped_policy_type = policy_hint
+
+            doc_type = ctx.classification.get("document_type", "unknown")
+            doc_meta = DOCUMENT_TYPES.get(doc_type, DOCUMENT_TYPES["unknown"])
+            extraction_goal = doc_meta.get("extraction_goal")
+            if doc_meta.get("extractable") is False:
+                non_extractable_result = {
+                    "document_type": doc_type,
+                    "extractable": False,
+                    "message": NON_EXTRACTABLE_MESSAGES.get(
+                        doc_type,
+                        f"{doc_meta.get('display', 'This document type')} is not extractable.",
+                    ),
+                    "classification": ctx.classification,
+                }
+                return non_extractable_result, ctx.usage_metadata, None
+
+            if extraction_goal == "coi_summary":
+                # TODO(Phase 4): route COI/memorandum to summary-only extraction path.
+                logger.info("Document taxonomy route: coi_summary (fallback to full_policy in Phase 3).")
 
             if status_callback:
                 status_callback(" PerformingExtraction (Universal One-Shot)...")
@@ -388,6 +415,7 @@ class GeminiExtractionPipeline:
                         f"Model classification ({model_pt}) differs from user-selected ({user_policy_type})."
                     )
                 ctx.classification = {
+                    "document_type": extracted_classification.get("document_type", "unknown"),
                     "policy_type": user_policy_type,
                     "confidence": "high",
                     "signals": ["user_selected"],

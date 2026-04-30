@@ -62,6 +62,7 @@ class HistoryService:
             'has_full_collision': 'has_full_collision',
             'insured_name': 'insured_name',
             'insured_address': 'insured_address',
+            'document_type': 'document_type',
             'status': 'status' # New Field
         }
 
@@ -150,6 +151,17 @@ class HistoryService:
                     "new_value": f"Count: {len(new_ais_set)}"
                 })
                 collection_changes["additional_interests"] = True
+
+        if "extraction_extras" in new_data:
+            new_ex = new_data.get("extraction_extras")
+            old_ex = getattr(policy, "extraction_extras", None)
+            if self._normalize(new_ex) != self._normalize(old_ex):
+                changes.append({
+                    "field": "extraction_extras",
+                    "old_value": str(old_ex)[:500] if old_ex else "",
+                    "new_value": str(new_ex)[:500] if new_ex else "",
+                })
+                policy.extraction_extras = new_ex
 
         if changes:
              version = self._get_next_version(policy.id)

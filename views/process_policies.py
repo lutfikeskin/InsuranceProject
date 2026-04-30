@@ -5,12 +5,30 @@ import pandas as pd
 from core.constants import VEHICLE_TYPES, INTEREST_TYPES, VIN_REGEX
 import json
 from core.services import PolicyService
+from datetime import date
 from core.database import get_session, Policy, Vehicle, Driver, Coverage, AdditionalInterest
 from modules.extraction import process_pdf
+from modules.extraction.pipeline import POLICY_TYPE_ENUM
 from utils.vehicle_utils import refine_vehicle_type
 from utils.naic_utils import get_naic_for_carrier
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from streamlit_pdf_viewer import pdf_viewer
+
+MAX_PARALLEL_WORKERS = 3
+
+
+def _compute_parallel_workers(total_files: int) -> int:
+    """
+    Adaptive worker sizing:
+    - small batches keep lower concurrency to avoid bursty rate limits
+    - larger batches scale up to a conservative cap
+    """
+    if total_files <= 2:
+        return 2
+    if total_files <= 6:
+        return 2
+    return MAX_PARALLEL_WORKERS
+
 
 def _friendly_extraction_error(message: str | None) -> str:
     if not message:
@@ -30,14 +48,36 @@ def _friendly_extraction_error(message: str | None) -> str:
         return "API quota or rate limit issue. Wait a moment, check your billing, and retry."
     if "API Key" in m or "api" in m.lower() and "key" in m.lower():
         return "API key problem. Add or update your Gemini key in Settings."
+    if "invalid policy type" in m.lower():
+        return "Invalid policy type selection. Choose a type from the list or use Auto-detect."
     return m
 
 
-def _process_one_pdf(fname: str, content: bytes, api_key: str, force_refresh: bool):
+def _policy_type_selectbox_options() -> tuple[list[str], dict[str, str | None]]:
+    """Streamlit option strings mapped to API policy_type or None for auto-detect."""
+    manual = [pt for pt in POLICY_TYPE_ENUM if pt != "unknown"]
+    labels = ["Auto-detect (recommended)"] + [pt.replace("_", " ").title() for pt in manual]
+    label_to_value: dict[str, str | None] = {labels[0]: None}
+    for pt, lbl in zip(manual, labels[1:]):
+        label_to_value[lbl] = pt
+    return labels, label_to_value
+
+
+def _process_one_pdf(
+    fname: str,
+    content: bytes,
+    api_key: str,
+    force_refresh: bool,
+    user_policy_type: str | None,
+):
     """Worker for parallel extraction; each call uses its own stack (process_pdf creates its own client)."""
     try:
         data, usage, error_msg = process_pdf(
-            content, api_key, status_callback=None, force_refresh=force_refresh
+            content,
+            api_key,
+            status_callback=None,
+            force_refresh=force_refresh,
+            user_policy_type=user_policy_type,
         )
         return fname, data, usage, error_msg, None
     except Exception as e:
@@ -53,6 +93,14 @@ def page_process_policies(api_key):
     
     if "temp_extracted" not in st.session_state:
         st.session_state["temp_extracted"] = []
+    if "batch_telemetry_today" not in st.session_state:
+        st.session_state["batch_telemetry_today"] = {
+            "day": date.today().isoformat(),
+            "files": 0,
+            "cache_hits": 0,
+            "retries": 0,
+            "errors": 0,
+        }
         
     tab_upload, tab_manual = st.tabs(["📄 Upload & Extract", "✍️ Manual Entry"])
 
@@ -73,7 +121,17 @@ def page_process_policies(api_key):
         with st.expander("Step 1: Upload & Extract", expanded=expanded_upload):
             if not api_key:
                  st.warning("⚠️ Access Restricted: Please add your Gemini API Key in Settings to proceed.")
-            
+
+            _ptype_labels, _ptype_map = _policy_type_selectbox_options()
+            policy_type_label = st.selectbox(
+                "Policy type",
+                options=_ptype_labels,
+                index=0,
+                help="Auto-detect runs classification then extraction (two model calls). "
+                "A manual type skips classification and uses one extraction call with a scoped coverage registry.",
+            )
+            user_policy_type = _ptype_map[policy_type_label]
+
             uploaded_files = st.file_uploader("Drop PDF files here", type=["pdf"], accept_multiple_files=True)
             
             if not uploaded_files:
@@ -82,9 +140,9 @@ def page_process_policies(api_key):
             opt_c1, opt_c2 = st.columns(2)
             with opt_c1:
                 parallel_extract = st.checkbox(
-                    "Parallel extraction (max 2 files at a time)",
+                    "Parallel extraction (adaptive max 2-3 files at a time)",
                     value=False,
-                    help="Faster for many PDFs; logs are less detailed than sequential mode.",
+                    help="Faster for many PDFs; retry policy is handled centrally in extraction pipeline.",
                 )
             with opt_c2:
                 force_refresh = st.checkbox(
@@ -105,42 +163,87 @@ def page_process_policies(api_key):
                 files_map = {f.name: f.getvalue() for f in uploaded_files}
                 batch_rows = []
 
-                def _record_batch(fname, ok, detail, source=""):
+                def _record_batch(fname, ok, detail, source="", retries=0, error_class=""):
                     batch_rows.append(
                         {
                             "filename": fname,
                             "status": "ok" if ok else "error",
                             "detail": detail,
                             "source": source,
+                            "retries": retries,
+                            "error_class": error_class,
                         }
                     )
 
+                def _classify_error(message: str | None) -> str:
+                    m = (message or "").lower()
+                    if any(t in m for t in ["quota", "rate limit", "429", "resource exhausted"]):
+                        return "rate_limit_or_quota"
+                    if "timeout" in m:
+                        return "timeout"
+                    if "api key" in m or ("api" in m and "key" in m):
+                        return "auth"
+                    if "json" in m or "parse" in m:
+                        return "parse"
+                    if m:
+                        return "other"
+                    return ""
+
                 if parallel_extract and total_files > 1:
                     done = 0
-                    with ThreadPoolExecutor(max_workers=2) as pool:
+                    worker_count = _compute_parallel_workers(total_files)
+                    status_text.text(f"Parallel mode: using {worker_count} workers with retry/backoff.")
+                    with ThreadPoolExecutor(max_workers=worker_count) as pool:
                         futures = {
                             pool.submit(
-                                _process_one_pdf, fn, files_map[fn], api_key, force_refresh
+                                _process_one_pdf,
+                                fn,
+                                files_map[fn],
+                                api_key,
+                                force_refresh,
+                                user_policy_type,
                             ): fn
                             for fn in files_map
                         }
                         for fut in as_completed(futures):
                             fname, data, usage, error_msg, exc = fut.result()
+                            retries_used = int((usage or {}).get("llm_retries", 0))
                             done += 1
                             progress_bar.progress(done / total_files)
                             if exc:
                                 st.error(f"`{fname}`: {_friendly_extraction_error(exc)}")
-                                _record_batch(fname, False, exc)
+                                _record_batch(
+                                    fname,
+                                    False,
+                                    exc,
+                                    retries=retries_used,
+                                    error_class=_classify_error(exc),
+                                )
                             elif data:
                                 if usage and usage.get("source") == "cache":
                                     st.info(f"`{fname}`: loaded from extraction cache (no API charge).")
+                                rejected = len(data.get("extraction_audit", {}).get("rejected_coverages", []))
+                                if rejected:
+                                    st.warning(f"`{fname}`: {rejected} coverage entries were rejected by validation rules.")
                                 st.session_state["temp_extracted"].append(
                                     {"filename": fname, "pdf_bytes": files_map[fname], "data": data}
                                 )
-                                _record_batch(fname, True, "extracted", usage.get("source", "") if usage else "")
+                                _record_batch(
+                                    fname,
+                                    True,
+                                    "extracted",
+                                    usage.get("source", "") if usage else "",
+                                    retries=retries_used,
+                                )
                             else:
                                 st.error(f"`{fname}`: {_friendly_extraction_error(error_msg)}")
-                                _record_batch(fname, False, error_msg or "")
+                                _record_batch(
+                                    fname,
+                                    False,
+                                    error_msg or "",
+                                    retries=retries_used,
+                                    error_class=_classify_error(error_msg),
+                                )
                     status_text.text("Extraction complete (parallel).")
                 else:
                     for i, (fname, content) in enumerate(files_map.items()):
@@ -164,7 +267,7 @@ def page_process_policies(api_key):
                                         state="complete",
                                         expanded=False,
                                     )
-                                    _record_batch(fname, True, "session_memory", "")
+                                    _record_batch(fname, True, "session_memory", "", retries=0)
                                     continue
 
                                 data, usage, error_msg = process_pdf(
@@ -172,12 +275,17 @@ def page_process_policies(api_key):
                                     api_key,
                                     status_callback=update_status,
                                     force_refresh=force_refresh,
+                                    user_policy_type=user_policy_type,
                                 )
 
                                 if usage and usage.get("source") == "cache":
                                     status.write("Loaded from file hash cache (no API call).")
 
                                 if data:
+                                    retries_used = int((usage or {}).get("llm_retries", 0))
+                                    rejected = len(data.get("extraction_audit", {}).get("rejected_coverages", []))
+                                    if rejected:
+                                        status.write(f"Validation rejected {rejected} coverage entries (see review).")
                                     st.session_state["temp_extracted"].append(
                                         {"filename": fname, "pdf_bytes": content, "data": data}
                                     )
@@ -191,6 +299,7 @@ def page_process_policies(api_key):
                                         True,
                                         "extracted",
                                         usage.get("source", "") if usage else "",
+                                        retries=retries_used,
                                     )
                                 else:
                                     status.update(
@@ -201,7 +310,13 @@ def page_process_policies(api_key):
                                     friendly = _friendly_extraction_error(error_msg)
                                     status.write(friendly)
                                     st.error(f"`{fname}`: {friendly}")
-                                    _record_batch(fname, False, error_msg or "")
+                                    _record_batch(
+                                        fname,
+                                        False,
+                                        error_msg or "",
+                                        retries=0,
+                                        error_class=_classify_error(error_msg),
+                                    )
 
                             except Exception as e:
                                 status.update(
@@ -212,7 +327,13 @@ def page_process_policies(api_key):
                                 friendly = _friendly_extraction_error(str(e))
                                 status.write(friendly)
                                 st.error(f"`{fname}`: {friendly}")
-                                _record_batch(fname, False, str(e))
+                                _record_batch(
+                                    fname,
+                                    False,
+                                    str(e),
+                                    retries=0,
+                                    error_class=_classify_error(str(e)),
+                                )
 
                         progress_bar.progress((i + 1) / total_files)
 
@@ -222,6 +343,28 @@ def page_process_policies(api_key):
                     rep = pd.DataFrame(batch_rows)
                     st.subheader("Batch report")
                     st.dataframe(rep, hide_index=True, use_container_width=True)
+                    today_key = date.today().isoformat()
+                    telem = st.session_state.get("batch_telemetry_today", {})
+                    if telem.get("day") != today_key:
+                        telem = {
+                            "day": today_key,
+                            "files": 0,
+                            "cache_hits": 0,
+                            "retries": 0,
+                            "errors": 0,
+                        }
+                    telem["files"] += int(len(rep))
+                    telem["cache_hits"] += int((rep["source"] == "cache").sum()) if "source" in rep else 0
+                    telem["retries"] += int(rep["retries"].sum()) if "retries" in rep else 0
+                    telem["errors"] += int((rep["status"] == "error").sum()) if "status" in rep else 0
+                    st.session_state["batch_telemetry_today"] = telem
+                    if len(rep) > 1:
+                        cache_hits = int((rep["source"] == "cache").sum()) if "source" in rep else 0
+                        total_retries = int(rep["retries"].sum()) if "retries" in rep else 0
+                        error_total = int((rep["status"] == "error").sum()) if "status" in rep else 0
+                        st.caption(
+                            f"Batch telemetry: cache_hits={cache_hits}, total_retries={total_retries}, errors={error_total}"
+                        )
                     if len(batch_rows) > 1:
                         st.download_button(
                             "Download batch report (CSV)",
@@ -252,6 +395,13 @@ def page_process_policies(api_key):
                 
                 try:
                     for item in st.session_state["temp_extracted"]:
+                        if item["data"].get("extractable") is False:
+                            skipped_count += 1
+                            st.toast(
+                                f"Skipped {item['filename']}: {item['data'].get('message', 'document not extractable')}",
+                                icon="⚠️",
+                            )
+                            continue
                         pol_num = item['data'].get('policy', {}).get('policy_number', '')
                         existing = service.check_duplicate(pol_num) if pol_num else None
                         
@@ -420,6 +570,27 @@ def page_process_policies(api_key):
             
         with c_form:
             st.markdown("#### Verify Extracted Data")
+            classification = current_item['data'].get('classification', {})
+            document_type = (
+                current_item['data'].get('document_type')
+                or classification.get('document_type')
+                or "unknown"
+            )
+            is_extractable = current_item['data'].get('extractable', True)
+
+            if not is_extractable:
+                st.error(current_item['data'].get('message', "This document type is not extractable yet."))
+                st.info(f"Document type detected: `{document_type}`")
+                if st.button("Skip This Document", key=f"skip_non_extractable_{fname}", type="primary"):
+                    st.session_state["review_queue"].pop(0)
+                    st.rerun()
+                st.stop()
+
+            if document_type == "renewal_declarations":
+                st.info("Renewal declarations detected. Review effective/expiration dates carefully before saving.")
+            if document_type in ("certificate_of_insurance", "memorandum"):
+                st.warning("COI/Memorandum detected: vehicle and driver detail may be incomplete in this phase.")
+
             with st.form(key=f"review_form_{fname}"):
                 c1, c2 = st.columns(2)
                 
@@ -428,7 +599,6 @@ def page_process_policies(api_key):
                 r_carrier = c1.text_input("Carrier", value=p.get('carrier_name', ''), help=get_source_help("carrier_name", locs))
                 r_pol_num = c2.text_input("Policy Number", value=p.get('policy_number', ''), help=get_source_help("policy_number", locs))
                 
-                classification = current_item['data'].get('classification', {})
                 cc1, cc2 = st.columns(2)
                 r_type = cc1.text_input("Policy Type", value=classification.get('policy_type', ''), disabled=True)
                 r_conf = cc2.text_input("Confidence", value=classification.get('confidence', ''), disabled=True)
@@ -626,6 +796,7 @@ def page_process_policies(api_key):
                             "has_general_liability": r_gl,
                             "has_auto_liability": r_auto,
                             "account_type": p.get('account_type'),
+                            "document_type": document_type,
                             "policy_type": classification.get('policy_type'),
                             "classification_confidence": classification.get('confidence'),
                             "classification_signals": classification.get('signals', []),
