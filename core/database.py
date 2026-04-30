@@ -241,3 +241,8 @@ def init_db(db_name="insurance_data.db"):
 def get_session(engine):
     Session = sessionmaker(bind=engine)
     return Session()
+
+# Late import to register PolicyHistory model with SQLAlchemy mapper
+# before any session uses Policy.history relationship. Do not move.
+from core import history_model  # noqa: F401, E402
+PolicyHistory = history_model.PolicyHistory
