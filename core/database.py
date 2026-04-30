@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Date, Boolean, ForeignKey, Float, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Date, Boolean, ForeignKey, Float, DateTime, Text, JSON, inspect, text
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 import os
 from datetime import datetime
@@ -17,10 +17,36 @@ class ApiUsage(Base):
     status = Column(String) # success/failure
     request_type = Column(String) # e.g. "scout", "extraction", "query"
 
+class Customer(Base):
+    __tablename__ = 'customers'
+
+    id = Column(Integer, primary_key=True)
+    full_name = Column(String, nullable=False)
+    primary_email = Column(String, nullable=True)
+    primary_phone = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    entities = relationship("CustomerEntity", back_populates="customer", cascade="all, delete-orphan")
+    policies = relationship("Policy", back_populates="customer")
+
+class CustomerEntity(Base):
+    __tablename__ = 'customer_entities'
+
+    id = Column(Integer, primary_key=True)
+    customer_id = Column(Integer, ForeignKey('customers.id'))
+    entity_name = Column(String, nullable=False)
+    entity_type = Column(String)  # personal, business, dba, maiden_name
+    is_primary = Column(Boolean, default=False)
+    source = Column(String)  # extraction, manual
+    first_seen = Column(DateTime, default=datetime.utcnow)
+
+    customer = relationship("Customer", back_populates="entities")
+
 class Policy(Base):
     __tablename__ = 'policies'
     
     id = Column(Integer, primary_key=True)
+    customer_id = Column(Integer, ForeignKey('customers.id'), nullable=True)
     carrier_name = Column(String)
     naic_number = Column(String)  # New
     policy_number = Column(String, unique=True, nullable=False)
@@ -63,7 +89,15 @@ class Policy(Base):
     coll_deductible = Column(String)
 
     status = Column(String, default='Active') # New Status Field
+    policy_status = Column(String, default='active')
+    replaced_by_policy_id = Column(Integer, ForeignKey('policies.id'), nullable=True)
+    field_confidences = Column(JSON, nullable=True)
+    document_type = Column(String, nullable=True)
+    layout_fingerprint = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow) # New Timestamp Field
+
+    # Ontology / compliance / extra fields not mapped to relational columns (JSON string)
+    extraction_extras = Column(Text, nullable=True)
 
     # Relationships
     vehicles = relationship("Vehicle", back_populates="policy", cascade="all, delete-orphan")
@@ -71,6 +105,32 @@ class Policy(Base):
     coverages = relationship("Coverage", back_populates="policy", cascade="all, delete-orphan")
     history = relationship("PolicyHistory", back_populates="policy", cascade="all, delete-orphan")
     additional_interests = relationship("AdditionalInterest", back_populates="policy", cascade="all, delete-orphan")
+    customer = relationship("Customer", back_populates="policies")
+    policy_relationships = relationship(
+        "PolicyRelationship",
+        foreign_keys="PolicyRelationship.policy_id",
+        back_populates="policy",
+        cascade="all, delete-orphan",
+    )
+    related_policy_relationships = relationship(
+        "PolicyRelationship",
+        foreign_keys="PolicyRelationship.related_policy_id",
+        back_populates="related_policy",
+        cascade="all, delete-orphan",
+    )
+
+class PolicyRelationship(Base):
+    __tablename__ = 'policy_relationships'
+
+    id = Column(Integer, primary_key=True)
+    policy_id = Column(Integer, ForeignKey('policies.id'))
+    related_policy_id = Column(Integer, ForeignKey('policies.id'))
+    relationship_type = Column(String)  # renewal, rewrite, mid_term_change, same_customer_new_policy, canceled_replaced
+    confidence = Column(String)  # confirmed, suggested
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    policy = relationship("Policy", foreign_keys=[policy_id], back_populates="policy_relationships")
+    related_policy = relationship("Policy", foreign_keys=[related_policy_id], back_populates="related_policy_relationships")
 
 class Vehicle(Base):
     __tablename__ = 'vehicles'
@@ -141,11 +201,16 @@ class Coverage(Base):
 def init_db(db_name="insurance_data.db"):
     """
     Initializes the SQLite database.
-    Note: Schema updates are now handled by Alembic.
-    This function primarily ensures the DB exists for new setups.
+    For SQLite, adds new columns when the file already exists without them.
     """
     engine = create_engine(f'sqlite:///{db_name}')
     Base.metadata.create_all(engine)
+    if engine.dialect.name == "sqlite":
+        insp = inspect(engine)
+        cols = {c["name"] for c in insp.get_columns("policies")}
+        if "extraction_extras" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE policies ADD COLUMN extraction_extras TEXT"))
     return engine
 
 def get_session(engine):
