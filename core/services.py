@@ -1,7 +1,17 @@
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
-from .database import get_session, Policy, Vehicle, Driver, Coverage, ApiUsage
+from .database import (
+    get_session,
+    Policy,
+    Vehicle,
+    Driver,
+    Coverage,
+    ApiUsage,
+    PolicyRelationship,
+    Customer,
+    CustomerEntity,
+)
 from datetime import datetime, timedelta
 from sqlalchemy import func, or_
 from utils.naic_utils import get_naic_for_carrier
@@ -155,6 +165,8 @@ class PolicyService:
         "liability_limit",
     )
     RECOMMENDED_FOR_COI = ("naic_number", "insured_address", "cargo_limit")
+    RELATIONSHIP_SCORE_THRESHOLD = 0.5
+    RELATIONSHIP_CANDIDATE_LIMIT = 3
 
     @classmethod
     def _extract_field_confidences(cls, policy_data: dict) -> dict | None:
@@ -229,109 +241,11 @@ class PolicyService:
     def _save_single_extraction_payload(self, extraction_result):
         new_policy = self._create_policy_instance(extraction_result)
         existing = self.get_policy_by_number(new_policy.policy_number)
-        resolver = CustomerResolver(self.session)
 
         if existing:
-            from .history_service import HistoryService
-            history_svc = HistoryService(self.session)
+            return self._handle_policy_update(existing, new_policy, extraction_result)
 
-            normalized = self.normalize_policy_data(extraction_result)
-            is_changed, changes, collection_changes = history_svc.compare_and_record(
-                existing, normalized, source="AI_Re-Extraction", event_type="AI_EXTRACTION"
-            )
-
-            if is_changed:
-                if collection_changes["vehicles"]:
-                    existing.vehicles.clear()
-                    for v in new_policy.vehicles:
-                        existing.vehicles.append(Vehicle(
-                            year=v.year, make=v.make, model=v.model, vin=v.vin,
-                            gvw=v.gvw, vehicle_type=v.vehicle_type, chassis=v.chassis, body=v.body
-                        ))
-
-                if collection_changes["coverages"]:
-                    existing.coverages.clear()
-                    vin_map_existing = {
-                        str(v.vin).strip().upper(): v
-                        for v in existing.vehicles
-                        if getattr(v, "vin", None)
-                    }
-                    for c in new_policy.coverages:
-                        matched_ev = None
-                        if c.vehicle is not None and getattr(c.vehicle, "vin", None):
-                            matched_ev = vin_map_existing.get(str(c.vehicle.vin).strip().upper())
-                        existing.coverages.append(
-                            Coverage(
-                                type=c.type,
-                                coverage_code=c.coverage_code,
-                                family=c.family,
-                                per_person=c.per_person,
-                                per_accident=c.per_accident,
-                                per_occurrence=c.per_occurrence,
-                                combined_single_limit=c.combined_single_limit,
-                                aggregate=c.aggregate,
-                                limit_per_person=c.limit_per_person,
-                                limit_per_accident=c.limit_per_accident,
-                                limit_property_damage=c.limit_property_damage,
-                                deductible=c.deductible,
-                                vehicle=matched_ev,
-                            )
-                        )
-
-                if collection_changes["drivers"]:
-                    existing.drivers.clear()
-                    for d in new_policy.drivers:
-                        existing.drivers.append(Driver(full_name=d.full_name, license_number=d.license_number, is_excluded=d.is_excluded))
-
-                if collection_changes["additional_interests"]:
-                    existing.additional_interests.clear()
-                    for a in new_policy.additional_interests:
-                        from .database import AdditionalInterest
-                        existing.additional_interests.append(AdditionalInterest(
-                            name=a.name, address=a.address, interest_type=a.interest_type
-                        ))
-
-                resolution = resolver.resolve(extraction_result)
-                if resolution["confidence"] == "confirmed":
-                    customer = resolution["customer"]
-                    existing.customer_id = customer.id
-                    insured_name = (existing.insured_name or "").strip()
-                    if insured_name:
-                        entity_type = (
-                            "business"
-                            if any(t in insured_name.lower() for t in ["llc", "inc", "corp", "ltd"])
-                            else "personal"
-                        )
-                        resolver.add_entity(customer, insured_name, entity_type, source="extraction")
-                elif resolution["confidence"] == "suggested":
-                    extraction_result["_customer_suggestion"] = {
-                        "customer_id": resolution["customer"].id,
-                        "reason": resolution["match_reason"],
-                    }
-                else:
-                    insured_name = (existing.insured_name or "").strip()
-                    policy_type = (existing.policy_type or "").strip()
-                    if insured_name:
-                        if policy_type == "personal_auto":
-                            customer = resolver.create_customer(
-                                full_name=insured_name,
-                                entity_name=insured_name,
-                                entity_type="personal",
-                            )
-                            existing.customer_id = customer.id
-                        else:
-                            customer = resolver.create_customer(
-                                full_name=insured_name,
-                                entity_name=insured_name,
-                                entity_type="business",
-                            )
-                            customer.needs_real_name_entry = True
-                            existing.customer_id = customer.id
-
-                self.session.commit()
-                return True, f"Updated existing policy. {len(changes)} changes logged (Version updated)."
-            return False, "No changes detected."
-
+        resolver = CustomerResolver(self.session)
         self.session.add(new_policy)
         self.session.flush()
         resolution = resolver.resolve(extraction_result)
@@ -373,6 +287,251 @@ class PolicyService:
 
         self.session.commit()
         return True, "Saved successfully"
+
+    def _classify_update(self, existing, new_policy) -> str:
+        """For same-policy-number cases."""
+        old_eff = existing.effective_date
+        old_exp = existing.expiration_date
+        new_eff = new_policy.effective_date
+
+        if not new_eff or not old_eff:
+            return "mid_term_change"
+
+        if old_exp and abs((new_eff - old_exp).days) <= 1:
+            return "renewal"
+
+        if new_eff == old_eff:
+            return "mid_term_change"
+
+        if old_eff <= new_eff <= (old_exp or new_eff):
+            return "mid_term_change"
+
+        return "mid_term_change"
+
+    def _score_policy_relationship(self, existing, extraction_result):
+        p = extraction_result.get("policy", {})
+        score = 0.0
+        relationship_type = "same_customer_new_policy"
+
+        new_name = (p.get("insured_name") or "").lower().strip()
+        old_name = (existing.insured_name or "").lower().strip()
+        if new_name and old_name and new_name == old_name:
+            score += 0.4
+        elif new_name and old_name and (new_name in old_name or old_name in new_name):
+            score += 0.2
+
+        try:
+            new_eff_str = p.get("effective_date")
+            if new_eff_str and existing.expiration_date:
+                new_eff = datetime.strptime(str(new_eff_str), "%Y-%m-%d").date()
+                days_gap = (new_eff - existing.expiration_date).days
+                if 0 <= days_gap <= 1:
+                    score += 0.4
+                    relationship_type = "renewal"
+                elif 1 < days_gap <= 90:
+                    score += 0.2
+                    relationship_type = "canceled_replaced"
+                elif days_gap < 0:
+                    score += 0.1
+                    relationship_type = "rewrite"
+        except (ValueError, TypeError):
+            pass
+
+        new_type = extraction_result.get("classification", {}).get("policy_type")
+        if new_type and new_type == existing.policy_type:
+            score += 0.1
+        else:
+            relationship_type = "same_customer_new_policy"
+
+        return min(score, 1.0), relationship_type
+
+    def find_related_policies(self, extraction_result: dict) -> list:
+        p = extraction_result.get("policy", {})
+        insured_name = p.get("insured_name", "")
+        new_policy_number = p.get("policy_number", "")
+        if not insured_name:
+            return []
+
+        candidates = []
+        direct = self.session.query(Policy).filter(
+            Policy.insured_name.ilike(f"%{insured_name}%"),
+            Policy.policy_number != new_policy_number,
+        ).all()
+        candidates.extend(direct)
+
+        entity_policies = (
+            self.session.query(Policy)
+            .join(Customer)
+            .join(CustomerEntity)
+            .filter(
+                CustomerEntity.entity_name.ilike(f"%{insured_name}%"),
+                Policy.policy_number != new_policy_number,
+            )
+            .all()
+        )
+        candidates.extend(entity_policies)
+
+        seen_ids = set()
+        unique = []
+        for candidate in candidates:
+            if candidate.id in seen_ids:
+                continue
+            seen_ids.add(candidate.id)
+            unique.append(candidate)
+
+        scored = []
+        for candidate in unique:
+            score, rel_type = self._score_policy_relationship(candidate, extraction_result)
+            if score >= self.RELATIONSHIP_SCORE_THRESHOLD:
+                scored.append(
+                    {
+                        "policy": {
+                            "id": candidate.id,
+                            "policy_number": candidate.policy_number,
+                            "insured_name": candidate.insured_name,
+                            "policy_type": candidate.policy_type,
+                            "effective_date": str(candidate.effective_date) if candidate.effective_date else None,
+                            "expiration_date": str(candidate.expiration_date) if candidate.expiration_date else None,
+                        },
+                        "score": round(score, 2),
+                        "relationship_type": rel_type,
+                    }
+                )
+
+        return sorted(scored, key=lambda item: item["score"], reverse=True)[
+            : self.RELATIONSHIP_CANDIDATE_LIMIT
+        ]
+
+    def _handle_policy_update(self, existing, new_policy, extraction_result):
+        from .history_service import HistoryService
+
+        history_svc = HistoryService(self.session)
+        normalized = self.normalize_policy_data(extraction_result)
+        is_changed, changes, collection_changes = history_svc.compare_and_record(
+            existing, normalized, source="AI_Re-Extraction", event_type="AI_EXTRACTION"
+        )
+        if not is_changed:
+            return False, "No changes detected."
+
+        if collection_changes["vehicles"]:
+            existing.vehicles.clear()
+            for vehicle in new_policy.vehicles:
+                existing.vehicles.append(
+                    Vehicle(
+                        year=vehicle.year,
+                        make=vehicle.make,
+                        model=vehicle.model,
+                        vin=vehicle.vin,
+                        gvw=vehicle.gvw,
+                        vehicle_type=vehicle.vehicle_type,
+                        chassis=vehicle.chassis,
+                        body=vehicle.body,
+                    )
+                )
+
+        if collection_changes["coverages"]:
+            existing.coverages.clear()
+            vin_map_existing = {
+                str(vehicle.vin).strip().upper(): vehicle
+                for vehicle in existing.vehicles
+                if getattr(vehicle, "vin", None)
+            }
+            for coverage in new_policy.coverages:
+                matched_vehicle = None
+                if coverage.vehicle is not None and getattr(coverage.vehicle, "vin", None):
+                    matched_vehicle = vin_map_existing.get(str(coverage.vehicle.vin).strip().upper())
+                existing.coverages.append(
+                    Coverage(
+                        type=coverage.type,
+                        coverage_code=coverage.coverage_code,
+                        family=coverage.family,
+                        per_person=coverage.per_person,
+                        per_accident=coverage.per_accident,
+                        per_occurrence=coverage.per_occurrence,
+                        combined_single_limit=coverage.combined_single_limit,
+                        aggregate=coverage.aggregate,
+                        limit_per_person=coverage.limit_per_person,
+                        limit_per_accident=coverage.limit_per_accident,
+                        limit_property_damage=coverage.limit_property_damage,
+                        deductible=coverage.deductible,
+                        vehicle=matched_vehicle,
+                    )
+                )
+
+        if collection_changes["drivers"]:
+            existing.drivers.clear()
+            for driver in new_policy.drivers:
+                existing.drivers.append(
+                    Driver(
+                        full_name=driver.full_name,
+                        license_number=driver.license_number,
+                        is_excluded=driver.is_excluded,
+                    )
+                )
+
+        if collection_changes["additional_interests"]:
+            existing.additional_interests.clear()
+            from .database import AdditionalInterest
+
+            for interest in new_policy.additional_interests:
+                existing.additional_interests.append(
+                    AdditionalInterest(
+                        name=interest.name,
+                        address=interest.address,
+                        interest_type=interest.interest_type,
+                    )
+                )
+
+        resolver = CustomerResolver(self.session)
+        resolution = resolver.resolve(extraction_result)
+        if resolution["confidence"] == "confirmed":
+            customer = resolution["customer"]
+            existing.customer_id = customer.id
+            insured_name = (existing.insured_name or "").strip()
+            if insured_name:
+                entity_type = (
+                    "business"
+                    if any(t in insured_name.lower() for t in ["llc", "inc", "corp", "ltd"])
+                    else "personal"
+                )
+                resolver.add_entity(customer, insured_name, entity_type, source="extraction")
+        elif resolution["confidence"] == "suggested":
+            extraction_result["_customer_suggestion"] = {
+                "customer_id": resolution["customer"].id,
+                "reason": resolution["match_reason"],
+            }
+        else:
+            insured_name = (existing.insured_name or "").strip()
+            policy_type = (existing.policy_type or "").strip()
+            if insured_name:
+                if policy_type == "personal_auto":
+                    customer = resolver.create_customer(
+                        full_name=insured_name,
+                        entity_name=insured_name,
+                        entity_type="personal",
+                    )
+                    existing.customer_id = customer.id
+                else:
+                    customer = resolver.create_customer(
+                        full_name=insured_name,
+                        entity_name=insured_name,
+                        entity_type="business",
+                    )
+                    customer.needs_real_name_entry = True
+                    existing.customer_id = customer.id
+
+        update_type = self._classify_update(existing, new_policy)
+        self.session.add(
+            PolicyRelationship(
+                policy_id=existing.id,
+                related_policy_id=existing.id,
+                relationship_type=update_type,
+                confidence="confirmed",
+            )
+        )
+
+        self.session.commit()
+        return True, f"Updated existing policy. {len(changes)} changes logged (Version updated)."
 
     def __init__(self, session: Session):
         self.session = session
@@ -540,6 +699,7 @@ class PolicyService:
         return self.create_policy_from_dict(flat_data)
 
     def save_policy_from_extraction(self, extraction_result):
+        extraction_result["_related_policy_candidates"] = self.find_related_policies(extraction_result)
         if extraction_result.get("policy_data_source") == "coi_summary" and extraction_result.get("coi_summary", {}).get("policies"):
             return self._save_policies_from_coi_summary(extraction_result)
         return self._save_single_extraction_payload(extraction_result)
@@ -671,6 +831,26 @@ class PolicyService:
             else "personal",
         )
         self.session.commit()
+
+    def save_with_relationship(self, extraction_result, related_policy_id, relationship_type):
+        """Save new policy and record explicit relationship to existing one."""
+        saved_result = self.save_policy_from_extraction(extraction_result)
+        new_policy = self.get_policy_by_number(extraction_result["policy"]["policy_number"])
+        relationship = PolicyRelationship(
+            policy_id=new_policy.id,
+            related_policy_id=related_policy_id,
+            relationship_type=relationship_type,
+            confidence="confirmed",
+        )
+        self.session.add(relationship)
+
+        if relationship_type in ("canceled_replaced", "rewrite"):
+            old_policy = self.session.query(Policy).get(related_policy_id)
+            old_policy.policy_status = "replaced"
+            old_policy.replaced_by_policy_id = new_policy.id
+
+        self.session.commit()
+        return saved_result
 
     def update_policy(self, policy: Policy, updated_data: dict):
         """

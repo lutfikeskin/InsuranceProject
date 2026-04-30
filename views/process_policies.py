@@ -946,6 +946,7 @@ def page_process_policies(api_key):
                             "field_confidences": confidence_map,
                             "premium_audit_flag": audit_flag,
                             "_customer_suggestion": current_item["data"].get("_customer_suggestion"),
+                            "_related_policy_candidates": current_item["data"].get("_related_policy_candidates"),
                             "business_name": p.get('business_name'),
                             "premium": r_premium,
                             "financial_responsibility_name": p.get('financial_responsibility_name'),
