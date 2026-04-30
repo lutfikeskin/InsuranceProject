@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, or_
 from utils.naic_utils import get_naic_for_carrier
 from .coverage_ontology import summarize_auto_liability, format_liability_limit
+from .customer_resolver import CustomerResolver
 from utils.vehicle_utils import refine_vehicle_type
 import pandas as pd
 import json
@@ -228,6 +229,7 @@ class PolicyService:
     def _save_single_extraction_payload(self, extraction_result):
         new_policy = self._create_policy_instance(extraction_result)
         existing = self.get_policy_by_number(new_policy.policy_number)
+        resolver = CustomerResolver(self.session)
 
         if existing:
             from .history_service import HistoryService
@@ -289,11 +291,86 @@ class PolicyService:
                             name=a.name, address=a.address, interest_type=a.interest_type
                         ))
 
+                resolution = resolver.resolve(extraction_result)
+                if resolution["confidence"] == "confirmed":
+                    customer = resolution["customer"]
+                    existing.customer_id = customer.id
+                    insured_name = (existing.insured_name or "").strip()
+                    if insured_name:
+                        entity_type = (
+                            "business"
+                            if any(t in insured_name.lower() for t in ["llc", "inc", "corp", "ltd"])
+                            else "personal"
+                        )
+                        resolver.add_entity(customer, insured_name, entity_type, source="extraction")
+                elif resolution["confidence"] == "suggested":
+                    extraction_result["_customer_suggestion"] = {
+                        "customer_id": resolution["customer"].id,
+                        "reason": resolution["match_reason"],
+                    }
+                else:
+                    insured_name = (existing.insured_name or "").strip()
+                    policy_type = (existing.policy_type or "").strip()
+                    if insured_name:
+                        if policy_type == "personal_auto":
+                            customer = resolver.create_customer(
+                                full_name=insured_name,
+                                entity_name=insured_name,
+                                entity_type="personal",
+                            )
+                            existing.customer_id = customer.id
+                        else:
+                            customer = resolver.create_customer(
+                                full_name=insured_name,
+                                entity_name=insured_name,
+                                entity_type="business",
+                            )
+                            customer.needs_real_name_entry = True
+                            existing.customer_id = customer.id
+
                 self.session.commit()
                 return True, f"Updated existing policy. {len(changes)} changes logged (Version updated)."
             return False, "No changes detected."
 
         self.session.add(new_policy)
+        self.session.flush()
+        resolution = resolver.resolve(extraction_result)
+        if resolution["confidence"] == "confirmed":
+            customer = resolution["customer"]
+            new_policy.customer_id = customer.id
+            insured_name = (new_policy.insured_name or "").strip()
+            if insured_name:
+                entity_type = (
+                    "business"
+                    if any(t in insured_name.lower() for t in ["llc", "inc", "corp", "ltd"])
+                    else "personal"
+                )
+                resolver.add_entity(customer, insured_name, entity_type, source="extraction")
+        elif resolution["confidence"] == "suggested":
+            extraction_result["_customer_suggestion"] = {
+                "customer_id": resolution["customer"].id,
+                "reason": resolution["match_reason"],
+            }
+        else:
+            insured_name = (new_policy.insured_name or "").strip()
+            policy_type = (new_policy.policy_type or "").strip()
+            if insured_name:
+                if policy_type == "personal_auto":
+                    customer = resolver.create_customer(
+                        full_name=insured_name,
+                        entity_name=insured_name,
+                        entity_type="personal",
+                    )
+                    new_policy.customer_id = customer.id
+                else:
+                    customer = resolver.create_customer(
+                        full_name=insured_name,
+                        entity_name=insured_name,
+                        entity_type="business",
+                    )
+                    customer.needs_real_name_entry = True
+                    new_policy.customer_id = customer.id
+
         self.session.commit()
         return True, "Saved successfully"
 
@@ -572,6 +649,28 @@ class PolicyService:
         self.session.add(policy)
         self.session.commit()
         return True, "Saved policy manually."
+
+    def confirm_customer_match(self, policy_id, customer_id):
+        """Called when user confirms a 'suggested' match in the UI."""
+        from .database import Customer
+
+        policy = self.session.query(Policy).get(policy_id)
+        if not policy:
+            return
+        policy.customer_id = customer_id
+        resolver = CustomerResolver(self.session)
+        customer = self.session.query(Customer).get(customer_id)
+        if not customer:
+            return
+        insured_name = policy.insured_name or ""
+        resolver.add_entity(
+            customer,
+            insured_name,
+            "business"
+            if any(t in insured_name.lower() for t in ["llc", "inc", "corp", "ltd"])
+            else "personal",
+        )
+        self.session.commit()
 
     def update_policy(self, policy: Policy, updated_data: dict):
         """

@@ -24,6 +24,7 @@ class Customer(Base):
     full_name = Column(String, nullable=False)
     primary_email = Column(String, nullable=True)
     primary_phone = Column(String, nullable=True)
+    needs_real_name_entry = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     entities = relationship("CustomerEntity", back_populates="customer", cascade="all, delete-orphan")

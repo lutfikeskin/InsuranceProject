@@ -9,7 +9,7 @@
 - [x] Phase 5: Variant Tracker
 - [x] Phase 6: Field Confidence Scoring
 - [x] Phase 7: Premium Sanity Audit
-- [ ] Phase 8: Customer Resolver
+- [x] Phase 8: Customer Resolver
 - [ ] Phase 9: Policy Relationship Detection
 - [ ] Phase 10: Endorsement Lightweight Capture
 - [ ] Phase 11: Carrier Knowledge Base Bidirectional
@@ -44,3 +44,4 @@
 - CustomerEntity
 - PolicyRelationship
 - core/document_taxonomy.py
+- core/customer_resolver.py
