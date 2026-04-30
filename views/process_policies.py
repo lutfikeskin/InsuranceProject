@@ -589,7 +589,67 @@ def page_process_policies(api_key):
             if document_type == "renewal_declarations":
                 st.info("Renewal declarations detected. Review effective/expiration dates carefully before saving.")
             if document_type in ("certificate_of_insurance", "memorandum"):
-                st.warning("COI/Memorandum detected: vehicle and driver detail may be incomplete in this phase.")
+                st.info("COI/Memorandum detected: vehicle and driver schedules are extracted when present.")
+
+            coi_summary = current_item["data"].get("coi_summary") or {}
+            coi_policies = coi_summary.get("policies") or []
+            if coi_policies:
+                st.markdown("##### COI Policies Detected")
+                list_rows = []
+                for idx, row in enumerate(coi_policies):
+                    if not isinstance(row, dict):
+                        continue
+                    list_rows.append(
+                        {
+                            "index": idx,
+                            "policy_type": row.get("policy_type"),
+                            "carrier_name": row.get("carrier_name"),
+                            "policy_number": row.get("policy_number"),
+                            "effective_date": row.get("effective_date"),
+                            "expiration_date": row.get("expiration_date"),
+                        }
+                    )
+                if list_rows:
+                    st.dataframe(pd.DataFrame(list_rows), hide_index=True, width='stretch')
+                    selected_policy_idx = st.selectbox(
+                        "Select COI policy row to review",
+                        options=list(range(len(list_rows))),
+                        format_func=lambda i: f"{list_rows[i].get('policy_number') or 'no_policy_number'} ({list_rows[i].get('carrier_name') or 'unknown_carrier'})",
+                        key=f"coi_policy_pick_{fname}",
+                    )
+                    selected_row = coi_policies[selected_policy_idx] if selected_policy_idx < len(coi_policies) else {}
+                    selected_limits = selected_row.get("limits") if isinstance(selected_row.get("limits"), dict) else {}
+                    p = {
+                        **p,
+                        "carrier_name": selected_row.get("carrier_name"),
+                        "naic_number": selected_row.get("naic_number"),
+                        "policy_number": selected_row.get("policy_number"),
+                        "effective_date": selected_row.get("effective_date"),
+                        "expiration_date": selected_row.get("expiration_date"),
+                        "liability_limit": selected_limits.get("liability_limit"),
+                        "general_liability_limit": selected_limits.get("general_liability_limit"),
+                        "cargo_limit": selected_limits.get("cargo_limit"),
+                        "cargo_deductible": selected_limits.get("cargo_deductible"),
+                        "um_uim_limit": selected_limits.get("um_uim_limit"),
+                        "med_pay_limit": selected_limits.get("med_pay_limit"),
+                        "pip_limit": selected_limits.get("pip_limit"),
+                        "comp_deductible": selected_limits.get("comp_deductible"),
+                        "coll_deductible": selected_limits.get("coll_deductible"),
+                    }
+
+            variant_status = current_item["data"].get("variant_status")
+            if variant_status == "new_carrier":
+                st.warning(
+                    "⚠️ **New carrier layout detected.** After saving, consider generating a golden file for regression testing."
+                )
+            elif variant_status == "new_layout_variant":
+                st.info(
+                    "ℹ️ **New layout variant of known carrier.** Verify fields carefully — this format hasn't been extracted before."
+                )
+            elif variant_status == "new_policy_type_variant":
+                st.info(
+                    "ℹ️ **New policy type for this carrier.** Verify fields carefully."
+                )
 
             with st.form(key=f"review_form_{fname}"):
                 c1, c2 = st.columns(2)
@@ -657,48 +717,65 @@ def page_process_policies(api_key):
 
                 st.divider()
                 st.markdown("#### Detailed Inventory (Editable)")
-                t1, t2, t3, t4 = st.tabs(["🚙 Vehicles", "👤 Drivers", "🛡️ Coverages", "🏢 Additional Interests"])
+                v_data = current_item['data'].get('vehicles') or []
+                d_data = current_item['data'].get('drivers') or []
+                show_vehicle_tab = len(v_data) > 0
+                show_driver_tab = len(d_data) > 0
 
-                with t1:
-                    v_data = current_item['data'].get('vehicles', [])
-                    v_df = pd.DataFrame(v_data)
-                    for col in ["year", "make", "model", "vin", "type", "gvw"]:
-                        if col not in v_df.columns: v_df[col] = None
-                    
-                    edited_v = st.data_editor(
-                        v_df,
-                        num_rows="dynamic",
-                        column_config={
-                            "year": st.column_config.NumberColumn("Year", min_value=1900, max_value=2030, format="%d"),
-                            "make": st.column_config.TextColumn("Make", required=True),
-                            "model": st.column_config.TextColumn("Model"),
-                            "vin": st.column_config.TextColumn("VIN", max_chars=17, validate=VIN_REGEX),
-                            "type": st.column_config.SelectboxColumn("Type", options=VEHICLE_TYPES),
-                            "gvw": st.column_config.NumberColumn("GVW", format="%d")
-                        },
-                        width='stretch',
-                        key=f"edt_v_{fname}"
-                    )
+                tab_defs = []
+                if show_vehicle_tab:
+                    tab_defs.append(("vehicles", "🚙 Vehicles"))
+                if show_driver_tab:
+                    tab_defs.append(("drivers", "👤 Drivers"))
+                tab_defs.extend([
+                    ("coverages", "🛡️ Coverages"),
+                    ("additional_interests", "🏢 Additional Interests"),
+                ])
+                tab_views = dict(zip([k for k, _ in tab_defs], st.tabs([label for _, label in tab_defs])))
 
-                with t2:
-                    d_data = current_item['data'].get('drivers', [])
-                    d_df = pd.DataFrame(d_data)
-                    for col in ["full_name", "license_number", "is_excluded"]:
-                        if col not in d_df.columns: d_df[col] = None
+                edited_v = pd.DataFrame(v_data) if show_vehicle_tab else pd.DataFrame()
+                edited_d = pd.DataFrame(d_data) if show_driver_tab else pd.DataFrame()
+
+                if show_vehicle_tab:
+                    with tab_views["vehicles"]:
+                        v_df = pd.DataFrame(v_data)
+                        for col in ["year", "make", "model", "vin", "type", "gvw"]:
+                            if col not in v_df.columns: v_df[col] = None
                         
-                    edited_d = st.data_editor(
-                        d_df,
-                        num_rows="dynamic",
-                        column_config={
-                            "full_name": st.column_config.TextColumn("Driver Name", required=True),
-                            "license_number": st.column_config.TextColumn("License #"),
-                            "is_excluded": st.column_config.CheckboxColumn("Excluded?", default=False)
-                        },
-                        width='stretch',
-                        key=f"edt_d_{fname}"
-                    )
+                        edited_v = st.data_editor(
+                            v_df,
+                            num_rows="dynamic",
+                            column_config={
+                                "year": st.column_config.NumberColumn("Year", min_value=1900, max_value=2030, format="%d"),
+                                "make": st.column_config.TextColumn("Make", required=True),
+                                "model": st.column_config.TextColumn("Model"),
+                                "vin": st.column_config.TextColumn("VIN", max_chars=17, validate=VIN_REGEX),
+                                "type": st.column_config.SelectboxColumn("Type", options=VEHICLE_TYPES),
+                                "gvw": st.column_config.NumberColumn("GVW", format="%d")
+                            },
+                            width='stretch',
+                            key=f"edt_v_{fname}"
+                        )
+
+                if show_driver_tab:
+                    with tab_views["drivers"]:
+                        d_df = pd.DataFrame(d_data)
+                        for col in ["full_name", "license_number", "is_excluded"]:
+                            if col not in d_df.columns: d_df[col] = None
+                            
+                        edited_d = st.data_editor(
+                            d_df,
+                            num_rows="dynamic",
+                            column_config={
+                                "full_name": st.column_config.TextColumn("Driver Name", required=True),
+                                "license_number": st.column_config.TextColumn("License #"),
+                                "is_excluded": st.column_config.CheckboxColumn("Excluded?", default=False)
+                            },
+                            width='stretch',
+                            key=f"edt_d_{fname}"
+                        )
                 
-                with t3:
+                with tab_views["coverages"]:
                     c_data = current_item['data'].get('coverages', [])
                     c_rows = []
                     for c in c_data:
@@ -731,7 +808,7 @@ def page_process_policies(api_key):
                         key=f"edt_c_{fname}"
                     )
 
-                with t4:
+                with tab_views["additional_interests"]:
                     ai_data = current_item['data'].get('additional_interests', [])
                     ai_df = pd.DataFrame(ai_data)
                     for col in ["name", "address", "interest_type"]:
@@ -800,6 +877,7 @@ def page_process_policies(api_key):
                             "policy_type": classification.get('policy_type'),
                             "classification_confidence": classification.get('confidence'),
                             "classification_signals": classification.get('signals', []),
+                            "policy_data_source": current_item['data'].get("policy_data_source"),
                             "business_name": p.get('business_name'),
                             "premium": r_premium,
                             "financial_responsibility_name": p.get('financial_responsibility_name'),

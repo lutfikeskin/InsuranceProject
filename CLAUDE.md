@@ -5,8 +5,8 @@
 - [x] Phase 1: Schema Foundation
 - [x] Phase 2: Auto Cache Versioning
 - [x] Phase 3: Document Taxonomy
-- [ ] Phase 4: COI Summary Extraction
-- [ ] Phase 5: Variant Tracker
+- [x] Phase 4: COI Summary Extraction
+- [x] Phase 5: Variant Tracker
 - [ ] Phase 6: Field Confidence Scoring
 - [ ] Phase 7: Premium Sanity Audit
 - [ ] Phase 8: Customer Resolver
@@ -34,6 +34,7 @@
 - Variant tracker composite key: fingerprint + document_type + policy_type
 - Customer resolution: confirmed = auto-link, suggested = human review, none = create new
 - Cache version is auto-derived from prompt+schema hash
+- COI/Memorandum extraction includes vehicles/drivers when present; absent fields must stay null/empty
 - Field confidence is per-field, not policy-level
 - Goldens organized by carrier/document_type with `_meta` routing
 

@@ -40,6 +40,7 @@ from core.coverage_normalization import (
     enrich_coverage_from_registry,
 )
 from core.document_taxonomy import DOCUMENT_TYPES
+from core.variant_tracker import VariantTracker
 from core.database import get_session, create_engine
 from core.services import UsageService
 
@@ -51,12 +52,14 @@ from .schemas import (
     COVERAGE_SCHEMA,
     VEHICLE_SCHEMA,
     DRIVER_SCHEMA,
-    COMPLETE_POLICY_SCHEMA
+    COMPLETE_POLICY_SCHEMA,
+    COI_SUMMARY_SCHEMA,
 )
 
 from .prompts import (
     CLASSIFY_POLICY_PROMPT,
-    get_extract_all_prompt
+    get_extract_all_prompt,
+    get_extract_coi_prompt,
 )
 
 POLICY_TYPE_ENUM: Tuple[str, ...] = tuple(
@@ -103,8 +106,11 @@ EXTRACTION_MODEL = "gemini-2.5-flash"
 
 def _compute_cache_version() -> str:
     content = (
-        get_extract_all_prompt("__REGISTRY_PLACEHOLDER__")
+        CLASSIFY_POLICY_PROMPT
+        + get_extract_coi_prompt()
+        + get_extract_all_prompt("__REGISTRY_PLACEHOLDER__")
         + json.dumps(COMPLETE_POLICY_SCHEMA, sort_keys=True)
+        + json.dumps(COI_SUMMARY_SCHEMA, sort_keys=True)
     )
     return hashlib.md5(content.encode()).hexdigest()[:8]
 
@@ -138,6 +144,7 @@ class ExtractionContext:
     usage_metadata: dict = field(default_factory=dict)
     errors: list = field(default_factory=list)
     carrier_hints: str = ""
+    variant_status: str = "known"
 
     @property
     def policy_type(self) -> str:
@@ -276,6 +283,8 @@ class GeminiExtractionPipeline:
         cache_system = ExtractionCache()
         cached_result = cache_system.get(ctx.file_hash, cache_scope)
         if cached_result and not force_refresh:
+            if isinstance(cached_result, dict):
+                cached_result.setdefault("variant_status", "known")
             return cached_result, {"source": "cache", "cost": 0}, None
 
         uploaded_file = None
@@ -341,6 +350,7 @@ class GeminiExtractionPipeline:
             doc_meta = DOCUMENT_TYPES.get(doc_type, DOCUMENT_TYPES["unknown"])
             extraction_goal = doc_meta.get("extraction_goal")
             if doc_meta.get("extractable") is False:
+                ctx.variant_status = self._track_variant(processor, ctx)
                 non_extractable_result = {
                     "document_type": doc_type,
                     "extractable": False,
@@ -349,12 +359,9 @@ class GeminiExtractionPipeline:
                         f"{doc_meta.get('display', 'This document type')} is not extractable.",
                     ),
                     "classification": ctx.classification,
+                    "variant_status": ctx.variant_status,
                 }
                 return non_extractable_result, ctx.usage_metadata, None
-
-            if extraction_goal == "coi_summary":
-                # TODO(Phase 4): route COI/memorandum to summary-only extraction path.
-                logger.info("Document taxonomy route: coi_summary (fallback to full_policy in Phase 3).")
 
             if status_callback:
                 status_callback(" PerformingExtraction (Universal One-Shot)...")
@@ -367,31 +374,22 @@ class GeminiExtractionPipeline:
                 else ""
             )
             ctx.carrier_hints = carrier_hint_block
-            prompt = get_extract_all_prompt(
-                registry_json,
-                user_policy_type=user_policy_type,
-                carrier_hints_suffix=carrier_hint_block,
-            )
-
-            config = types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=COMPLETE_POLICY_SCHEMA,
-                thinking_config=types.ThinkingConfig(thinking_budget=0)
-            )
-            
-            contents = [prompt]
-            if active_cache:
-                config.cached_content = active_cache.name
+            if extraction_goal == "coi_summary":
+                logger.info("Document taxonomy route: coi_summary")
+                response = self._run_coi_extraction(
+                    active_cache=active_cache,
+                    uploaded_file=uploaded_file,
+                    user_policy_type=user_policy_type,
+                    carrier_hint_block=carrier_hint_block,
+                )
             else:
-                # Fallback: Pass the file object directly if cache failed (e.g. small file)
-                contents.insert(0, uploaded_file)
-
-            response = self._call_gemini(
-                model=EXTRACTION_MODEL,
-                contents=contents, # Prompt + (Optional File if no cache)
-                config=config,
-                request_type="universal_one_shot"
-            )
+                response = self._run_full_extraction(
+                    active_cache=active_cache,
+                    uploaded_file=uploaded_file,
+                    user_policy_type=user_policy_type,
+                    carrier_hint_block=carrier_hint_block,
+                    registry_json=registry_json,
+                )
             ctx.usage_metadata["llm_retries"] = ctx.usage_metadata.get("llm_retries", 0) + int(getattr(self, "_last_call_retries", 0))
             if response.usage_metadata:
                 ctx.usage_metadata["prompt_tokens"] = response.usage_metadata.prompt_token_count or 0
@@ -402,6 +400,8 @@ class GeminiExtractionPipeline:
             raw_data = self._parse_json_response(response.text, ctx)
             if not raw_data:
                 return None, ctx.usage_metadata, "Extraction Parse Error"
+            if extraction_goal == "coi_summary":
+                raw_data = self._normalize_coi_result(raw_data, ctx.classification)
 
             extracted_classification = raw_data.get("classification", {}) or {}
             if user_policy_type:
@@ -425,13 +425,19 @@ class GeminiExtractionPipeline:
             ctx.extracted_data["policy"] = raw_data.get("policy", {})
             ctx.extracted_data["compliance"] = raw_data.get("compliance") or {}
             ctx.extracted_data["coverages"] = {"coverages": raw_data.get("coverages", [])}
-            ctx.extracted_data["vehicles"] = {"vehicles": raw_data.get("vehicles", [])} 
-            ctx.extracted_data["drivers"] = {"drivers": raw_data.get("drivers", [])}
+            vehicle_rows = raw_data.get("vehicles")
+            driver_rows = raw_data.get("drivers")
+            ctx.extracted_data["vehicles"] = {"vehicles": vehicle_rows if isinstance(vehicle_rows, list) else []}
+            ctx.extracted_data["drivers"] = {"drivers": driver_rows if isinstance(driver_rows, list) else []}
+            ctx.usage_metadata["policy_data_source"] = (
+                "coi_summary" if extraction_goal == "coi_summary" else "full_policy"
+            )
             
             logger.info(f"Policy Classified: {ctx.policy_type} ({ctx.confidence})")
 
             if ctx.policy_type == "unknown":
                 return None, None, "Unknown Policy Type"
+            ctx.variant_status = self._track_variant(processor, ctx)
             
         except Exception as e:
             return None, None, f"Extraction Error: {str(e)}"
@@ -445,6 +451,8 @@ class GeminiExtractionPipeline:
 
 
         final_result = self._assemble_result(ctx, processor)
+        final_result["policy_data_source"] = ctx.usage_metadata.get("policy_data_source", "full_policy")
+        final_result["variant_status"] = ctx.variant_status
         
 
 
@@ -457,6 +465,22 @@ class GeminiExtractionPipeline:
 
         ctx.usage_metadata["source"] = "api"
         return final_result, ctx.usage_metadata, None
+
+    def _track_variant(self, processor: PdfProcessor, ctx: ExtractionContext) -> str:
+        try:
+            tracker = VariantTracker()
+            variant_result = tracker.check_and_record(
+                fingerprint=ctx.file_hash,
+                carrier_name=ctx.classification.get("carrier_name", "unknown"),
+                document_type=ctx.classification.get("document_type", "unknown"),
+                policy_type=ctx.classification.get("policy_type", "unknown"),
+                page_count=processor.get_page_count(),
+                file_hash=ctx.file_hash,
+            )
+            return variant_result.get("status", "known")
+        except Exception as exc:
+            logger.warning(f"VARIANT TRACKER: unable to record variant: {exc}")
+            return "known"
 
     def _get_reusable_cache(self, file_hash: str, cache_system: ExtractionCache):
         """Attempts to reuse a live cache for the same file hash to save tokens and latency."""
@@ -659,6 +683,137 @@ class GeminiExtractionPipeline:
         )
         return self._parse_json_response(response.text)
 
+    def _run_full_extraction(
+        self,
+        active_cache,
+        uploaded_file,
+        user_policy_type: Optional[str],
+        carrier_hint_block: str,
+        registry_json: str,
+    ):
+        prompt = get_extract_all_prompt(
+            registry_json,
+            user_policy_type=user_policy_type,
+            carrier_hints_suffix=carrier_hint_block,
+        )
+        config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=COMPLETE_POLICY_SCHEMA,
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+        )
+        contents = [prompt]
+        if active_cache:
+            config.cached_content = active_cache.name
+        else:
+            contents.insert(0, uploaded_file)
+        return self._call_gemini(
+            model=EXTRACTION_MODEL,
+            contents=contents,
+            config=config,
+            request_type="universal_one_shot",
+        )
+
+    def _run_coi_extraction(
+        self,
+        active_cache,
+        uploaded_file,
+        user_policy_type: Optional[str],
+        carrier_hint_block: str,
+    ):
+        prompt = get_extract_coi_prompt(
+            user_policy_type=user_policy_type,
+            carrier_hints_suffix=carrier_hint_block,
+        )
+        config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=COI_SUMMARY_SCHEMA,
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+        )
+        contents = [prompt]
+        if active_cache:
+            config.cached_content = active_cache.name
+        else:
+            contents.insert(0, uploaded_file)
+        return self._call_gemini(
+            model=EXTRACTION_MODEL,
+            contents=contents,
+            config=config,
+            request_type="coi_summary",
+        )
+
+    def _normalize_coi_result(self, raw_data: dict, fallback_classification: dict) -> dict:
+        policies = raw_data.get("policies") or []
+        policy_rows = [p for p in policies if isinstance(p, dict)]
+
+        def _clean_text(value):
+            if value is None:
+                return None
+            if not isinstance(value, str):
+                return value
+            compact = " ".join(value.replace("\u200b", "").split()).strip()
+            if not compact:
+                return None
+            if compact.lower() in {"null", "none", "n/a", "-"}:
+                return None
+            return compact
+
+        def _pick_first_nonempty(key: str):
+            for row in policy_rows:
+                val = _clean_text(row.get(key))
+                if val is not None:
+                    return val
+            return None
+
+        aggregated_limits = {}
+        for row in policy_rows:
+            limits = row.get("limits") if isinstance(row.get("limits"), dict) else {}
+            for limit_key, limit_val in limits.items():
+                clean_limit = _clean_text(limit_val)
+                if clean_limit is not None and aggregated_limits.get(limit_key) in (None, ""):
+                    aggregated_limits[limit_key] = clean_limit
+
+        classification = raw_data.get("classification") or fallback_classification or {}
+        if "document_type" not in classification:
+            classification["document_type"] = "certificate_of_insurance"
+
+        normalized_policy = {
+            "carrier_name": _pick_first_nonempty("carrier_name"),
+            "naic_number": _pick_first_nonempty("naic_number"),
+            "policy_number": _pick_first_nonempty("policy_number"),
+            "effective_date": _pick_first_nonempty("effective_date"),
+            "expiration_date": _pick_first_nonempty("expiration_date"),
+            "insured_name": _clean_text((raw_data.get("insured") or {}).get("name")),
+            "insured_address": _clean_text((raw_data.get("insured") or {}).get("address")),
+            "financial_responsibility_name": _clean_text((raw_data.get("producer") or {}).get("name")),
+            "liability_limit": aggregated_limits.get("liability_limit"),
+            "general_liability_limit": aggregated_limits.get("general_liability_limit"),
+            "cargo_limit": aggregated_limits.get("cargo_limit"),
+            "cargo_deductible": aggregated_limits.get("cargo_deductible"),
+            "um_uim_limit": aggregated_limits.get("um_uim_limit"),
+            "med_pay_limit": aggregated_limits.get("med_pay_limit"),
+            "pip_limit": aggregated_limits.get("pip_limit"),
+            "comp_deductible": aggregated_limits.get("comp_deductible"),
+            "coll_deductible": aggregated_limits.get("coll_deductible"),
+        }
+
+        return {
+            "classification": classification,
+            "policy": normalized_policy,
+            "compliance": {},
+            "coverages": [],
+            "vehicles": raw_data.get("vehicles") if isinstance(raw_data.get("vehicles"), list) else [],
+            "drivers": raw_data.get("drivers") if isinstance(raw_data.get("drivers"), list) else [],
+            "coi_summary": {
+                "certificate_holder": raw_data.get("certificate_holder") or {},
+                "insured": raw_data.get("insured") or {},
+                "producer": raw_data.get("producer") or {},
+                "policies": policies,
+                "additional_insured_text": raw_data.get("additional_insured_text"),
+                "cancellation_notice_days": raw_data.get("cancellation_notice_days"),
+                "description_of_operations": raw_data.get("description_of_operations"),
+            },
+        }
+
 
 
     def _parse_json_response(self, text: str, ctx: Optional[ExtractionContext] = None) -> dict:
@@ -791,8 +946,8 @@ class GeminiExtractionPipeline:
 
 
         self._apply_auto_liability_rules(final["coverages"], ctx.policy_type)
-        
-        self._compute_summaries(final)
+        if ctx.usage_metadata.get("policy_data_source") != "coi_summary":
+            self._compute_summaries(final)
         enrich_statutory_policy_display(final)
 
         final["policy"]["has_full_collision"] = any(c.get("family") == "physical_damage" for c in final["coverages"])
