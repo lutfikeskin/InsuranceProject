@@ -11,7 +11,7 @@
 - [x] Phase 7: Premium Sanity Audit
 - [x] Phase 8: Customer Resolver
 - [x] Phase 9: Policy Relationship Detection
-- [ ] Phase 10: Endorsement Lightweight Capture
+- [x] Phase 10: Endorsement Lightweight Capture
 - [ ] Phase 11: Carrier Knowledge Base Bidirectional
 - [ ] Phase 12: Golden Set Infrastructure
 - [ ] Phase 13: Customer UI
@@ -43,5 +43,6 @@
 - Customer
 - CustomerEntity
 - PolicyRelationship
+- PolicyEndorsement
 - core/document_taxonomy.py
 - core/customer_resolver.py

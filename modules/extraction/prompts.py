@@ -215,3 +215,45 @@ def get_extract_coi_prompt(
     if suffix:
         return core + "\n" + suffix + "\n"
     return core
+
+
+def get_extract_endorsement_prompt(
+    user_policy_type: Optional[str] = None,
+    carrier_hints_suffix: str = "",
+) -> str:
+    if user_policy_type:
+        classification_block = f"""
+    --- CLASSIFICATION ---
+    policy_type is FIXED to "{user_policy_type}" (user or system). Set classification.policy_type to exactly this string,
+    confidence to "high", and include "user_selected" in classification.signals. Do not output a different policy_type.
+    """
+    else:
+        classification_block = """
+    --- CLASSIFICATION ---
+    Keep document_type from routing context and classify policy_type from explicit wording only.
+    """
+
+    core = GLOBAL_EXTRACTION_PRINCIPLES + f"""
+    You are an insurance endorsement metadata extraction specialist.
+    Extract only lightweight endorsement metadata that is explicitly visible.
+
+    {classification_block}
+    --- ENDORSEMENT METADATA ---
+    - parent_policy_number: the policy number this endorsement modifies.
+    - endorsement_type: choose one from the allowed enum based on explicit content.
+    - endorsement_form_number: endorsement form id if visible (example: CA 20 01).
+    - effective_date: the date this endorsement change takes effect.
+    - changes_summary: brief factual summary of what changed.
+
+    Rules:
+    - Do NOT extract full policy details.
+    - Do NOT extract vehicle, driver, or coverage schedules as structured rows.
+    - Do not infer missing values. Use null-equivalent omissions per schema behavior.
+
+    OUTPUT: Return one JSON object with top-level keys:
+    parent_policy_number, endorsement_type, endorsement_form_number, effective_date, changes_summary
+    """
+    suffix = (carrier_hints_suffix or "").strip()
+    if suffix:
+        return core + "\n" + suffix + "\n"
+    return core

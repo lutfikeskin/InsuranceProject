@@ -37,9 +37,9 @@ DOCUMENT_TYPES = {
     },
     "endorsement": {
         "display": "Endorsement",
-        "extractable": False,  # Phase 10 will change this
-        "extraction_goal": None,
-        "description": "Policy modification, needs parent policy context"
+        "extractable": True,
+        "extraction_goal": "endorsement_summary",
+        "description": "Policy modification, captured as metadata only"
     },
     "unknown": {
         "display": "Unknown",
@@ -52,5 +52,6 @@ DOCUMENT_TYPES = {
 EXTRACTION_GOAL_GROUPS = {
     "full_policy": ["declarations_page", "renewal_declarations", "unknown"],
     "coi_summary": ["certificate_of_insurance", "memorandum"],
-    "skip": ["quote", "application", "endorsement"]
+    "endorsement_summary": ["endorsement"],
+    "skip": ["quote", "application"]
 }

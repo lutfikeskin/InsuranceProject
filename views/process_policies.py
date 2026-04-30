@@ -613,6 +613,108 @@ def page_process_policies(api_key):
                 st.info("Renewal declarations detected. Review effective/expiration dates carefully before saving.")
             if document_type in ("certificate_of_insurance", "memorandum"):
                 st.info("COI/Memorandum detected: vehicle and driver schedules are extracted when present.")
+            if document_type == "endorsement":
+                st.info("Endorsement detected: metadata-only capture. No policy row will be created.")
+                endorsement = current_item["data"].get("endorsement") or {}
+                with st.form(key=f"review_endorsement_form_{fname}"):
+                    endorsement_options = [
+                        "additional_insured",
+                        "excluded_driver",
+                        "coverage_change",
+                        "vehicle_add",
+                        "vehicle_delete",
+                        "cargo_amendment",
+                        "premium_change",
+                        "other",
+                    ]
+                    default_endorsement_type = endorsement.get("endorsement_type")
+                    default_endorsement_idx = (
+                        endorsement_options.index(default_endorsement_type)
+                        if default_endorsement_type in endorsement_options
+                        else 0
+                    )
+                    e_type = st.selectbox(
+                        "Endorsement Type",
+                        options=endorsement_options,
+                        index=default_endorsement_idx,
+                    )
+                    e_parent_number = st.text_input(
+                        "Parent Policy Number",
+                        value=endorsement.get("parent_policy_number", ""),
+                    )
+                    e_form_number = st.text_input(
+                        "Endorsement Form Number",
+                        value=endorsement.get("endorsement_form_number", ""),
+                    )
+                    e_effective = st.text_input(
+                        "Effective Date",
+                        value=endorsement.get("effective_date", ""),
+                    )
+                    e_summary = st.text_area(
+                        "Changes Summary",
+                        value=endorsement.get("changes_summary", ""),
+                        height=120,
+                    )
+
+                    session = get_session(st.session_state.db_engine)
+                    service = PolicyService(session)
+                    all_policies = service.search_policies(None, limit=5000, offset=0)
+                    matched_parent = service.get_policy_by_number(e_parent_number) if e_parent_number else None
+                    if matched_parent:
+                        st.success(
+                            f"Matched parent policy: {matched_parent.policy_number} ({matched_parent.insured_name})"
+                        )
+                        selected_parent_number = matched_parent.policy_number
+                    else:
+                        st.warning("No parent policy match found. Select one manually.")
+                        policy_choices = [""] + [
+                            f"{p.policy_number} | {p.insured_name or 'Unknown'}"
+                            for p in all_policies
+                            if p.policy_number
+                        ]
+                        selected_choice = st.selectbox(
+                            "Manual Parent Policy Selection",
+                            options=policy_choices,
+                            index=0,
+                        )
+                        selected_parent_number = selected_choice.split(" | ")[0] if selected_choice else e_parent_number
+
+                    b_col1, b_col2, b_col3 = st.columns([1, 1, 1])
+                    saved_endorsement = b_col1.form_submit_button("💾 Save", type="secondary")
+                    save_next_endorsement = b_col2.form_submit_button("💾⏩ Save & Next", type="primary")
+                    discard_endorsement = b_col3.form_submit_button("🗑️ Discard")
+
+                    if saved_endorsement or save_next_endorsement:
+                        try:
+                            payload = {
+                                "classification": classification,
+                                "policy_data_source": "endorsement_summary",
+                                "endorsement": {
+                                    "parent_policy_number": selected_parent_number,
+                                    "endorsement_type": e_type,
+                                    "endorsement_form_number": e_form_number,
+                                    "effective_date": e_effective,
+                                    "changes_summary": e_summary,
+                                    "file_hash": endorsement.get("file_hash"),
+                                },
+                            }
+                            success, msg = service.save_policy_from_extraction(payload)
+                            if success:
+                                st.toast("✅ Endorsement saved.")
+                                st.session_state["review_queue"].pop(0)
+                                st.rerun()
+                            st.toast(f"⚠️ Could not save endorsement: {msg}", icon="⚠️")
+                        except Exception as e:
+                            st.toast(f"❌ Save failed: {e}", icon="❌")
+                        finally:
+                            session.close()
+                    elif discard_endorsement:
+                        session.close()
+                        st.session_state["review_queue"].pop(0)
+                        st.rerun()
+                    else:
+                        session.close()
+                st.stop()
 
             coi_summary = current_item["data"].get("coi_summary") or {}
             coi_policies = coi_summary.get("policies") or []

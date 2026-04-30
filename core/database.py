@@ -121,6 +121,12 @@ class Policy(Base):
         back_populates="related_policy",
         cascade="all, delete-orphan",
     )
+    endorsements = relationship(
+        "PolicyEndorsement",
+        foreign_keys="PolicyEndorsement.parent_policy_id",
+        back_populates="parent_policy",
+        cascade="all, delete-orphan",
+    )
 
 class PolicyRelationship(Base):
     __tablename__ = 'policy_relationships'
@@ -134,6 +140,22 @@ class PolicyRelationship(Base):
 
     policy = relationship("Policy", foreign_keys=[policy_id], back_populates="policy_relationships")
     related_policy = relationship("Policy", foreign_keys=[related_policy_id], back_populates="related_policy_relationships")
+
+
+class PolicyEndorsement(Base):
+    __tablename__ = 'policy_endorsements'
+
+    id = Column(Integer, primary_key=True)
+    parent_policy_id = Column(Integer, ForeignKey('policies.id'), nullable=True)
+    parent_policy_number = Column(String)
+    endorsement_type = Column(String)
+    endorsement_form_number = Column(String, nullable=True)
+    effective_date = Column(Date, nullable=True)
+    changes_summary = Column(Text, nullable=True)
+    file_hash = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    parent_policy = relationship("Policy", foreign_keys=[parent_policy_id], back_populates="endorsements")
 
 class Vehicle(Base):
     __tablename__ = 'vehicles'

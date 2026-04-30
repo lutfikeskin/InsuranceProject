@@ -9,6 +9,7 @@ from .database import (
     Coverage,
     ApiUsage,
     PolicyRelationship,
+    PolicyEndorsement,
     Customer,
     CustomerEntity,
 )
@@ -699,10 +700,36 @@ class PolicyService:
         return self.create_policy_from_dict(flat_data)
 
     def save_policy_from_extraction(self, extraction_result):
+        if extraction_result.get("policy_data_source") == "endorsement_summary":
+            return self.save_endorsement_from_extraction(extraction_result)
         extraction_result["_related_policy_candidates"] = self.find_related_policies(extraction_result)
         if extraction_result.get("policy_data_source") == "coi_summary" and extraction_result.get("coi_summary", {}).get("policies"):
             return self._save_policies_from_coi_summary(extraction_result)
         return self._save_single_extraction_payload(extraction_result)
+
+    def save_endorsement_from_extraction(self, extraction_result):
+        endorsement = extraction_result.get("endorsement") or {}
+        parent_policy_number = self._clean_text(endorsement.get("parent_policy_number"))
+        if not parent_policy_number:
+            return False, "Endorsement missing parent policy number."
+
+        parent = self.get_policy_by_number(parent_policy_number)
+        effective_raw = endorsement.get("effective_date")
+        effective_dt = pd.to_datetime(effective_raw, errors="coerce")
+        endorsement_row = PolicyEndorsement(
+            parent_policy_id=parent.id if parent else None,
+            parent_policy_number=parent_policy_number,
+            endorsement_type=self._clean_text(endorsement.get("endorsement_type")),
+            endorsement_form_number=self._clean_text(endorsement.get("endorsement_form_number")),
+            effective_date=effective_dt.date() if pd.notnull(effective_dt) else None,
+            changes_summary=self._clean_text(endorsement.get("changes_summary")),
+            file_hash=self._clean_text(endorsement.get("file_hash")),
+        )
+        self.session.add(endorsement_row)
+        self.session.commit()
+        if parent:
+            return True, f"Saved endorsement linked to {parent.policy_number}."
+        return True, "Saved endorsement without parent match (manual reconciliation needed)."
 
     @classmethod
     def compute_completeness_score(cls, policy_data, document_type):

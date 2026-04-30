@@ -343,3 +343,28 @@ COI_SUMMARY_SCHEMA = {
     },
     "required": ["classification", "certificate_holder", "insured", "producer", "policies"],
 }
+
+
+ENDORSEMENT_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "parent_policy_number": {"type": "STRING"},
+        "endorsement_type": {
+            "type": "STRING",
+            "enum": [
+                "additional_insured",
+                "excluded_driver",
+                "coverage_change",
+                "vehicle_add",
+                "vehicle_delete",
+                "cargo_amendment",
+                "premium_change",
+                "other",
+            ],
+        },
+        "endorsement_form_number": {"type": "STRING"},
+        "effective_date": {"type": "STRING"},
+        "changes_summary": {"type": "STRING"},
+    },
+    "required": ["parent_policy_number", "endorsement_type", "effective_date"],
+}

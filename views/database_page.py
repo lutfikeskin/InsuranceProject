@@ -379,6 +379,24 @@ def page_database(api_key):
                             st.session_state["nav_request"] = "Create COI"
                             st.session_state["coi_policy_id"] = target_pol.id
                             st.rerun()
+                    st.markdown("#### Endorsements")
+                    endorsements = list(getattr(target_pol, "endorsements", []) or [])
+                    if endorsements:
+                        end_rows = []
+                        for row in endorsements:
+                            end_rows.append(
+                                {
+                                    "Type": row.endorsement_type,
+                                    "Effective Date": str(row.effective_date) if row.effective_date else "",
+                                    "Form #": row.endorsement_form_number or "",
+                                    "Parent Policy #": row.parent_policy_number or "",
+                                    "Summary": row.changes_summary or "",
+                                    "Created At": str(row.created_at) if row.created_at else "",
+                                }
+                            )
+                        st.dataframe(pd.DataFrame(end_rows), hide_index=True, use_container_width=True)
+                    else:
+                        st.caption("No endorsements linked to this policy yet.")
             else:
                 st.button("✏️ Select a policy above to edit", disabled=True, width="stretch")
 

@@ -55,12 +55,14 @@ from .schemas import (
     DRIVER_SCHEMA,
     COMPLETE_POLICY_SCHEMA,
     COI_SUMMARY_SCHEMA,
+    ENDORSEMENT_SCHEMA,
 )
 
 from .prompts import (
     CLASSIFY_POLICY_PROMPT,
     get_extract_all_prompt,
     get_extract_coi_prompt,
+    get_extract_endorsement_prompt,
 )
 
 POLICY_TYPE_ENUM: Tuple[str, ...] = tuple(
@@ -109,9 +111,11 @@ def _compute_cache_version() -> str:
     content = (
         CLASSIFY_POLICY_PROMPT
         + get_extract_coi_prompt()
+        + get_extract_endorsement_prompt()
         + get_extract_all_prompt("__REGISTRY_PLACEHOLDER__")
         + json.dumps(COMPLETE_POLICY_SCHEMA, sort_keys=True)
         + json.dumps(COI_SUMMARY_SCHEMA, sort_keys=True)
+        + json.dumps(ENDORSEMENT_SCHEMA, sort_keys=True)
     )
     return hashlib.md5(content.encode()).hexdigest()[:8]
 
@@ -383,6 +387,14 @@ class GeminiExtractionPipeline:
                     user_policy_type=user_policy_type,
                     carrier_hint_block=carrier_hint_block,
                 )
+            elif extraction_goal == "endorsement_summary":
+                logger.info("Document taxonomy route: endorsement_summary")
+                response = self._run_endorsement_extraction(
+                    active_cache=active_cache,
+                    uploaded_file=uploaded_file,
+                    user_policy_type=user_policy_type,
+                    carrier_hint_block=carrier_hint_block,
+                )
             else:
                 response = self._run_full_extraction(
                     active_cache=active_cache,
@@ -403,6 +415,8 @@ class GeminiExtractionPipeline:
                 return None, ctx.usage_metadata, "Extraction Parse Error"
             if extraction_goal == "coi_summary":
                 raw_data = self._normalize_coi_result(raw_data, ctx.classification)
+            elif extraction_goal == "endorsement_summary":
+                raw_data = self._normalize_endorsement_result(raw_data, ctx.classification, ctx.file_hash)
 
             extracted_classification = raw_data.get("classification", {}) or {}
             if user_policy_type:
@@ -423,20 +437,23 @@ class GeminiExtractionPipeline:
                 }
             elif extracted_classification and extracted_classification.get("policy_type"):
                 ctx.classification = extracted_classification
-            ctx.extracted_data["policy"] = raw_data.get("policy", {})
-            ctx.extracted_data["compliance"] = raw_data.get("compliance") or {}
-            ctx.extracted_data["coverages"] = {"coverages": raw_data.get("coverages", [])}
-            vehicle_rows = raw_data.get("vehicles")
-            driver_rows = raw_data.get("drivers")
-            ctx.extracted_data["vehicles"] = {"vehicles": vehicle_rows if isinstance(vehicle_rows, list) else []}
-            ctx.extracted_data["drivers"] = {"drivers": driver_rows if isinstance(driver_rows, list) else []}
-            ctx.usage_metadata["policy_data_source"] = (
-                "coi_summary" if extraction_goal == "coi_summary" else "full_policy"
-            )
+            if extraction_goal == "endorsement_summary":
+                ctx.usage_metadata["policy_data_source"] = "endorsement_summary"
+            else:
+                ctx.extracted_data["policy"] = raw_data.get("policy", {})
+                ctx.extracted_data["compliance"] = raw_data.get("compliance") or {}
+                ctx.extracted_data["coverages"] = {"coverages": raw_data.get("coverages", [])}
+                vehicle_rows = raw_data.get("vehicles")
+                driver_rows = raw_data.get("drivers")
+                ctx.extracted_data["vehicles"] = {"vehicles": vehicle_rows if isinstance(vehicle_rows, list) else []}
+                ctx.extracted_data["drivers"] = {"drivers": driver_rows if isinstance(driver_rows, list) else []}
+                ctx.usage_metadata["policy_data_source"] = (
+                    "coi_summary" if extraction_goal == "coi_summary" else "full_policy"
+                )
             
             logger.info(f"Policy Classified: {ctx.policy_type} ({ctx.confidence})")
 
-            if ctx.policy_type == "unknown":
+            if extraction_goal != "endorsement_summary" and ctx.policy_type == "unknown":
                 return None, None, "Unknown Policy Type"
             ctx.variant_status = self._track_variant(processor, ctx)
             
@@ -451,9 +468,17 @@ class GeminiExtractionPipeline:
             
 
 
-        final_result = self._assemble_result(ctx, processor)
-        final_result["policy_data_source"] = ctx.usage_metadata.get("policy_data_source", "full_policy")
-        final_result["variant_status"] = ctx.variant_status
+        if extraction_goal == "endorsement_summary":
+            final_result = {
+                "classification": ctx.classification,
+                "endorsement": raw_data.get("endorsement", {}),
+                "policy_data_source": "endorsement_summary",
+                "variant_status": ctx.variant_status,
+            }
+        else:
+            final_result = self._assemble_result(ctx, processor)
+            final_result["policy_data_source"] = ctx.usage_metadata.get("policy_data_source", "full_policy")
+            final_result["variant_status"] = ctx.variant_status
         
 
 
@@ -742,6 +767,34 @@ class GeminiExtractionPipeline:
             request_type="coi_summary",
         )
 
+    def _run_endorsement_extraction(
+        self,
+        active_cache,
+        uploaded_file,
+        user_policy_type: Optional[str],
+        carrier_hint_block: str,
+    ):
+        prompt = get_extract_endorsement_prompt(
+            user_policy_type=user_policy_type,
+            carrier_hints_suffix=carrier_hint_block,
+        )
+        config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=ENDORSEMENT_SCHEMA,
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+        )
+        contents = [prompt]
+        if active_cache:
+            config.cached_content = active_cache.name
+        else:
+            contents.insert(0, uploaded_file)
+        return self._call_gemini(
+            model=EXTRACTION_MODEL,
+            contents=contents,
+            config=config,
+            request_type="endorsement_summary",
+        )
+
     def _normalize_coi_result(self, raw_data: dict, fallback_classification: dict) -> dict:
         policies = raw_data.get("policies") or []
         policy_rows = [p for p in policies if isinstance(p, dict)]
@@ -813,6 +866,25 @@ class GeminiExtractionPipeline:
                 "cancellation_notice_days": raw_data.get("cancellation_notice_days"),
                 "description_of_operations": raw_data.get("description_of_operations"),
             },
+        }
+
+    def _normalize_endorsement_result(
+        self, raw_data: dict, fallback_classification: dict, file_hash: str
+    ) -> dict:
+        classification = raw_data.get("classification") or fallback_classification or {}
+        if "document_type" not in classification:
+            classification["document_type"] = "endorsement"
+        endorsement = {
+            "parent_policy_number": raw_data.get("parent_policy_number"),
+            "endorsement_type": raw_data.get("endorsement_type"),
+            "endorsement_form_number": raw_data.get("endorsement_form_number"),
+            "effective_date": raw_data.get("effective_date"),
+            "changes_summary": raw_data.get("changes_summary"),
+            "file_hash": file_hash,
+        }
+        return {
+            "classification": classification,
+            "endorsement": endorsement,
         }
 
 
