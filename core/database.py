@@ -232,10 +232,30 @@ def init_db(db_name="insurance_data.db"):
     Base.metadata.create_all(engine)
     if engine.dialect.name == "sqlite":
         insp = inspect(engine)
-        cols = {c["name"] for c in insp.get_columns("policies")}
-        if "extraction_extras" not in cols:
+        policy_cols = {c["name"] for c in insp.get_columns("policies")}
+        if "extraction_extras" not in policy_cols:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE policies ADD COLUMN extraction_extras TEXT"))
+        customer_cols = {c["name"] for c in insp.get_columns("customers")}
+        with engine.begin() as conn:
+            if "primary_email" not in customer_cols:
+                conn.execute(text("ALTER TABLE customers ADD COLUMN primary_email VARCHAR"))
+            if "primary_phone" not in customer_cols:
+                conn.execute(text("ALTER TABLE customers ADD COLUMN primary_phone VARCHAR"))
+            if "needs_real_name_entry" not in customer_cols:
+                conn.execute(text("ALTER TABLE customers ADD COLUMN needs_real_name_entry BOOLEAN DEFAULT 0"))
+        entity_cols = {c["name"] for c in insp.get_columns("customer_entities")}
+        with engine.begin() as conn:
+            if "entity_name" not in entity_cols:
+                conn.execute(text("ALTER TABLE customer_entities ADD COLUMN entity_name VARCHAR"))
+            if "entity_type" not in entity_cols:
+                conn.execute(text("ALTER TABLE customer_entities ADD COLUMN entity_type VARCHAR"))
+            if "is_primary" not in entity_cols:
+                conn.execute(text("ALTER TABLE customer_entities ADD COLUMN is_primary BOOLEAN DEFAULT 0"))
+            if "source" not in entity_cols:
+                conn.execute(text("ALTER TABLE customer_entities ADD COLUMN source VARCHAR"))
+            if "first_seen" not in entity_cols:
+                conn.execute(text("ALTER TABLE customer_entities ADD COLUMN first_seen DATETIME"))
     return engine
 
 def get_session(engine):

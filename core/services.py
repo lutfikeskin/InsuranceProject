@@ -18,7 +18,6 @@ from sqlalchemy import func, or_
 from utils.naic_utils import get_naic_for_carrier
 from .coverage_ontology import summarize_auto_liability, format_liability_limit
 from .customer_resolver import CustomerResolver
-from modules.extraction.knowledge_base import CarrierKnowledgeBase
 from core.logger import logger
 from utils.vehicle_utils import refine_vehicle_type
 import pandas as pd
@@ -184,6 +183,8 @@ class PolicyService:
 
     def _record_carrier_profile_if_high_confidence(self, extraction_result: dict, policy: Policy):
         try:
+            from modules.extraction.knowledge_base import CarrierKnowledgeBase
+
             field_confs = self._field_confidences_from_extraction(extraction_result)
             if not field_confs:
                 return
@@ -280,6 +281,25 @@ class PolicyService:
         resolver = CustomerResolver(self.session)
         self.session.add(new_policy)
         self.session.flush()
+        override_customer_id = extraction_result.get("_review_confirm_customer_id")
+        owner_name_override = (extraction_result.get("_review_commercial_owner_name") or "").strip()
+
+        if override_customer_id:
+            customer = self.session.query(Customer).get(int(override_customer_id))
+            if customer:
+                new_policy.customer_id = customer.id
+                insured_name = (new_policy.insured_name or "").strip()
+                if insured_name:
+                    entity_type = (
+                        "business"
+                        if any(t in insured_name.lower() for t in ["llc", "inc", "corp", "ltd"])
+                        else "personal"
+                    )
+                    resolver.add_entity(customer, insured_name, entity_type, source="manual")
+                self.session.commit()
+                self._record_carrier_profile_if_high_confidence(extraction_result, new_policy)
+                return True, "Saved successfully"
+
         resolution = resolver.resolve(extraction_result)
         if resolution["confidence"] == "confirmed":
             customer = resolution["customer"]
@@ -309,8 +329,9 @@ class PolicyService:
                     )
                     new_policy.customer_id = customer.id
                 else:
+                    full_name = owner_name_override or insured_name
                     customer = resolver.create_customer(
-                        full_name=insured_name,
+                        full_name=full_name,
                         entity_name=insured_name,
                         entity_type="business",
                     )
@@ -516,42 +537,58 @@ class PolicyService:
                 )
 
         resolver = CustomerResolver(self.session)
-        resolution = resolver.resolve(extraction_result)
-        if resolution["confidence"] == "confirmed":
-            customer = resolution["customer"]
-            existing.customer_id = customer.id
-            insured_name = (existing.insured_name or "").strip()
-            if insured_name:
-                entity_type = (
-                    "business"
-                    if any(t in insured_name.lower() for t in ["llc", "inc", "corp", "ltd"])
-                    else "personal"
-                )
-                resolver.add_entity(customer, insured_name, entity_type, source="extraction")
-        elif resolution["confidence"] == "suggested":
-            extraction_result["_customer_suggestion"] = {
-                "customer_id": resolution["customer"].id,
-                "reason": resolution["match_reason"],
-            }
+        override_customer_id = extraction_result.get("_review_confirm_customer_id")
+        owner_name_override = (extraction_result.get("_review_commercial_owner_name") or "").strip()
+        if override_customer_id:
+            customer = self.session.query(Customer).get(int(override_customer_id))
+            if customer:
+                existing.customer_id = customer.id
+                insured_name = (existing.insured_name or "").strip()
+                if insured_name:
+                    entity_type = (
+                        "business"
+                        if any(t in insured_name.lower() for t in ["llc", "inc", "corp", "ltd"])
+                        else "personal"
+                    )
+                    resolver.add_entity(customer, insured_name, entity_type, source="manual")
         else:
-            insured_name = (existing.insured_name or "").strip()
-            policy_type = (existing.policy_type or "").strip()
-            if insured_name:
-                if policy_type == "personal_auto":
-                    customer = resolver.create_customer(
-                        full_name=insured_name,
-                        entity_name=insured_name,
-                        entity_type="personal",
+            resolution = resolver.resolve(extraction_result)
+            if resolution["confidence"] == "confirmed":
+                customer = resolution["customer"]
+                existing.customer_id = customer.id
+                insured_name = (existing.insured_name or "").strip()
+                if insured_name:
+                    entity_type = (
+                        "business"
+                        if any(t in insured_name.lower() for t in ["llc", "inc", "corp", "ltd"])
+                        else "personal"
                     )
-                    existing.customer_id = customer.id
-                else:
-                    customer = resolver.create_customer(
-                        full_name=insured_name,
-                        entity_name=insured_name,
-                        entity_type="business",
-                    )
-                    customer.needs_real_name_entry = True
-                    existing.customer_id = customer.id
+                    resolver.add_entity(customer, insured_name, entity_type, source="extraction")
+            elif resolution["confidence"] == "suggested":
+                extraction_result["_customer_suggestion"] = {
+                    "customer_id": resolution["customer"].id,
+                    "reason": resolution["match_reason"],
+                }
+            else:
+                insured_name = (existing.insured_name or "").strip()
+                policy_type = (existing.policy_type or "").strip()
+                if insured_name:
+                    if policy_type == "personal_auto":
+                        customer = resolver.create_customer(
+                            full_name=insured_name,
+                            entity_name=insured_name,
+                            entity_type="personal",
+                        )
+                        existing.customer_id = customer.id
+                    else:
+                        full_name = owner_name_override or insured_name
+                        customer = resolver.create_customer(
+                            full_name=full_name,
+                            entity_name=insured_name,
+                            entity_type="business",
+                        )
+                        customer.needs_real_name_entry = True
+                        existing.customer_id = customer.id
 
         update_type = self._classify_update(existing, new_policy)
         self.session.add(

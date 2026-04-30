@@ -6,7 +6,7 @@ from core.constants import VEHICLE_TYPES, INTEREST_TYPES, VIN_REGEX
 import json
 from core.services import PolicyService
 from datetime import date
-from core.database import get_session, Policy, Vehicle, Driver, Coverage, AdditionalInterest
+from core.database import get_session, Policy, Vehicle, Driver, Coverage, AdditionalInterest, Customer
 from modules.extraction import process_pdf
 from modules.extraction.pipeline import POLICY_TYPE_ENUM
 from utils.vehicle_utils import refine_vehicle_type
@@ -997,6 +997,67 @@ def page_process_policies(api_key):
                     )
 
                 st.markdown("---")
+                st.subheader("👤 Customer")
+                confirm_key = f"confirm_customer_id_{fname}"
+                owner_key = f"commercial_owner_name_{fname}"
+                if confirm_key not in st.session_state:
+                    st.session_state[confirm_key] = None
+                if owner_key not in st.session_state:
+                    st.session_state[owner_key] = ""
+
+                resolution = current_item["data"].get("_customer_resolution")
+                suggestion = current_item["data"].get("_customer_suggestion")
+                policy_type = current_item["data"].get("classification", {}).get("policy_type", "")
+
+                customer_session = get_session(st.session_state.db_engine)
+                try:
+                    if resolution and resolution.get("confidence") == "confirmed" and resolution.get("customer_id"):
+                        customer = customer_session.query(Customer).get(resolution["customer_id"])
+                        if customer:
+                            st.success(f"✅ Matched to: **{customer.full_name}**")
+                            other_pols = list(customer.policies or [])
+                            if other_pols:
+                                st.caption("Their other policies with us:")
+                                for op in other_pols[:5]:
+                                    icon = "✅" if (op.policy_status or "") == "active" else "⏰"
+                                    st.markdown(
+                                        f"{icon} `{op.policy_number}` {op.policy_type} "
+                                        f"— {op.carrier_name}"
+                                    )
+                    elif suggestion and suggestion.get("customer_id"):
+                        customer = customer_session.query(Customer).get(suggestion["customer_id"])
+                        if customer:
+                            st.warning(
+                                f"⚠️ Possible match: **{customer.full_name}** — "
+                                f"{suggestion.get('reason', 'Needs review')}"
+                            )
+                            c1, c2 = st.columns(2)
+                            yes_clicked = c1.form_submit_button("✅ Yes, same customer")
+                            no_clicked = c2.form_submit_button("❌ No, different person")
+                            if yes_clicked:
+                                st.session_state[confirm_key] = customer.id
+                            if no_clicked:
+                                st.session_state[confirm_key] = None
+                            chosen = st.session_state.get(confirm_key)
+                            if chosen == customer.id:
+                                st.success("Will link to this customer on save.")
+                            elif chosen is None:
+                                st.caption("Will not auto-link this suggestion.")
+                    else:
+                        st.info("🆕 New customer will be created")
+                        if policy_type != "personal_auto":
+                            st.markdown("**Commercial — who is the owner?**")
+                            owner_name = st.text_input(
+                                "Owner / Principal Name",
+                                placeholder="e.g. Ayaz Demir",
+                                key=owner_key,
+                            )
+                            if owner_name:
+                                st.session_state[owner_key] = owner_name
+                finally:
+                    customer_session.close()
+
+                st.divider()
                 
                 b_col_warn = st.container()
                 
@@ -1048,6 +1109,9 @@ def page_process_policies(api_key):
                             "field_confidences": confidence_map,
                             "premium_audit_flag": audit_flag,
                             "_customer_suggestion": current_item["data"].get("_customer_suggestion"),
+                            "_customer_resolution": current_item["data"].get("_customer_resolution"),
+                            "_review_confirm_customer_id": st.session_state.get(confirm_key),
+                            "_review_commercial_owner_name": st.session_state.get(owner_key),
                             "_related_policy_candidates": current_item["data"].get("_related_policy_candidates"),
                             "business_name": p.get('business_name'),
                             "premium": r_premium,
@@ -1067,6 +1131,8 @@ def page_process_policies(api_key):
                         
                         if success:
                             st.toast(f"✅ Saved {r_pol_num}!")
+                            st.session_state.pop(confirm_key, None)
+                            st.session_state.pop(owner_key, None)
                             st.session_state["review_queue"].pop(0)
                             st.rerun()
                         else:
@@ -1078,6 +1144,8 @@ def page_process_policies(api_key):
                         session.close()
                 
                 if discarded:
+                    st.session_state.pop(confirm_key, None)
+                    st.session_state.pop(owner_key, None)
                     st.session_state["review_queue"].pop(0)
                     st.rerun()
     else:

@@ -13,8 +13,8 @@
 - [x] Phase 9: Policy Relationship Detection
 - [x] Phase 10: Endorsement Lightweight Capture
 - [x] Phase 11: Carrier Knowledge Base Bidirectional
-- [ ] Phase 12: Golden Set Infrastructure
-- [ ] Phase 13: Customer UI
+- [x] Phase 12: Golden Set Infrastructure
+- [x] Phase 13: Customer UI
 - [ ] Phase 14: Related Policies UI
 - [ ] Phase 15: Documentation Updates
 

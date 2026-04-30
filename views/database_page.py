@@ -1,13 +1,142 @@
 import streamlit as st
 import pandas as pd
+from datetime import date
+from sqlalchemy import or_
 from core.services import PolicyService
-from core.database import get_session
+from core.database import Customer, CustomerEntity, get_session
+from core.customer_resolver import CustomerResolver
 from utils.exporter import create_excel_report
 
 from views.edit_dialog import edit_policy_dialog
 from core.constants import POLICY_SEARCH_PAGE_LIMIT, POLICY_DELETE_CANDIDATE_LIMIT
 
-def page_database(api_key):
+
+CUSTOMER_PAGE_SIZE = 25
+
+
+def render_customer_row(customer, session):
+    active = [p for p in customer.policies if (p.policy_status or "").lower() == "active"]
+    all_types = sorted(set(p.policy_type for p in customer.policies if p.policy_type))
+
+    header = (
+        f"**{customer.full_name}** — "
+        f"{len(active)} active / "
+        f"{len(customer.policies)} total"
+    )
+    if all_types:
+        header += f" — {', '.join(all_types)}"
+
+    with st.expander(header):
+        if customer.entities:
+            entity_strs = [
+                f"`{e.entity_name}` ({e.entity_type})"
+                for e in customer.entities
+                if e.entity_name
+            ]
+            if entity_strs:
+                st.markdown(f"**Known as:** {' · '.join(entity_strs)}")
+
+        if getattr(customer, "needs_real_name_entry", False):
+            st.warning(
+                "⚠️ Customer was created from a commercial policy "
+                "without a clear personal name. Please update."
+            )
+            new_name = st.text_input(
+                "Enter the person's real name:",
+                key=f"realname_{customer.id}",
+            )
+            if st.button("Update", key=f"updatename_{customer.id}") and new_name.strip():
+                clean_name = new_name.strip()
+                customer.full_name = clean_name
+                customer.needs_real_name_entry = False
+                resolver = CustomerResolver(session)
+                resolver.add_entity(customer, clean_name, "personal")
+                session.commit()
+                st.rerun()
+
+        st.divider()
+
+        icons = {"active": "✅", "expired": "⏰", "canceled": "❌", "replaced": "🔄"}
+        for status in ["active", "expired", "canceled", "replaced"]:
+            status_pols = [p for p in customer.policies if (p.policy_status or "").lower() == status]
+            if not status_pols:
+                continue
+            st.markdown(f"**{icons[status]} {status.title()}**")
+            for p in sorted(status_pols, key=lambda x: x.effective_date or date.min, reverse=True):
+                c1, c2 = st.columns([3, 2])
+                c1.markdown(
+                    f"`{p.policy_number}` — {p.policy_type or 'unknown'} — "
+                    f"{p.carrier_name or 'Unknown Carrier'}"
+                )
+                c2.markdown(f"{p.effective_date} → {p.expiration_date}")
+
+        with st.expander("➕ Add business name / DBA / alias"):
+            new_entity = st.text_input("Entity name", key=f"newent_{customer.id}")
+            new_type = st.selectbox(
+                "Type",
+                ["business", "dba", "maiden_name", "personal"],
+                key=f"newent_type_{customer.id}",
+            )
+            if st.button("Add", key=f"addent_{customer.id}") and new_entity.strip():
+                resolver = CustomerResolver(session)
+                resolver.add_entity(customer, new_entity.strip(), new_type, source="manual")
+                session.commit()
+                st.rerun()
+
+
+def render_customers_view(session):
+    st.subheader("👥 Customer Portfolio")
+    search = st.text_input("🔍 Search by name or business", key="customer_search")
+    search_lower = search.strip().lower()
+
+    page_key = "customer_page_idx"
+    if page_key not in st.session_state:
+        st.session_state[page_key] = 0
+
+    last_search_key = "customer_search_last"
+    if st.session_state.get(last_search_key) != search_lower:
+        st.session_state[page_key] = 0
+        st.session_state[last_search_key] = search_lower
+
+    query = session.query(Customer)
+    if search_lower:
+        like_term = f"%{search_lower}%"
+        query = (
+            query.outerjoin(CustomerEntity)
+            .filter(
+                or_(
+                    Customer.full_name.ilike(like_term),
+                    CustomerEntity.entity_name.ilike(like_term),
+                )
+            )
+            .distinct()
+        )
+
+    total_customers = query.count()
+    customers = (
+        query.order_by(Customer.full_name)
+        .offset(st.session_state[page_key] * CUSTOMER_PAGE_SIZE)
+        .limit(CUSTOMER_PAGE_SIZE)
+        .all()
+    )
+
+    start = st.session_state[page_key] * CUSTOMER_PAGE_SIZE + 1 if total_customers else 0
+    end = min((st.session_state[page_key] + 1) * CUSTOMER_PAGE_SIZE, total_customers)
+    st.caption(f"Showing {start}-{end} of {total_customers} customer(s)")
+    p1, p2, _ = st.columns([1, 1, 4])
+    if p1.button("⬅️ Prev", disabled=st.session_state[page_key] == 0, key="customers_prev"):
+        st.session_state[page_key] -= 1
+        st.rerun()
+    has_next = end < total_customers
+    if p2.button("Next ➡️", disabled=not has_next, key="customers_next"):
+        st.session_state[page_key] += 1
+        st.rerun()
+
+    for customer in customers:
+        render_customer_row(customer, session)
+
+
+def _render_policies_tab(api_key):
     st.title("🗃️ Policy Database")
     st.markdown("Search, view, and edit all previously extracted insurance data.")
     
@@ -444,3 +573,15 @@ def page_database(api_key):
 
     finally:
         session.close()
+
+
+def page_database(api_key):
+    tab_policies, tab_customers = st.tabs(["📄 Policies", "👥 Customers"])
+    with tab_policies:
+        _render_policies_tab(api_key)
+    with tab_customers:
+        session = get_session(st.session_state.db_engine)
+        try:
+            render_customers_view(session)
+        finally:
+            session.close()
