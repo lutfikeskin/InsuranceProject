@@ -82,6 +82,20 @@
 - Working tree has many unrelated repo changes not part of this handoff (cache/docs/assets/etc). Commit only intended files if making a clean Phase 13 commit.
 - Streamlit was restarted and confirmed on `http://localhost:8501`.
 
+## User-Facing Impact
+- Database ekranında yeni `👥 Customers` sekmesi var; müşteri bazlı portföy görünümü kullanılabiliyor.
+- Müşteri arama artık kişi adı + bilinen business/alias isimleri üzerinden çalışıyor.
+- Review ekranında müşteri eşleşmesi daha güvenli:
+  - suggested eşleşmeler otomatik linklenmiyor
+  - kullanıcı `Yes/No` ile net karar veriyor
+- Commercial poliçelerde yeni müşteri oluştururken owner/principal adı ayrı alınarak müşteri anchor'ı kişiye bağlanıyor.
+- Legacy SQLite dosyalarında eksik kolonlardan dolayı app crash olma riski startup'ta otomatik kolon ekleme ile azaltıldı.
+
+## Technical Risk / Debt Notes
+- `init_db()` içinde SQLite için runtime schema patching var; bu geçişte pratik ama uzun vadede Alembic migration ile normalize edilmeli.
+- `Customer`/`CustomerEntity` için otomatik `ALTER TABLE` yaklaşımı sadece eksik kolon ekler; tip/constraint farklarını düzeltmez.
+- `review` panelindeki müşteri kararları `st.session_state` key'leri üzerinden gidiyor; future refactor'da typed payload contract'a taşınması önerilir.
+
 ## Recommended Next Steps
 1. Open app -> Database -> Customers tab and manually verify:
    - search behavior
