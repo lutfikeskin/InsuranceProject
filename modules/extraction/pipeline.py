@@ -112,7 +112,7 @@ def _compute_cache_version() -> str:
         CLASSIFY_POLICY_PROMPT
         + get_extract_coi_prompt()
         + get_extract_endorsement_prompt()
-        + get_extract_all_prompt("__REGISTRY_PLACEHOLDER__")
+        + get_extract_all_prompt("__REGISTRY_PLACEHOLDER__", unreliable_fields=["__UNRELIABLE_FIELD__"])
         + json.dumps(COMPLETE_POLICY_SCHEMA, sort_keys=True)
         + json.dumps(COI_SUMMARY_SCHEMA, sort_keys=True)
         + json.dumps(ENDORSEMENT_SCHEMA, sort_keys=True)
@@ -379,6 +379,22 @@ class GeminiExtractionPipeline:
                 else ""
             )
             ctx.carrier_hints = carrier_hint_block
+            unreliable_fields: list[str] = []
+            if matched_carrier and extraction_goal == "full_policy":
+                try:
+                    unreliable_rows = self.kb.get_unreliable_fields(
+                        carrier_name=matched_carrier,
+                        document_type=doc_type,
+                        policy_type=scoped_policy_type or ctx.policy_type,
+                        threshold=CarrierKnowledgeBase.UNRELIABLE_RATIO_THRESHOLD,
+                    )
+                    unreliable_fields = [
+                        row.get("field")
+                        for row in unreliable_rows
+                        if isinstance(row, dict) and row.get("field")
+                    ]
+                except Exception as exc:
+                    logger.warning(f"Unable to load unreliable field hints: {exc}")
             if extraction_goal == "coi_summary":
                 logger.info("Document taxonomy route: coi_summary")
                 response = self._run_coi_extraction(
@@ -402,6 +418,7 @@ class GeminiExtractionPipeline:
                     user_policy_type=user_policy_type,
                     carrier_hint_block=carrier_hint_block,
                     registry_json=registry_json,
+                    unreliable_fields=unreliable_fields,
                 )
             ctx.usage_metadata["llm_retries"] = ctx.usage_metadata.get("llm_retries", 0) + int(getattr(self, "_last_call_retries", 0))
             if response.usage_metadata:
@@ -716,11 +733,13 @@ class GeminiExtractionPipeline:
         user_policy_type: Optional[str],
         carrier_hint_block: str,
         registry_json: str,
+        unreliable_fields: Optional[list[str]] = None,
     ):
         prompt = get_extract_all_prompt(
             registry_json,
             user_policy_type=user_policy_type,
             carrier_hints_suffix=carrier_hint_block,
+            unreliable_fields=unreliable_fields,
         )
         config = types.GenerateContentConfig(
             response_mime_type="application/json",

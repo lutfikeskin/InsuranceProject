@@ -65,6 +65,7 @@ def get_extract_all_prompt(
     registry_text: str,
     user_policy_type: Optional[str] = None,
     carrier_hints_suffix: str = "",
+    unreliable_fields: Optional[list[str]] = None,
 ) -> str:
     if user_policy_type:
         classification_block = f"""
@@ -108,12 +109,23 @@ def get_extract_all_prompt(
     If the value is null/absent, set confidence to "low". Do not fabricate values.
     """
 
+    unreliable_block = ""
+    if unreliable_fields:
+        formatted = ", ".join(sorted({f for f in unreliable_fields if f}))
+        if formatted:
+            unreliable_block = f"""
+    --- RELIABILITY GUIDANCE ---
+    Note: For this carrier and document type, the following fields have historically been difficult to extract correctly.
+    Pay special attention: {formatted}.
+    """
+
     core = GLOBAL_EXTRACTION_PRINCIPLES + f"""
     You are an expert insurance underwriter and data extraction specialist.
     Extract the COMPLETE policy information from the provided document in a single pass.
     {classification_block}
     {declarations_block}
     {confidence_block}
+    {unreliable_block}
     --- VEHICLES ---
     - Extract ALL vehicles (VIN, Year, Make, Model, GVW, Type).
     - Look for explicit schedules and vehicles mentioned in prose.

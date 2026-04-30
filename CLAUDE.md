@@ -12,7 +12,7 @@
 - [x] Phase 8: Customer Resolver
 - [x] Phase 9: Policy Relationship Detection
 - [x] Phase 10: Endorsement Lightweight Capture
-- [ ] Phase 11: Carrier Knowledge Base Bidirectional
+- [x] Phase 11: Carrier Knowledge Base Bidirectional
 - [ ] Phase 12: Golden Set Infrastructure
 - [ ] Phase 13: Customer UI
 - [ ] Phase 14: Related Policies UI
@@ -46,3 +46,4 @@
 - PolicyEndorsement
 - core/document_taxonomy.py
 - core/customer_resolver.py
+- modules/extraction/knowledge_base.py

@@ -18,6 +18,8 @@ from sqlalchemy import func, or_
 from utils.naic_utils import get_naic_for_carrier
 from .coverage_ontology import summarize_auto_liability, format_liability_limit
 from .customer_resolver import CustomerResolver
+from modules.extraction.knowledge_base import CarrierKnowledgeBase
+from core.logger import logger
 from utils.vehicle_utils import refine_vehicle_type
 import pandas as pd
 import json
@@ -169,6 +171,35 @@ class PolicyService:
     RELATIONSHIP_SCORE_THRESHOLD = 0.5
     RELATIONSHIP_CANDIDATE_LIMIT = 3
 
+    @staticmethod
+    def _field_confidences_from_extraction(extraction_result: dict) -> dict[str, str]:
+        policy_payload = extraction_result.get("policy", {}) if isinstance(extraction_result, dict) else {}
+        if not isinstance(policy_payload, dict):
+            return {}
+        return {
+            key.replace("_confidence", ""): value
+            for key, value in policy_payload.items()
+            if isinstance(key, str) and key.endswith("_confidence")
+        }
+
+    def _record_carrier_profile_if_high_confidence(self, extraction_result: dict, policy: Policy):
+        try:
+            field_confs = self._field_confidences_from_extraction(extraction_result)
+            if not field_confs:
+                return
+            overall_high = sum(1 for v in field_confs.values() if v == "high")
+            if overall_high < len(field_confs) * CarrierKnowledgeBase.HIGH_OVERALL_THRESHOLD:
+                return
+            kb = CarrierKnowledgeBase()
+            kb.record_successful_extraction(
+                carrier_name=policy.carrier_name,
+                document_type=policy.document_type,
+                policy_type=policy.policy_type,
+                field_confidences=field_confs,
+            )
+        except Exception as exc:
+            logger.warning(f"Carrier profile update skipped: {exc}")
+
     @classmethod
     def _extract_field_confidences(cls, policy_data: dict) -> dict | None:
         if not isinstance(policy_data, dict):
@@ -287,6 +318,7 @@ class PolicyService:
                     new_policy.customer_id = customer.id
 
         self.session.commit()
+        self._record_carrier_profile_if_high_confidence(extraction_result, new_policy)
         return True, "Saved successfully"
 
     def _classify_update(self, existing, new_policy) -> str:
@@ -532,6 +564,7 @@ class PolicyService:
         )
 
         self.session.commit()
+        self._record_carrier_profile_if_high_confidence(extraction_result, existing)
         return True, f"Updated existing policy. {len(changes)} changes logged (Version updated)."
 
     def __init__(self, session: Session):
