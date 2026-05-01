@@ -1,8 +1,11 @@
-
 import json
 import os
+import shutil
 from typing import Dict, List
+
 from core.logger import logger
+
+PROFILES_EXAMPLE_PATH = "data/carrier_profiles.example.json"
 
 DEFAULT_HINTS = {
     "GEICO": [
@@ -37,8 +40,11 @@ class CarrierKnowledgeBase:
             with open(self.kb_path, 'w') as f:
                 json.dump(DEFAULT_HINTS, f, indent=2)
         if not os.path.exists(self.profiles_path):
-            with open(self.profiles_path, "w") as f:
-                json.dump({}, f, indent=2)
+            if os.path.exists(PROFILES_EXAMPLE_PATH):
+                shutil.copyfile(PROFILES_EXAMPLE_PATH, self.profiles_path)
+            else:
+                with open(self.profiles_path, "w") as f:
+                    json.dump({}, f, indent=2)
 
     def _load_hints(self) -> Dict[str, List[str]]:
         try:

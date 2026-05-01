@@ -1,0 +1,27 @@
+{
+  "Example Carrier LLC|declarations_page|commercial_auto": {
+    "carrier_name": "Example Carrier LLC",
+    "document_type": "declarations_page",
+    "policy_type": "commercial_auto",
+    "reliable_fields": {
+      "policy_number": 5,
+      "effective_date": 4,
+      "insured_name": 3
+    },
+    "unreliable_fields": {
+      "cargo_limit": 2
+    },
+    "sample_count": 6
+  },
+  "Sample Insurer Inc|certificate_of_insurance|commercial_auto": {
+    "carrier_name": "Sample Insurer Inc",
+    "document_type": "certificate_of_insurance",
+    "policy_type": "commercial_auto",
+    "reliable_fields": {
+      "carrier_name": 4,
+      "policy_number": 4
+    },
+    "unreliable_fields": {},
+    "sample_count": 4
+  }
+}
