@@ -458,6 +458,9 @@ class PolicyService:
                             "policy_type": candidate.policy_type,
                             "effective_date": str(candidate.effective_date) if candidate.effective_date else None,
                             "expiration_date": str(candidate.expiration_date) if candidate.expiration_date else None,
+                            "policy_status": candidate.policy_status,
+                            "carrier_name": candidate.carrier_name,
+                            "underwriter_name": candidate.underwriter_name,
                         },
                         "score": round(score, 2),
                         "relationship_type": rel_type,
@@ -958,6 +961,8 @@ class PolicyService:
         """Save new policy and record explicit relationship to existing one."""
         saved_result = self.save_policy_from_extraction(extraction_result)
         new_policy = self.get_policy_by_number(extraction_result["policy"]["policy_number"])
+        if not new_policy:
+            return saved_result
         relationship = PolicyRelationship(
             policy_id=new_policy.id,
             related_policy_id=related_policy_id,

@@ -171,8 +171,11 @@ def render_related_section(policy, session):
         if not other:
             continue
         icon = RELATIONSHIP_DISPLAY.get(rel.relationship_type, ("🔗", "Related"))[0]
+        carrier_line = _carrier_display(
+            other.carrier_name, getattr(other, "underwriter_name", None)
+        )
         st.markdown(
-            f"{icon} `{other.policy_number}` "
+            f"{icon} `{other.policy_number}` — {carrier_line} "
             f"({rel.relationship_type}, {rel.confidence})"
         )
 

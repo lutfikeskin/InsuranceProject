@@ -154,6 +154,12 @@ def render_related_policy(match, current_item, service):
 
     new_p = current_item["data"].get("policy", {})
     expanded_default = confidence > 0.8
+    existing_carrier = _carrier_display(
+        existing.get("carrier_name"), existing.get("underwriter_name")
+    )
+    incoming_carrier = _carrier_display(
+        new_p.get("carrier_name"), new_p.get("underwriter_name")
+    )
     with st.expander(
         f"{icon} {label} — `{existing.get('policy_number')}` "
         f"({existing.get('insured_name')}) — "
@@ -164,6 +170,7 @@ def render_related_policy(match, current_item, service):
         c1.markdown(
             f"**Existing**\n\n"
             f"Number: `{existing.get('policy_number')}`\n\n"
+            f"Carrier: {existing_carrier}\n\n"
             f"Insured: {existing.get('insured_name')}\n\n"
             f"Type: {existing.get('policy_type')}\n\n"
             f"Effective: {existing.get('effective_date')}\n\n"
@@ -173,6 +180,7 @@ def render_related_policy(match, current_item, service):
         c2.markdown(
             f"**Incoming**\n\n"
             f"Number: `{new_p.get('policy_number')}`\n\n"
+            f"Carrier: {incoming_carrier}\n\n"
             f"Insured: {new_p.get('insured_name')}\n\n"
             f"Type: {current_item['data'].get('classification', {}).get('policy_type')}\n\n"
             f"Effective: {new_p.get('effective_date')}\n\n"
@@ -183,7 +191,7 @@ def render_related_policy(match, current_item, service):
         b1, _, b3 = st.columns(3)
 
         if rel_type == "renewal":
-            if b1.form_submit_button("🔄 Save as Renewal", key=f"act_renewal_{existing_id}"):
+            if b1.button("🔄 Save as Renewal", key=f"act_renewal_{existing_id}"):
                 success, msg = service.save_with_relationship(
                     current_item["data"], existing_id, "renewal"
                 )
@@ -191,10 +199,11 @@ def render_related_policy(match, current_item, service):
                     st.success("Saved as renewal")
                     st.session_state["review_queue"].pop(0)
                     st.rerun()
-                st.warning(msg)
+                else:
+                    st.warning(msg or "Save failed")
 
         elif rel_type in ("canceled_replaced", "rewrite"):
-            if b1.form_submit_button("📋 Save as Replacement", key=f"act_replace_{existing_id}"):
+            if b1.button("📋 Save as Replacement", key=f"act_replace_{existing_id}"):
                 success, msg = service.save_with_relationship(
                     current_item["data"], existing_id, rel_type
                 )
@@ -202,10 +211,11 @@ def render_related_policy(match, current_item, service):
                     st.success("Saved as replacement, old policy marked replaced")
                     st.session_state["review_queue"].pop(0)
                     st.rerun()
-                st.warning(msg)
+                else:
+                    st.warning(msg or "Save failed")
 
         elif rel_type == "same_customer_new_policy":
-            if b1.form_submit_button("👤 Link as Same Customer", key=f"act_link_{existing_id}"):
+            if b1.button("👤 Link as Same Customer", key=f"act_link_{existing_id}"):
                 success, msg = service.save_with_relationship(
                     current_item["data"], existing_id, "same_customer_new_policy"
                 )
@@ -213,9 +223,10 @@ def render_related_policy(match, current_item, service):
                     st.success("Saved and linked as same customer")
                     st.session_state["review_queue"].pop(0)
                     st.rerun()
-                st.warning(msg)
+                else:
+                    st.warning(msg or "Save failed")
 
-        if b3.form_submit_button(
+        if b3.button(
             "Ignore",
             key=f"act_ignore_{existing_id}",
             help="Don't link, save as separate",
