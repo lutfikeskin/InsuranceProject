@@ -1,0 +1,121 @@
+{
+  "policy": {
+    "carrier_name": "GEICO Marine Insurance Company",
+    "naic_number": "37923",
+    "policy_number": "9300139482-01",
+    "effective_date": "04/15/2026",
+    "expiration_date": "04/15/2027",
+    "insured_name": "Jeury JIMENEZ SANCHEZ",
+    "insured_address": "52 N MARKET ST MOUNT CARMEL, PA 17851",
+    "financial_responsibility_name": "MARBLE CITY INSURANCE",
+    "liability_limit": "1,000,000",
+    "general_liability_limit": null,
+    "cargo_limit": "100,000",
+    "cargo_deductible": "1,000",
+    "um_uim_limit": "100k",
+    "med_pay_limit": null,
+    "pip_limit": "31",
+    "comp_deductible": "250",
+    "coll_deductible": "1,000",
+    "has_full_collision": false
+  },
+  "compliance": {},
+  "coverages": [],
+  "vehicles": [
+    {
+      "year": 2023,
+      "make": "RAM",
+      "model": "PROMASTER 2500",
+      "vin": "3C6LRVDG0PE502586",
+      "gvw": 10000,
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": "Delivery Van",
+      "covered_auto_symbols": "7",
+      "radius_of_operation": "0-500+",
+      "business_use_class": "Commercial",
+      "valuation_basis": "ACV"
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "Jeury JIMENEZ SANCHEZ",
+      "license_number": "null",
+      "is_excluded": false
+    }
+  ],
+  "audits": {
+    "premium": {
+      "flag": "MISSING_DATA",
+      "confidence": "low",
+      "reason": "missing premium or vehicle count"
+    }
+  },
+  "classification": {
+    "document_type": "certificate_of_insurance",
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": []
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ],
+  "extraction_audit": {
+    "errors": [],
+    "rejected_coverages": [],
+    "classification_warnings": [],
+    "commercial_flags": {
+      "symbol1_any_auto_suggested": false,
+      "covered_auto_symbols_detected": "7"
+    }
+  },
+  "policy_data_source": "coi_summary",
+  "variant_status": "new_carrier"
+}

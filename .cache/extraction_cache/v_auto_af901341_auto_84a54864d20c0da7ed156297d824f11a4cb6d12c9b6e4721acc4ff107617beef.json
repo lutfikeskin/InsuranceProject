@@ -1,0 +1,76 @@
+{
+  "policy": {
+    "carrier_name": "GEICO Marine Insurance Company",
+    "naic_number": null,
+    "policy_number": "9300317286",
+    "effective_date": "04/22/2026",
+    "expiration_date": "04/22/2027",
+    "insured_name": "A.O GRACE CORP.",
+    "insured_address": "2 VILLA VERDE DR APT 214 BUFFALO GROVE IL 60089",
+    "financial_responsibility_name": "Marble City Insurance DBA Truckers National",
+    "liability_limit": "$1,000,000",
+    "general_liability_limit": null,
+    "cargo_limit": "$100,000",
+    "cargo_deductible": "$1000",
+    "um_uim_limit": null,
+    "med_pay_limit": null,
+    "pip_limit": null,
+    "comp_deductible": null,
+    "coll_deductible": null,
+    "has_full_collision": false
+  },
+  "compliance": {},
+  "coverages": [],
+  "vehicles": [
+    {
+      "year": 2019,
+      "make": "MERCEDES-BENZ",
+      "model": "SPRINTER",
+      "vin": "WD4PF1CD4KT002262",
+      "gvw": 0,
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": "null",
+      "covered_auto_symbols": "null",
+      "radius_of_operation": "Unlimited",
+      "business_use_class": "null",
+      "valuation_basis": "null"
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "Andrian Opanovych",
+      "license_number": "null",
+      "is_excluded": false
+    }
+  ],
+  "audits": {
+    "premium": {
+      "flag": "MISSING_DATA",
+      "confidence": "low",
+      "reason": "missing premium or vehicle count"
+    }
+  },
+  "classification": {
+    "document_type": "certificate_of_insurance",
+    "policy_type": "commercial_auto",
+    "confidence": "high"
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ],
+  "extraction_audit": {
+    "errors": [],
+    "rejected_coverages": [],
+    "classification_warnings": [],
+    "commercial_flags": {
+      "symbol1_any_auto_suggested": false,
+      "covered_auto_symbols_detected": "null"
+    }
+  },
+  "policy_data_source": "coi_summary",
+  "variant_status": "new_carrier"
+}

@@ -1,0 +1,205 @@
+{
+  "policy": {
+    "carrier_name": "PROGRESSIVE",
+    "carrier_name_confidence": "high",
+    "naic_number": "24260",
+    "policy_number": "999152403",
+    "policy_number_confidence": "high",
+    "effective_date": "2025-06-20",
+    "effective_date_confidence": "high",
+    "expiration_date": "2026-06-20",
+    "expiration_date_confidence": "high",
+    "account_type": "corporation",
+    "insured_name": "REUBEN BALIRAINE INC",
+    "insured_name_confidence": "high",
+    "insured_address": "88 HEYWOOD ST APT 2L",
+    "insured_city": "WORCESTER",
+    "insured_state_code": "MA",
+    "insured_zip": "01604",
+    "premium": "$7,282",
+    "premium_confidence": "high",
+    "state": "MA",
+    "liability_limit": "1,000,000 CSL",
+    "liability_limit_confidence": "high",
+    "cargo_limit": "$100,000",
+    "cargo_limit_confidence": "high",
+    "um_uim_limit": "100,000 CSL",
+    "med_pay_limit": "1,000",
+    "pip_limit": "8,000",
+    "comp_deductible": "1000",
+    "coll_deductible": "1000",
+    "has_auto_liability": true,
+    "has_general_liability": false,
+    "has_full_collision": true,
+    "statutory_auto_liability_display": "1,000,000 CSL",
+    "statutory_auto_liability_resolved": "1,000,000 CSL"
+  },
+  "compliance": {},
+  "coverages": [
+    {
+      "coverage_code": "AUTO_LIAB_CSL",
+      "display_name": "Optional Bodily Injury / Property Damage",
+      "family": "auto_liability",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 1000000
+      },
+      "vehicle_vin": "W1Y40BHY3NT108525",
+      "line_of_business": "auto"
+    },
+    {
+      "coverage_code": "UM_CSL",
+      "display_name": "Uninsured Motorist Bodily Injury",
+      "family": "uninsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 100000
+      },
+      "vehicle_vin": "W1Y40BHY3NT108525",
+      "line_of_business": "auto"
+    },
+    {
+      "coverage_code": "UIM_CSL",
+      "display_name": "Underinsured Motorist Bodily Injury",
+      "family": "underinsured_motorist",
+      "limit_structure": "csl",
+      "limits": {
+        "combined_single_limit": 100000
+      },
+      "vehicle_vin": "W1Y40BHY3NT108525",
+      "line_of_business": "auto"
+    },
+    {
+      "coverage_code": "PIP",
+      "display_name": "Personal Injury Protection",
+      "family": "pip",
+      "limit_structure": "csl",
+      "limits": {
+        "per_person": 8000
+      },
+      "vehicle_vin": "W1Y40BHY3NT108525",
+      "line_of_business": "auto"
+    },
+    {
+      "coverage_code": "MED_PAY",
+      "display_name": "Medical Payments",
+      "family": "medical_payments",
+      "limit_structure": "split",
+      "limits": {
+        "per_person": 1000
+      },
+      "vehicle_vin": "W1Y40BHY3NT108525",
+      "line_of_business": "auto"
+    },
+    {
+      "coverage_code": "COMP",
+      "display_name": "Comprehensive",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "vehicle_vin": "W1Y40BHY3NT108525",
+      "limits": {},
+      "line_of_business": "auto"
+    },
+    {
+      "coverage_code": "COLL",
+      "display_name": "Collision",
+      "family": "physical_damage",
+      "limit_structure": "deductible_only",
+      "deductible": 1000,
+      "vehicle_vin": "W1Y40BHY3NT108525",
+      "limits": {},
+      "line_of_business": "auto"
+    },
+    {
+      "coverage_code": "RENTAL",
+      "display_name": "Rental Reimbursement",
+      "family": "physical_damage",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 40
+      },
+      "vehicle_vin": "W1Y40BHY3NT108525",
+      "line_of_business": "auto"
+    },
+    {
+      "coverage_code": "CARGO_LEGAL_LIAB",
+      "display_name": "Motor Truck Cargo",
+      "family": "cargo",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 100000
+      },
+      "line_of_business": "auto"
+    }
+  ],
+  "vehicles": [
+    {
+      "year": 2022,
+      "make": "MERCEDES-BENZ",
+      "model": "SPRINTER",
+      "vin": "W1Y40BHY3NT108525",
+      "body": "Cargo Van",
+      "radius_of_operation": "More than 500 miles",
+      "valuation_basis": "Actual Cash Value",
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis"
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "REUBEN J BALIRAINE"
+    }
+  ],
+  "audits": {
+    "premium": {
+      "flag": "PLAUSIBLE",
+      "confidence": "high",
+      "per_vehicle": 7282.0
+    }
+  },
+  "classification": {
+    "document_type": "declarations_page",
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "commercial_auto_policy"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ],
+  "extraction_audit": {
+    "errors": [],
+    "rejected_coverages": [
+      {
+        "coverage_code": "AUTO_LIAB_BI",
+        "reason": "AUTO_LIAB_BI: Forbidden limit keys {'per_occurrence'}. Allowed: {'per_person', 'per_accident'}"
+      },
+      {
+        "coverage_code": "TOWING",
+        "reason": "TOWING: Structure mismatch. Registry requires per_occurrence"
+      }
+    ],
+    "classification_warnings": [],
+    "liability_normalization": [
+      "Merged AUTO_LIAB_PD into AUTO_LIAB_BI for vin=W1Y40BHY3NT108525"
+    ],
+    "commercial_flags": {
+      "symbol1_any_auto_suggested": false
+    }
+  },
+  "policy_data_source": "full_policy",
+  "variant_status": "new_carrier"
+}

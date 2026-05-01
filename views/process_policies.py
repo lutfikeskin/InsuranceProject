@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import streamlit as st
 import pandas as pd
 from core.constants import VEHICLE_TYPES, INTEREST_TYPES, VIN_REGEX
@@ -7,6 +8,7 @@ import json
 from core.services import PolicyService
 from datetime import date
 from core.database import get_session, Policy, Vehicle, Driver, Coverage, AdditionalInterest, Customer
+from core.customer_resolver import CustomerResolver
 from modules.extraction import process_pdf
 from modules.extraction.pipeline import POLICY_TYPE_ENUM
 from utils.vehicle_utils import refine_vehicle_type
@@ -30,6 +32,50 @@ def _carrier_display(carrier_name: str | None, underwriter_name: str | None) -> 
     if underwriter and carrier and underwriter.lower() != carrier.lower():
         return f"{carrier} ({underwriter})"
     return carrier or underwriter or ""
+
+
+def _dataframe_to_record_list(df: pd.DataFrame) -> list:
+    if df is None or df.empty:
+        return []
+    out = []
+    for rec in df.to_dict("records"):
+        row = {}
+        for k, v in rec.items():
+            if v is None:
+                row[k] = None
+            elif isinstance(v, float) and pd.isna(v):
+                row[k] = None
+            else:
+                row[k] = v
+        out.append(row)
+    return out
+
+
+def _coverages_from_editor_rows(c_data: list, edited_c: pd.DataFrame) -> list:
+    """Rebuild extraction-style coverage dicts from the flat review data_editor rows."""
+    if edited_c is None or edited_c.empty:
+        return []
+    rows = edited_c.to_dict("records")
+    out = []
+    for idx, row in enumerate(rows):
+        t = (row.get("type") or "").strip()
+        if not t:
+            continue
+        orig = c_data[idx] if idx < len(c_data) and isinstance(c_data[idx], dict) else {}
+        limits = dict(orig.get("limits") or {})
+        for k in ("per_occurrence", "aggregate", "combined_single_limit", "deductible"):
+            v = row.get(k)
+            if v is not None and v != "":
+                limits[k] = v
+        item = {k: v for k, v in orig.items() if k not in ("limits", "display_name", "type")}
+        item["display_name"] = t
+        item["type"] = t
+        item["coverage_code"] = row.get("coverage_code")
+        item["limits"] = limits
+        if row.get("deductible") is not None and row.get("deductible") != "":
+            item["deductible"] = row.get("deductible")
+        out.append(item)
+    return out
 
 
 def _compute_parallel_workers(total_files: int) -> int:
@@ -881,328 +927,353 @@ def page_process_policies(api_key):
                     "ℹ️ **New policy type for this carrier.** Verify fields carefully."
                 )
 
-            with st.form(key=f"review_form_{fname}"):
-                confidence_map = _build_confidence_map(
-                    p,
-                    p.get("field_confidences")
-                    or current_item["data"].get("field_confidences")
-                    or current_item["data"].get("policy", {}).get("field_confidences"),
+            confidence_map = _build_confidence_map(
+                p,
+                p.get("field_confidences")
+                or current_item["data"].get("field_confidences")
+                or current_item["data"].get("policy", {}).get("field_confidences"),
+            )
+            low_fields = [k for k, v in confidence_map.items() if v == "low"]
+            medium_fields = [k for k, v in confidence_map.items() if v == "medium"]
+            if low_fields:
+                st.markdown(
+                    "<div style='background-color:#fff7d6;padding:8px 10px;border-radius:6px;border:1px solid #f0d77a;'>"
+                    "⚠️ <b>Low-confidence fields detected.</b> Please verify highlighted values before saving."
+                    "</div>",
+                    unsafe_allow_html=True,
                 )
-                low_fields = [k for k, v in confidence_map.items() if v == "low"]
-                medium_fields = [k for k, v in confidence_map.items() if v == "medium"]
-                if low_fields:
-                    st.markdown(
-                        "<div style='background-color:#fff7d6;padding:8px 10px;border-radius:6px;border:1px solid #f0d77a;'>"
-                        "⚠️ <b>Low-confidence fields detected.</b> Please verify highlighted values before saving."
-                        "</div>",
-                        unsafe_allow_html=True,
-                    )
-                elif medium_fields:
-                    st.caption("◐ Some fields are medium confidence. Verify if ambiguous.")
+            elif medium_fields:
+                st.caption("◐ Some fields are medium confidence. Verify if ambiguous.")
 
-                completeness = PolicyService.compute_completeness_score(p, document_type)
-                coi_badge = "✅ COI Ready" if completeness["coi_ready"] else "⚠️ COI Needs Review"
+            completeness = PolicyService.compute_completeness_score(p, document_type)
+            coi_badge = "✅ COI Ready" if completeness["coi_ready"] else "⚠️ COI Needs Review"
+            st.caption(
+                f"Completeness Score: **{completeness['score']}** | {coi_badge} | "
+                f"Missing required: {len(completeness['missing_required'])} | "
+                f"Missing recommended: {len(completeness['missing_recommended'])}"
+            )
+
+            c1, c2 = st.columns(2)
+            
+            locs = p.get('field_locations', [])
+            
+            r_carrier = c1.text_input(_confidence_label("Carrier (Brand)", "carrier_name", confidence_map), value=p.get('carrier_name', ''), help=get_source_help("carrier_name", locs))
+            r_underwriter = c2.text_input("Underwriter (Legal Entity)", value=p.get("underwriter_name", ""))
+            r_pol_num = c2.text_input(_confidence_label("Policy Number", "policy_number", confidence_map), value=p.get('policy_number', ''), help=get_source_help("policy_number", locs))
+            
+            cc1, cc2 = st.columns(2)
+            r_type = cc1.text_input("Policy Type", value=classification.get('policy_type', ''), disabled=True)
+            r_conf = cc2.text_input("Confidence", value=classification.get('confidence', ''), disabled=True)
+            
+            c3, c4 = st.columns(2)
+            
+            current_naic = p.get('naic_number', '')
+            if not current_naic:
+                current_naic = get_naic_for_carrier(p.get('carrier_name', ''))
+            
+            locs = p.get('field_locations', [])
+            
+            r_naic = c3.text_input("NAIC Code", value=current_naic)
+            
+            prem_help = get_source_help("premium", locs)
+            premium_audit = (
+                (current_item["data"].get("audits") or {}).get("premium")
+                or {}
+            )
+            
+            prem_label = _confidence_label("Premium", "premium", confidence_map)
+            audit_flag = premium_audit.get("flag")
+            if audit_flag == "PLAUSIBLE":
+                prem_label += " ✅"
+            elif audit_flag in {"POSSIBLE_INSTALLMENT", "UNUSUALLY_HIGH"}:
+                prem_label += " ⚠️"
+
+            r_premium = c3.text_input(prem_label, value=p.get('premium', ''), help=prem_help)
+            
+            if audit_flag == "PLAUSIBLE":
+                st.success(
+                    f"Premium audit: PLAUSIBLE ({premium_audit.get('per_vehicle', 'n/a')} per vehicle)"
+                )
+            elif audit_flag in {"POSSIBLE_INSTALLMENT", "UNUSUALLY_HIGH"}:
+                st.warning(
+                    premium_audit.get("reason")
+                    or f"Premium audit warning: {audit_flag}"
+                )
+            elif audit_flag in {"MISSING_DATA", "SKIP"}:
                 st.caption(
-                    f"Completeness Score: **{completeness['score']}** | {coi_badge} | "
-                    f"Missing required: {len(completeness['missing_required'])} | "
-                    f"Missing recommended: {len(completeness['missing_recommended'])}"
+                    premium_audit.get("reason")
+                    or f"Premium audit: {audit_flag}"
                 )
+            r_eff = c4.text_input(_confidence_label("Effective Date", "effective_date", confidence_map), value=p.get('effective_date', ''), help=get_source_help("effective_date", locs))
+            r_exp = c4.text_input(_confidence_label("Expiration Date", "expiration_date", confidence_map), value=p.get('expiration_date', ''), help=get_source_help("expiration_date", locs))
+            
+            st.divider()
+            r_ins_name = st.text_input(_confidence_label("Insured Name", "insured_name", confidence_map), value=p.get('insured_name', ''))
+            r_ins_addr = st.text_input("Insured Address", value=p.get('insured_address', ''))
+            ic1, ic2, ic3 = st.columns(3)
+            r_ins_city = ic1.text_input("City", value=p.get('insured_city', ''))
+            r_ins_state = ic2.text_input("State", value=p.get('insured_state_code', ''))
+            r_ins_zip = ic3.text_input("Zip", value=p.get('insured_zip', ''))
+            
+            st.divider()
+            r_liab = st.text_input(_confidence_label("Auto Liability Limit", "liability_limit", confidence_map), value=p.get('liability_limit', ''))
+            r_gl_limit = st.text_input("GL Limit", value=p.get('general_liability_limit', ''))
+            r_cargo = st.text_input(_confidence_label("Cargo Limit", "cargo_limit", confidence_map), value=p.get('cargo_limit', ''))
+            r_cargo_ded = st.text_input("Cargo Ded", value=p.get('cargo_deductible', ''))
+            
+            st.markdown("##### Additional Coverages")
+            rc1, rc2, rc3, rc4, rc5 = st.columns(5)
+            r_um = rc1.text_input("UM/UIM", value=p.get('um_uim_limit', ''))
+            r_med = rc2.text_input("Med Pay", value=p.get('med_pay_limit', ''))
+            r_pip = rc3.text_input("PIP", value=p.get('pip_limit', ''))
+            r_comp = rc4.text_input("Comp Ded", value=p.get('comp_deductible', ''))
+            r_coll = rc5.text_input("Coll Ded", value=p.get('coll_deductible', ''))
+            
+            r_gl = st.checkbox("Has GL", value=p.get('has_general_liability', True))
+            r_auto = st.checkbox("Has Auto", value=p.get('has_auto_liability', True))
+            r_status = st.selectbox("Status", ["Active", "Pending", "Quote", "Expired"], index=0)
 
-                c1, c2 = st.columns(2)
-                
-                locs = p.get('field_locations', [])
-                
-                r_carrier = c1.text_input(_confidence_label("Carrier (Brand)", "carrier_name", confidence_map), value=p.get('carrier_name', ''), help=get_source_help("carrier_name", locs))
-                r_underwriter = c2.text_input("Underwriter (Legal Entity)", value=p.get("underwriter_name", ""))
-                r_pol_num = c2.text_input(_confidence_label("Policy Number", "policy_number", confidence_map), value=p.get('policy_number', ''), help=get_source_help("policy_number", locs))
-                
-                cc1, cc2 = st.columns(2)
-                r_type = cc1.text_input("Policy Type", value=classification.get('policy_type', ''), disabled=True)
-                r_conf = cc2.text_input("Confidence", value=classification.get('confidence', ''), disabled=True)
-                
-                c3, c4 = st.columns(2)
-                
-                current_naic = p.get('naic_number', '')
-                if not current_naic:
-                    current_naic = get_naic_for_carrier(p.get('carrier_name', ''))
-                
-                locs = p.get('field_locations', [])
-                
-                r_naic = c3.text_input("NAIC Code", value=current_naic)
-                
-                prem_help = get_source_help("premium", locs)
-                premium_audit = (
-                    (current_item["data"].get("audits") or {}).get("premium")
-                    or {}
-                )
-                
-                prem_label = _confidence_label("Premium", "premium", confidence_map)
-                audit_flag = premium_audit.get("flag")
-                if audit_flag == "PLAUSIBLE":
-                    prem_label += " ✅"
-                elif audit_flag in {"POSSIBLE_INSTALLMENT", "UNUSUALLY_HIGH"}:
-                    prem_label += " ⚠️"
+            st.divider()
+            st.markdown("#### Detailed Inventory (Editable)")
+            v_data = current_item['data'].get('vehicles') or []
+            d_data = current_item['data'].get('drivers') or []
+            show_vehicle_tab = len(v_data) > 0
+            show_driver_tab = len(d_data) > 0
 
-                r_premium = c3.text_input(prem_label, value=p.get('premium', ''), help=prem_help)
-                
-                if audit_flag == "PLAUSIBLE":
-                    st.success(
-                        f"Premium audit: PLAUSIBLE ({premium_audit.get('per_vehicle', 'n/a')} per vehicle)"
-                    )
-                elif audit_flag in {"POSSIBLE_INSTALLMENT", "UNUSUALLY_HIGH"}:
-                    st.warning(
-                        premium_audit.get("reason")
-                        or f"Premium audit warning: {audit_flag}"
-                    )
-                elif audit_flag in {"MISSING_DATA", "SKIP"}:
-                    st.caption(
-                        premium_audit.get("reason")
-                        or f"Premium audit: {audit_flag}"
-                    )
-                r_eff = c4.text_input(_confidence_label("Effective Date", "effective_date", confidence_map), value=p.get('effective_date', ''), help=get_source_help("effective_date", locs))
-                r_exp = c4.text_input(_confidence_label("Expiration Date", "expiration_date", confidence_map), value=p.get('expiration_date', ''), help=get_source_help("expiration_date", locs))
-                
-                st.divider()
-                r_ins_name = st.text_input(_confidence_label("Insured Name", "insured_name", confidence_map), value=p.get('insured_name', ''))
-                r_ins_addr = st.text_input("Insured Address", value=p.get('insured_address', ''))
-                ic1, ic2, ic3 = st.columns(3)
-                r_ins_city = ic1.text_input("City", value=p.get('insured_city', ''))
-                r_ins_state = ic2.text_input("State", value=p.get('insured_state_code', ''))
-                r_ins_zip = ic3.text_input("Zip", value=p.get('insured_zip', ''))
-                
-                st.divider()
-                r_liab = st.text_input(_confidence_label("Auto Liability Limit", "liability_limit", confidence_map), value=p.get('liability_limit', ''))
-                r_gl_limit = st.text_input("GL Limit", value=p.get('general_liability_limit', ''))
-                r_cargo = st.text_input(_confidence_label("Cargo Limit", "cargo_limit", confidence_map), value=p.get('cargo_limit', ''))
-                r_cargo_ded = st.text_input("Cargo Ded", value=p.get('cargo_deductible', ''))
-                
-                st.markdown("##### Additional Coverages")
-                rc1, rc2, rc3, rc4, rc5 = st.columns(5)
-                r_um = rc1.text_input("UM/UIM", value=p.get('um_uim_limit', ''))
-                r_med = rc2.text_input("Med Pay", value=p.get('med_pay_limit', ''))
-                r_pip = rc3.text_input("PIP", value=p.get('pip_limit', ''))
-                r_comp = rc4.text_input("Comp Ded", value=p.get('comp_deductible', ''))
-                r_coll = rc5.text_input("Coll Ded", value=p.get('coll_deductible', ''))
-                
-                r_gl = st.checkbox("Has GL", value=p.get('has_general_liability', True))
-                r_auto = st.checkbox("Has Auto", value=p.get('has_auto_liability', True))
-                r_status = st.selectbox("Status", ["Active", "Pending", "Quote", "Expired"], index=0)
+            tab_defs = []
+            if show_vehicle_tab:
+                tab_defs.append(("vehicles", "🚙 Vehicles"))
+            if show_driver_tab:
+                tab_defs.append(("drivers", "👤 Drivers"))
+            tab_defs.extend([
+                ("coverages", "🛡️ Coverages"),
+                ("additional_interests", "🏢 Additional Interests"),
+            ])
+            tab_views = dict(zip([k for k, _ in tab_defs], st.tabs([label for _, label in tab_defs])))
 
-                st.divider()
-                st.markdown("#### Detailed Inventory (Editable)")
-                v_data = current_item['data'].get('vehicles') or []
-                d_data = current_item['data'].get('drivers') or []
-                show_vehicle_tab = len(v_data) > 0
-                show_driver_tab = len(d_data) > 0
+            edited_v = pd.DataFrame(v_data) if show_vehicle_tab else pd.DataFrame()
+            edited_d = pd.DataFrame(d_data) if show_driver_tab else pd.DataFrame()
 
-                tab_defs = []
-                if show_vehicle_tab:
-                    tab_defs.append(("vehicles", "🚙 Vehicles"))
-                if show_driver_tab:
-                    tab_defs.append(("drivers", "👤 Drivers"))
-                tab_defs.extend([
-                    ("coverages", "🛡️ Coverages"),
-                    ("additional_interests", "🏢 Additional Interests"),
-                ])
-                tab_views = dict(zip([k for k, _ in tab_defs], st.tabs([label for _, label in tab_defs])))
-
-                edited_v = pd.DataFrame(v_data) if show_vehicle_tab else pd.DataFrame()
-                edited_d = pd.DataFrame(d_data) if show_driver_tab else pd.DataFrame()
-
-                if show_vehicle_tab:
-                    with tab_views["vehicles"]:
-                        v_df = pd.DataFrame(v_data)
-                        for col in ["year", "make", "model", "vin", "type", "gvw"]:
-                            if col not in v_df.columns: v_df[col] = None
-                        
-                        edited_v = st.data_editor(
-                            v_df,
-                            num_rows="dynamic",
-                            column_config={
-                                "year": st.column_config.NumberColumn("Year", min_value=1900, max_value=2030, format="%d"),
-                                "make": st.column_config.TextColumn("Make", required=True),
-                                "model": st.column_config.TextColumn("Model"),
-                                "vin": st.column_config.TextColumn("VIN", max_chars=17, validate=VIN_REGEX),
-                                "type": st.column_config.SelectboxColumn("Type", options=VEHICLE_TYPES),
-                                "gvw": st.column_config.NumberColumn("GVW", format="%d")
-                            },
-                            width='stretch',
-                            key=f"edt_v_{fname}"
-                        )
-
-                if show_driver_tab:
-                    with tab_views["drivers"]:
-                        d_df = pd.DataFrame(d_data)
-                        for col in ["full_name", "license_number", "is_excluded"]:
-                            if col not in d_df.columns: d_df[col] = None
-                            
-                        edited_d = st.data_editor(
-                            d_df,
-                            num_rows="dynamic",
-                            column_config={
-                                "full_name": st.column_config.TextColumn("Driver Name", required=True),
-                                "license_number": st.column_config.TextColumn("License #"),
-                                "is_excluded": st.column_config.CheckboxColumn("Excluded?", default=False)
-                            },
-                            width='stretch',
-                            key=f"edt_d_{fname}"
-                        )
-                
-                with tab_views["coverages"]:
-                    c_data = current_item['data'].get('coverages', [])
-                    c_rows = []
-                    for c in c_data:
-                         row = {
-                             "type": c.get('display_name') or c.get('type'),
-                             "coverage_code": c.get('coverage_code'),
-                             "per_occurrence": c.get('limits', {}).get('per_occurrence'),
-                             "aggregate": c.get('limits', {}).get('aggregate'),
-                             "combined_single_limit": c.get('limits', {}).get('combined_single_limit'),
-                             "deductible": c.get('deductible')
-                         }
-                         c_rows.append(row)
+            if show_vehicle_tab:
+                with tab_views["vehicles"]:
+                    v_df = pd.DataFrame(v_data)
+                    for col in ["year", "make", "model", "vin", "type", "gvw"]:
+                        if col not in v_df.columns: v_df[col] = None
                     
-                    c_df = pd.DataFrame(c_rows)
-                    if c_df.empty:
-                        c_df = pd.DataFrame(columns=["type", "coverage_code", "per_occurrence", "aggregate", "combined_single_limit", "deductible"])
-
-                    edited_c = st.data_editor(
-                        c_df,
+                    edited_v = st.data_editor(
+                        v_df,
                         num_rows="dynamic",
                         column_config={
-                            "type": st.column_config.TextColumn("Coverage Type", required=True),
-                            "coverage_code": st.column_config.TextColumn("Code"),
-                            "per_occurrence": st.column_config.NumberColumn("Occ Limit", format="$%d"),
-                            "aggregate": st.column_config.NumberColumn("Agg Limit", format="$%d"),
-                            "combined_single_limit": st.column_config.NumberColumn("CSL", format="$%d"),
-                            "deductible": st.column_config.NumberColumn("Ded", format="$%d"),
+                            "year": st.column_config.NumberColumn("Year", min_value=1900, max_value=2030, format="%d"),
+                            "make": st.column_config.TextColumn("Make", required=True),
+                            "model": st.column_config.TextColumn("Model"),
+                            "vin": st.column_config.TextColumn("VIN", max_chars=17, validate=VIN_REGEX),
+                            "type": st.column_config.SelectboxColumn("Type", options=VEHICLE_TYPES),
+                            "gvw": st.column_config.NumberColumn("GVW", format="%d")
                         },
                         width='stretch',
-                        key=f"edt_c_{fname}"
+                        key=f"edt_v_{fname}"
                     )
 
-                with tab_views["additional_interests"]:
-                    ai_data = current_item['data'].get('additional_interests', [])
-                    ai_df = pd.DataFrame(ai_data)
-                    for col in ["name", "address", "interest_type"]:
-                        if col not in ai_df.columns: ai_df[col] = None
-
-                    edited_ai = st.data_editor(
-                        ai_df,
-                        num_rows="dynamic",
-                        column_config={
-                            "name": st.column_config.TextColumn("Entity Name", required=True),
-                            "address": st.column_config.TextColumn("Address"),
-                            "interest_type": st.column_config.SelectboxColumn(
-                                "Interest Type", 
-                                options=INTEREST_TYPES
-                            )
-                        },
-                        width='stretch',
-                        key=f"edt_ai_{fname}"
-                    )
-
-                st.markdown("---")
-                st.subheader("👤 Customer")
-                confirm_key = f"confirm_customer_id_{fname}"
-                owner_key = f"commercial_owner_name_{fname}"
-                if confirm_key not in st.session_state:
-                    st.session_state[confirm_key] = None
-                if owner_key not in st.session_state:
-                    st.session_state[owner_key] = ""
-
-                resolution = current_item["data"].get("_customer_resolution")
-                suggestion = current_item["data"].get("_customer_suggestion")
-                policy_type = current_item["data"].get("classification", {}).get("policy_type", "")
-
-                customer_session = get_session(st.session_state.db_engine)
-                try:
-                    if resolution and resolution.get("confidence") == "confirmed" and resolution.get("customer_id"):
-                        customer = customer_session.query(Customer).get(resolution["customer_id"])
-                        if customer:
-                            st.success(f"✅ Matched to: **{customer.full_name}**")
-                            other_pols = list(customer.policies or [])
-                            if other_pols:
-                                st.caption("Their other policies with us:")
-                                for op in other_pols[:5]:
-                                    icon = "✅" if (op.policy_status or "") == "active" else "⏰"
-                                    st.markdown(
-                                        f"{icon} `{op.policy_number}` {op.policy_type} "
-                                        f"— {_carrier_display(op.carrier_name, getattr(op, 'underwriter_name', None))}"
-                                    )
-                    elif suggestion and suggestion.get("customer_id"):
-                        customer = customer_session.query(Customer).get(suggestion["customer_id"])
-                        if customer:
-                            st.warning(
-                                f"⚠️ Possible match: **{customer.full_name}** — "
-                                f"{suggestion.get('reason', 'Needs review')}"
-                            )
-                            c1, c2 = st.columns(2)
-                            yes_clicked = c1.form_submit_button("✅ Yes, same customer")
-                            no_clicked = c2.form_submit_button("❌ No, different person")
-                            if yes_clicked:
-                                st.session_state[confirm_key] = customer.id
-                            if no_clicked:
-                                st.session_state[confirm_key] = None
-                            chosen = st.session_state.get(confirm_key)
-                            if chosen == customer.id:
-                                st.success("Will link to this customer on save.")
-                            elif chosen is None:
-                                st.caption("Will not auto-link this suggestion.")
-                    else:
-                        st.info("🆕 New customer will be created")
-                        if policy_type != "personal_auto":
-                            st.markdown("**Commercial — who is the owner?**")
-                            owner_name = st.text_input(
-                                "Owner / Principal Name",
-                                placeholder="e.g. Ayaz Demir",
-                                key=owner_key,
-                            )
-                            if owner_name:
-                                st.session_state[owner_key] = owner_name
-                finally:
-                    customer_session.close()
-
-                related = (current_item["data"].get("_related_policy_candidates") or [])[:3]
-                if related:
-                    st.divider()
-                    st.subheader("🔗 Potential Related Policies")
-                    st.caption("Found existing policies that may be related to this one.")
-                    relationship_session = get_session(st.session_state.db_engine)
-                    relationship_service = PolicyService(relationship_session)
-                    try:
-                        for match in related:
-                            render_related_policy(match, current_item, relationship_service)
-                    finally:
-                        relationship_session.close()
-
-                st.divider()
-                
-                b_col_warn = st.container()
-                
-                b_col1, b_col2, b_col3 = st.columns([1, 1, 1])
-                saved = b_col1.form_submit_button("💾 Save", type="secondary")
-                save_next = b_col2.form_submit_button("💾⏩ Save & Next", type="primary")
-                discarded = b_col3.form_submit_button("🗑️ Discard")
-                
-                if saved or save_next:
-                    session = get_session(st.session_state.db_engine)
-                    service = PolicyService(session)
-                    try:
-                        existing = service.check_duplicate(r_pol_num)
-                        if existing:
-                            b_col_warn.warning(
-                                f"⚡ **Duplicate Detected:** Policy `{r_pol_num}` already exists "
-                                f"(Insured: {existing.insured_name}, Carrier: {_carrier_display(existing.carrier_name, getattr(existing, 'underwriter_name', None))}). "
-                                f"Saving will **update** the existing record."
-                            )
+            if show_driver_tab:
+                with tab_views["drivers"]:
+                    d_df = pd.DataFrame(d_data)
+                    for col in ["full_name", "license_number", "is_excluded"]:
+                        if col not in d_df.columns: d_df[col] = None
                         
-                        policy_payload = {
+                    edited_d = st.data_editor(
+                        d_df,
+                        num_rows="dynamic",
+                        column_config={
+                            "full_name": st.column_config.TextColumn("Driver Name", required=True),
+                            "license_number": st.column_config.TextColumn("License #"),
+                            "is_excluded": st.column_config.CheckboxColumn("Excluded?", default=False)
+                        },
+                        width='stretch',
+                        key=f"edt_d_{fname}"
+                    )
+            
+            with tab_views["coverages"]:
+                c_data = current_item['data'].get('coverages', [])
+                c_rows = []
+                for c in c_data:
+                     row = {
+                         "type": c.get('display_name') or c.get('type'),
+                         "coverage_code": c.get('coverage_code'),
+                         "per_occurrence": c.get('limits', {}).get('per_occurrence'),
+                         "aggregate": c.get('limits', {}).get('aggregate'),
+                         "combined_single_limit": c.get('limits', {}).get('combined_single_limit'),
+                         "deductible": c.get('deductible')
+                     }
+                     c_rows.append(row)
+                
+                c_df = pd.DataFrame(c_rows)
+                if c_df.empty:
+                    c_df = pd.DataFrame(columns=["type", "coverage_code", "per_occurrence", "aggregate", "combined_single_limit", "deductible"])
+
+                edited_c = st.data_editor(
+                    c_df,
+                    num_rows="dynamic",
+                    column_config={
+                        "type": st.column_config.TextColumn("Coverage Type", required=True),
+                        "coverage_code": st.column_config.TextColumn("Code"),
+                        "per_occurrence": st.column_config.NumberColumn("Occ Limit", format="$%d"),
+                        "aggregate": st.column_config.NumberColumn("Agg Limit", format="$%d"),
+                        "combined_single_limit": st.column_config.NumberColumn("CSL", format="$%d"),
+                        "deductible": st.column_config.NumberColumn("Ded", format="$%d"),
+                    },
+                    width='stretch',
+                    key=f"edt_c_{fname}"
+                )
+
+            with tab_views["additional_interests"]:
+                ai_data = current_item['data'].get('additional_interests', [])
+                ai_df = pd.DataFrame(ai_data)
+                for col in ["name", "address", "interest_type"]:
+                    if col not in ai_df.columns: ai_df[col] = None
+
+                edited_ai = st.data_editor(
+                    ai_df,
+                    num_rows="dynamic",
+                    column_config={
+                        "name": st.column_config.TextColumn("Entity Name", required=True),
+                        "address": st.column_config.TextColumn("Address"),
+                        "interest_type": st.column_config.SelectboxColumn(
+                            "Interest Type", 
+                            options=INTEREST_TYPES
+                        )
+                    },
+                    width='stretch',
+                    key=f"edt_ai_{fname}"
+                )
+
+            st.markdown("---")
+            st.subheader("👤 Customer")
+            st.caption(
+                "Customer matching uses the insured name, policy number, and drivers from the fields above."
+            )
+            confirm_key = f"confirm_customer_id_{fname}"
+            owner_widget_key = f"commercial_owner_input_{fname}"
+            owner_storage_key = f"commercial_owner_name_{fname}"
+            if confirm_key not in st.session_state:
+                st.session_state[confirm_key] = None
+            if owner_storage_key not in st.session_state:
+                st.session_state[owner_storage_key] = ""
+
+            policy_type = (classification or {}).get("policy_type", "")
+            data_for_resolve = copy.deepcopy(current_item["data"])
+            rp = data_for_resolve.setdefault("policy", {})
+            rp["insured_name"] = r_ins_name
+            rp["policy_number"] = r_pol_num
+            data_for_resolve["classification"] = dict(classification or {})
+            if not edited_d.empty:
+                data_for_resolve["drivers"] = _dataframe_to_record_list(edited_d)
+
+            customer_session = get_session(st.session_state.db_engine)
+            try:
+                resolved = CustomerResolver(customer_session).resolve(data_for_resolve)
+                conf = resolved.get("confidence")
+                res_customer = resolved.get("customer")
+
+                if conf == "confirmed" and res_customer is not None:
+                    customer = customer_session.query(Customer).get(res_customer.id)
+                    if customer:
+                        st.success(f"✅ Matched to: **{customer.full_name}**")
+                        other_pols = [
+                            op
+                            for op in (customer.policies or [])
+                            if (op.policy_number or "") != (r_pol_num or "").strip()
+                        ]
+                        if other_pols:
+                            st.caption("Their other policies with us:")
+                            for op in other_pols[:5]:
+                                icon = (
+                                    "✅"
+                                    if (op.policy_status or "").lower() == "active"
+                                    else "⏰"
+                                )
+                                st.markdown(
+                                    f"{icon} `{op.policy_number}` {op.policy_type} "
+                                    f"— {_carrier_display(op.carrier_name, getattr(op, 'underwriter_name', None))}"
+                                )
+                elif conf == "suggested" and res_customer is not None:
+                    customer = customer_session.query(Customer).get(res_customer.id)
+                    if customer:
+                        st.warning(
+                            f"⚠️ Possible match: **{customer.full_name}** — "
+                            f"{resolved.get('match_reason', 'Needs review')}"
+                        )
+                        c1, c2 = st.columns(2)
+                        if c1.button("✅ Yes, same customer", key=f"yes_customer_{fname}"):
+                            st.session_state[confirm_key] = customer.id
+                        if c2.button("❌ No, different person", key=f"no_customer_{fname}"):
+                            st.session_state[confirm_key] = None
+                        chosen = st.session_state.get(confirm_key)
+                        if chosen == customer.id:
+                            st.success("Will link to this customer on save.")
+                        elif chosen is None:
+                            st.caption("Will not auto-link this suggestion.")
+                else:
+                    st.info("🆕 New customer will be created")
+                    if policy_type != "personal_auto":
+                        st.markdown("**Commercial — who is the owner?**")
+                        owner_name = st.text_input(
+                            "Owner / Principal Name",
+                            placeholder="e.g. Ayaz Demir",
+                            key=owner_widget_key,
+                        )
+                        if owner_name.strip():
+                            st.session_state[owner_storage_key] = owner_name.strip()
+                        else:
+                            st.session_state[owner_storage_key] = ""
+            finally:
+                customer_session.close()
+
+            related = (current_item["data"].get("_related_policy_candidates") or [])[:3]
+            if related:
+                st.divider()
+                st.subheader("🔗 Potential Related Policies")
+                st.caption("Found existing policies that may be related to this one.")
+                relationship_session = get_session(st.session_state.db_engine)
+                relationship_service = PolicyService(relationship_session)
+                try:
+                    for match in related:
+                        render_related_policy(match, current_item, relationship_service)
+                finally:
+                    relationship_session.close()
+
+            st.divider()
+            
+            b_col_warn = st.container()
+            
+            b_col1, b_col2, b_col3 = st.columns([1, 1, 1])
+            saved = b_col1.button("💾 Save", type="secondary", key=f"save_review_{fname}")
+            save_next = b_col2.button(
+                "💾⏩ Save & Next", type="primary", key=f"save_next_review_{fname}"
+            )
+            discarded = b_col3.button("🗑️ Discard", key=f"discard_review_{fname}")
+            
+            if saved or save_next:
+                session = get_session(st.session_state.db_engine)
+                service = PolicyService(session)
+                try:
+                    existing = service.check_duplicate(r_pol_num)
+                    if existing:
+                        b_col_warn.warning(
+                            f"⚡ **Duplicate Detected:** Policy `{r_pol_num}` already exists "
+                            f"(Insured: {existing.insured_name}, Carrier: {_carrier_display(existing.carrier_name, getattr(existing, 'underwriter_name', None))}). "
+                            f"Saving will **update** the existing record."
+                        )
+                    
+                    extraction_result = copy.deepcopy(current_item["data"])
+                    pol_save = extraction_result.setdefault("policy", {})
+                    pol_save.update(
+                        {
                             "carrier_name": r_carrier,
                             "underwriter_name": r_underwriter,
                             "naic_number": r_naic,
                             "policy_number": r_pol_num,
-                            "effective_date": r_eff, # Factory handles parsing
+                            "effective_date": r_eff,
                             "expiration_date": r_exp,
                             "insured_name": r_ins_name,
                             "insured_address": r_ins_addr,
@@ -1220,54 +1291,56 @@ def page_process_policies(api_key):
                             "coll_deductible": r_coll,
                             "has_general_liability": r_gl,
                             "has_auto_liability": r_auto,
-                            "account_type": p.get('account_type'),
+                            "account_type": p.get("account_type"),
                             "document_type": document_type,
-                            "policy_type": classification.get('policy_type'),
-                            "classification_confidence": classification.get('confidence'),
-                            "classification_signals": classification.get('signals', []),
-                            "policy_data_source": current_item['data'].get("policy_data_source"),
-                            "field_confidences": confidence_map,
-                            "premium_audit_flag": audit_flag,
-                            "_customer_suggestion": current_item["data"].get("_customer_suggestion"),
-                            "_customer_resolution": current_item["data"].get("_customer_resolution"),
-                            "_review_confirm_customer_id": st.session_state.get(confirm_key),
-                            "_review_commercial_owner_name": st.session_state.get(owner_key),
-                            "_related_policy_candidates": current_item["data"].get("_related_policy_candidates"),
-                            "business_name": p.get('business_name'),
                             "premium": r_premium,
-                            "financial_responsibility_name": p.get('financial_responsibility_name'),
-                            "has_full_collision": p.get('has_full_collision'),
+                            "business_name": p.get("business_name"),
+                            "financial_responsibility_name": p.get("financial_responsibility_name"),
+                            "has_full_collision": p.get("has_full_collision"),
                             "status": r_status,
-                            
-                            "vehicles": edited_v.to_dict('records') if not edited_v.empty else [],
-                            "drivers": edited_d.to_dict('records') if not edited_d.empty else [],
-                            "coverages": edited_c.to_dict('records') if not edited_c.empty else [],
-                            "additional_interests": edited_ai.to_dict('records') if not edited_ai.empty else []
+                            "field_confidences": confidence_map,
                         }
-                        
-                        policy = service.create_policy_from_dict(policy_payload)
+                    )
+                    extraction_result["classification"] = dict(classification or {})
+                    extraction_result["vehicles"] = _dataframe_to_record_list(edited_v)
+                    extraction_result["drivers"] = _dataframe_to_record_list(edited_d)
+                    extraction_result["coverages"] = _coverages_from_editor_rows(c_data, edited_c)
+                    extraction_result["additional_interests"] = _dataframe_to_record_list(edited_ai)
+                    extraction_result["_review_confirm_customer_id"] = st.session_state.get(confirm_key)
+                    extraction_result["_review_commercial_owner_name"] = (
+                        (st.session_state.get(owner_storage_key) or "").strip()
+                    )
 
-                        success, msg = service.save_policy_object(policy)
-                        
-                        if success:
-                            st.toast(f"✅ Saved {r_pol_num}!")
-                            st.session_state.pop(confirm_key, None)
-                            st.session_state.pop(owner_key, None)
-                            st.session_state["review_queue"].pop(0)
-                            st.rerun()
-                        else:
-                            st.toast(f"⚠️ Could not save: {msg}", icon="⚠️")
-                        
-                    except Exception as e:
-                        st.toast(f"❌ Save failed: {e}", icon="❌")
-                    finally:
-                        session.close()
-                
-                if discarded:
-                    st.session_state.pop(confirm_key, None)
-                    st.session_state.pop(owner_key, None)
-                    st.session_state["review_queue"].pop(0)
-                    st.rerun()
+                    if (
+                        extraction_result.get("policy_data_source") == "coi_summary"
+                        and (extraction_result.get("coi_summary") or {}).get("policies")
+                    ):
+                        extraction_result.pop("coi_summary", None)
+                        extraction_result["policy_data_source"] = (
+                            document_type or "certificate_of_insurance"
+                        )
+
+                    success, msg = service.save_policy_from_extraction(extraction_result)
+                    
+                    if success:
+                        st.toast(f"✅ Saved {r_pol_num}!")
+                        st.session_state.pop(confirm_key, None)
+                        st.session_state.pop(owner_storage_key, None)
+                        st.session_state["review_queue"].pop(0)
+                        st.rerun()
+                    else:
+                        st.toast(f"⚠️ Could not save: {msg}", icon="⚠️")
+                    
+                except Exception as e:
+                    st.toast(f"❌ Save failed: {e}", icon="❌")
+                finally:
+                    session.close()
+            
+            if discarded:
+                st.session_state.pop(confirm_key, None)
+                st.session_state.pop(owner_storage_key, None)
+                st.session_state["review_queue"].pop(0)
+                st.rerun()
     else:
         if "review_queue" in st.session_state and isinstance(st.session_state["review_queue"], list):
              st.info("No policies pending review.")

@@ -329,14 +329,26 @@ class PolicyService:
                     )
                     new_policy.customer_id = customer.id
                 else:
-                    full_name = owner_name_override or insured_name
-                    customer = resolver.create_customer(
-                        full_name=full_name,
-                        entity_name=insured_name,
-                        entity_type="business",
-                    )
-                    customer.needs_real_name_entry = True
-                    new_policy.customer_id = customer.id
+                    if owner_name_override:
+                        customer = resolver.create_customer(
+                            full_name=owner_name_override,
+                            entity_name=insured_name,
+                            entity_type="business",
+                        )
+                        customer.needs_real_name_entry = False
+                        for ent in customer.entities:
+                            if ent.is_primary:
+                                ent.source = "manual"
+                                break
+                        new_policy.customer_id = customer.id
+                    else:
+                        customer = resolver.create_customer(
+                            full_name=insured_name,
+                            entity_name=insured_name,
+                            entity_type="business",
+                        )
+                        customer.needs_real_name_entry = True
+                        new_policy.customer_id = customer.id
 
         self.session.commit()
         self._record_carrier_profile_if_high_confidence(extraction_result, new_policy)
@@ -581,14 +593,26 @@ class PolicyService:
                         )
                         existing.customer_id = customer.id
                     else:
-                        full_name = owner_name_override or insured_name
-                        customer = resolver.create_customer(
-                            full_name=full_name,
-                            entity_name=insured_name,
-                            entity_type="business",
-                        )
-                        customer.needs_real_name_entry = True
-                        existing.customer_id = customer.id
+                        if owner_name_override:
+                            customer = resolver.create_customer(
+                                full_name=owner_name_override,
+                                entity_name=insured_name,
+                                entity_type="business",
+                            )
+                            customer.needs_real_name_entry = False
+                            for ent in customer.entities:
+                                if ent.is_primary:
+                                    ent.source = "manual"
+                                    break
+                            existing.customer_id = customer.id
+                        else:
+                            customer = resolver.create_customer(
+                                full_name=insured_name,
+                                entity_name=insured_name,
+                                entity_type="business",
+                            )
+                            customer.needs_real_name_entry = True
+                            existing.customer_id = customer.id
 
         update_type = self._classify_update(existing, new_policy)
         self.session.add(
