@@ -41,6 +41,9 @@ pytest tests/test_accuracy.py -v
 
 - `test_accuracy.py` is skipped if `GEMINI_API_KEY` is missing.
 - It compares extracted vs expected JSON, with selective normalization and key exclusions.
+- Carrier/underwriter assertions:
+  - Progressive fixtures treat `carrier_name` as brand (`Progressive`).
+  - `underwriter_name` is a critical field for Progressive fixtures.
 
 ## Test Data
 

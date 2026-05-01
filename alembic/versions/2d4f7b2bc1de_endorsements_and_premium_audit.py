@@ -1,7 +1,7 @@
 """endorsements and premium audit
 
 Revision ID: 2d4f7b2bc1de
-Revises: c3f2a1b8d9e0
+Revises: e3fada8b937e
 Create Date: 2026-04-30 10:05:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "2d4f7b2bc1de"
-down_revision: Union[str, None] = "c3f2a1b8d9e0"
+down_revision: Union[str, None] = "e3fada8b937e"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

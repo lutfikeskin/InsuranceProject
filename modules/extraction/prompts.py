@@ -85,6 +85,15 @@ def get_extract_all_prompt(
     declarations_block = """
     --- POLICY DECLARATIONS ---
     - Distinguish between Carrier (Risk Bearer) and Agency (Broker). Extract Carrier only.
+    - carrier_name: The brand name shown prominently on the document (e.g. "Progressive", "GEICO", "Allstate"). This is what the customer recognizes.
+    - underwriter_name: The legal underwriting entity, often shown in smaller text near declarations as "Underwritten by:" or in fine print.
+      Examples:
+      - Progressive commercial auto -> "United Financial Casualty Company"
+      - Progressive personal auto -> "Progressive Direct Insurance Company" (or similar Progressive subsidiary)
+      - GEICO commercial auto -> "GEICO Casualty Company" (or similar)
+    - If only one name appears, populate carrier_name with it and leave underwriter_name null.
+    - If both appear, populate both.
+    - Never invent an underwriter; return null if unsure.
     - naic_number: insurer NAIC from declarations/schedules only; do not use producer/agency license numbers.
     - effective_date / expiration_date: use YYYY-MM-DD when the document shows a full parseable date; otherwise use the string as printed.
     - premium: copy the grand total as printed (string); do not compute or invent totals.
@@ -102,6 +111,7 @@ def get_extract_all_prompt(
     - premium
     - insured_name
     - carrier_name
+    - underwriter_name
     Confidence scale:
     - high: value is clearly stated and unambiguous
     - medium: value is present but partial, abbreviated, or required interpretation
@@ -208,7 +218,16 @@ def get_extract_coi_prompt(
     --- POLICIES ARRAY ---
     - Extract every policy row shown in the certificate/memorandum.
     - For each policy include:
-      policy_type, carrier_name, naic_number, policy_number, effective_date, expiration_date, limits.
+      policy_type, carrier_name, underwriter_name, naic_number, policy_number, effective_date, expiration_date, limits.
+    - carrier_name: The brand name shown prominently on the document (e.g. "Progressive", "GEICO", "Allstate"). This is what the customer recognizes.
+    - underwriter_name: The legal underwriting entity, often shown in smaller text near declarations as "Underwritten by:" or in fine print.
+      Examples:
+      - Progressive commercial auto -> "United Financial Casualty Company"
+      - Progressive personal auto -> "Progressive Direct Insurance Company" (or similar Progressive subsidiary)
+      - GEICO commercial auto -> "GEICO Casualty Company" (or similar)
+    - If only one name appears, populate carrier_name with it and leave underwriter_name null.
+    - If both appear, populate both.
+    - Never invent an underwriter; return null if unsure.
     - For each critical policy field, include sibling confidence values:
       carrier_name_confidence, policy_number_confidence, effective_date_confidence, expiration_date_confidence, insured_name_confidence, premium_confidence.
     - For limits include liability_limit_confidence and cargo_limit_confidence.

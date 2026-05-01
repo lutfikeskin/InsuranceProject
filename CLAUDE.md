@@ -15,7 +15,7 @@
 - [x] Phase 11: Carrier Knowledge Base Bidirectional
 - [x] Phase 12: Golden Set Infrastructure
 - [x] Phase 13: Customer UI
-- [ ] Phase 14: Related Policies UI
+- [x] Phase 14: Related Policies UI
 - [ ] Phase 15: Documentation Updates
 
 ## Architecture Constraints (Do Not Violate)
@@ -26,6 +26,15 @@
 - One-shot extraction architecture in pipeline.py is preserved
 - Token efficiency is a hard constraint, not a nice-to-have
 - Extract only what is present; null for absent fields; never invent data
+
+## Verification Standard (Future Phases)
+
+Before merging or closing a phase, run this checklist:
+
+1. Run `pytest tests/ -v --ignore=tests/test_accuracy.py` — must be all green.
+2. Run `streamlit run app.py` — must start without errors.
+3. Click through main UI flows — must not crash.
+4. If accuracy tests are relevant for the change, run with `GEMINI_API_KEY` set — note pass count (e.g. `5/5`).
 
 ## Key Design Decisions
 

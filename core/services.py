@@ -846,6 +846,7 @@ class PolicyService:
             policy_payload = {
                 "policy": {
                     "carrier_name": merged_row.get("carrier_name"),
+                    "underwriter_name": merged_row.get("underwriter_name"),
                     "carrier_name_confidence": merged_row.get("carrier_name_confidence"),
                     "naic_number": merged_row.get("naic_number"),
                     "policy_number": policy_number,
@@ -1020,6 +1021,7 @@ class PolicyService:
             
         policy = Policy(
             carrier_name=data.get('carrier_name'),
+            underwriter_name=data.get('underwriter_name'),
             naic_number=data.get('naic_number'),
             policy_number=data.get('policy_number'),
             effective_date=effective_dt.date() if pd.notnull(effective_dt) else None,
@@ -1225,6 +1227,7 @@ class COIService:
         
         p_data = {
             "carrier_name": p.carrier_name, 
+            "underwriter_name": p.underwriter_name,
             "naic_number": current_naic,
             "policy_number": p.policy_number, 
             "effective_date": p.effective_date, 

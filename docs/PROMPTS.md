@@ -58,3 +58,16 @@ pytest tests/test_accuracy.py -v
 Notes:
 - `tests/test_accuracy.py` requires `GEMINI_API_KEY`.
 - Keep prompt and schema updates synchronized to avoid parser drift.
+
+## Carrier vs Underwriter Rule
+
+Prompt guidance now enforces a strict split:
+
+- `carrier_name`: customer-facing brand (for example Progressive, GEICO, Allstate)
+- `underwriter_name`: legal underwriting entity when present in fine print/declarations
+
+Extraction behavior:
+
+- If only one insurer name appears, populate `carrier_name` and keep `underwriter_name` null.
+- If both appear, populate both.
+- Never invent `underwriter_name` when uncertain.

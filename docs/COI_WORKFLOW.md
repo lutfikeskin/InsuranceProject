@@ -26,6 +26,11 @@ This document covers Certificate of Insurance generation flow.
 
 `COIService.prepare_coi_data(...)` provides helper defaults.
 
+ACORD insurer behavior:
+
+- UI still shows brand (`carrier_name`) as the primary user-facing insurer label.
+- COI insurer field uses legal entity first: `underwriter_name` fallback to `carrier_name`.
+
 ## Generation Mechanics
 
 `COIGenerator.generate_coi(...)`:

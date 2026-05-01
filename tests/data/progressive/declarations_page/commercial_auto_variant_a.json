@@ -12,7 +12,8 @@
     "known_issues": []
   },
   "policy": {
-    "carrier_name": "United Financial Casualty Company",
+    "carrier_name": "Progressive",
+    "underwriter_name": "United Financial Casualty Company",
     "carrier_name_confidence": "high",
     "naic_number": "null",
     "policy_number": "999152403",

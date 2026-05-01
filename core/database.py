@@ -49,6 +49,7 @@ class Policy(Base):
     id = Column(Integer, primary_key=True)
     customer_id = Column(Integer, ForeignKey('customers.id'), nullable=True)
     carrier_name = Column(String)
+    underwriter_name = Column(String, nullable=True)
     naic_number = Column(String)  # New
     policy_number = Column(String, unique=True, nullable=False)
     effective_date = Column(Date)
@@ -236,6 +237,9 @@ def init_db(db_name="insurance_data.db"):
         if "extraction_extras" not in policy_cols:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE policies ADD COLUMN extraction_extras TEXT"))
+        if "underwriter_name" not in policy_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE policies ADD COLUMN underwriter_name VARCHAR"))
         customer_cols = {c["name"] for c in insp.get_columns("customers")}
         with engine.begin() as conn:
             if "primary_email" not in customer_cols:

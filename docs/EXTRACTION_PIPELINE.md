@@ -58,6 +58,11 @@ The final extraction result includes:
 - `classification`
 - `page_dimensions`
 
+Carrier-related policy fields include:
+
+- `policy.carrier_name` (brand)
+- `policy.underwriter_name` (legal insurer when present)
+
 ## Error Handling
 
 - Initialization/upload/extraction failures return `(None, None, error_message)`.

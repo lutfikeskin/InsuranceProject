@@ -35,6 +35,8 @@ DECLARATIONS_SCHEMA = {
     "properties": {
         "carrier_name": {"type": "STRING"},
         "carrier_name_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
+        "underwriter_name": {"type": "STRING", "nullable": True},
+        "underwriter_name_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
         "naic_number": {"type": "STRING"},
         "policy_number": {"type": "STRING"},
         "policy_number_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
@@ -71,6 +73,7 @@ DECLARATIONS_SCHEMA = {
     },
     "required": [
         "carrier_name_confidence",
+        "underwriter_name_confidence",
         "policy_number_confidence",
         "effective_date_confidence",
         "expiration_date_confidence",
@@ -233,6 +236,32 @@ DRIVER_SCHEMA = {
     }
 }
 
+UNIVERSAL_SCOUT_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "premium_signals": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "label": {"type": "STRING"},
+                    "page": {"type": "INTEGER"},
+                },
+                "required": ["label", "page"],
+            },
+        },
+        "vehicle_schedule_signals": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+        "driver_schedule_signals": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+        "coverage_schedule_signals": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+    },
+    "required": [
+        "premium_signals",
+        "vehicle_schedule_signals",
+        "driver_schedule_signals",
+        "coverage_schedule_signals",
+    ],
+}
+
 
 
 
@@ -284,6 +313,7 @@ COI_SUMMARY_SCHEMA = {
                     "policy_type": {"type": "STRING"},
                     "carrier_name": {"type": "STRING"},
                     "carrier_name_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
+                    "underwriter_name": {"type": "STRING", "nullable": True},
                     "naic_number": {"type": "STRING"},
                     "policy_number": {"type": "STRING"},
                     "policy_number_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},

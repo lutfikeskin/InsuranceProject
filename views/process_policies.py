@@ -16,6 +16,21 @@ from streamlit_pdf_viewer import pdf_viewer
 
 MAX_PARALLEL_WORKERS = 3
 
+RELATIONSHIP_DISPLAY = {
+    "renewal": ("🔄", "Possible Renewal"),
+    "canceled_replaced": ("📋", "Possible Replacement"),
+    "rewrite": ("✏️", "Possible Rewrite"),
+    "same_customer_new_policy": ("👤", "Same Customer, New Policy"),
+}
+
+
+def _carrier_display(carrier_name: str | None, underwriter_name: str | None) -> str:
+    carrier = (carrier_name or "").strip()
+    underwriter = (underwriter_name or "").strip()
+    if underwriter and carrier and underwriter.lower() != carrier.lower():
+        return f"{carrier} ({underwriter})"
+    return carrier or underwriter or ""
+
 
 def _compute_parallel_workers(total_files: int) -> int:
     """
@@ -82,6 +97,89 @@ def _process_one_pdf(
         return fname, data, usage, error_msg, None
     except Exception as e:
         return fname, None, None, None, str(e)
+
+
+def render_related_policy(match, current_item, service):
+    existing = match.get("policy") or {}
+    rel_type = match.get("relationship_type")
+    confidence = float(match.get("score") or 0.0)
+    icon, label = RELATIONSHIP_DISPLAY.get(rel_type, ("🔗", "Related"))
+    existing_id = existing.get("id")
+
+    new_p = current_item["data"].get("policy", {})
+    expanded_default = confidence > 0.8
+    with st.expander(
+        f"{icon} {label} — `{existing.get('policy_number')}` "
+        f"({existing.get('insured_name')}) — "
+        f"{int(confidence * 100)}% match",
+        expanded=expanded_default,
+    ):
+        c1, c2 = st.columns(2)
+        c1.markdown(
+            f"**Existing**\n\n"
+            f"Number: `{existing.get('policy_number')}`\n\n"
+            f"Insured: {existing.get('insured_name')}\n\n"
+            f"Type: {existing.get('policy_type')}\n\n"
+            f"Effective: {existing.get('effective_date')}\n\n"
+            f"Expires: {existing.get('expiration_date')}\n\n"
+            f"Status: {existing.get('policy_status', 'unknown')}"
+        )
+        c2.markdown(
+            f"**Incoming**\n\n"
+            f"Number: `{new_p.get('policy_number')}`\n\n"
+            f"Insured: {new_p.get('insured_name')}\n\n"
+            f"Type: {current_item['data'].get('classification', {}).get('policy_type')}\n\n"
+            f"Effective: {new_p.get('effective_date')}\n\n"
+            f"Expires: {new_p.get('expiration_date')}"
+        )
+
+        st.divider()
+        b1, _, b3 = st.columns(3)
+
+        if rel_type == "renewal":
+            if b1.form_submit_button("🔄 Save as Renewal", key=f"act_renewal_{existing_id}"):
+                success, msg = service.save_with_relationship(
+                    current_item["data"], existing_id, "renewal"
+                )
+                if success:
+                    st.success("Saved as renewal")
+                    st.session_state["review_queue"].pop(0)
+                    st.rerun()
+                st.warning(msg)
+
+        elif rel_type in ("canceled_replaced", "rewrite"):
+            if b1.form_submit_button("📋 Save as Replacement", key=f"act_replace_{existing_id}"):
+                success, msg = service.save_with_relationship(
+                    current_item["data"], existing_id, rel_type
+                )
+                if success:
+                    st.success("Saved as replacement, old policy marked replaced")
+                    st.session_state["review_queue"].pop(0)
+                    st.rerun()
+                st.warning(msg)
+
+        elif rel_type == "same_customer_new_policy":
+            if b1.form_submit_button("👤 Link as Same Customer", key=f"act_link_{existing_id}"):
+                success, msg = service.save_with_relationship(
+                    current_item["data"], existing_id, "same_customer_new_policy"
+                )
+                if success:
+                    st.success("Saved and linked as same customer")
+                    st.session_state["review_queue"].pop(0)
+                    st.rerun()
+                st.warning(msg)
+
+        if b3.form_submit_button(
+            "Ignore",
+            key=f"act_ignore_{existing_id}",
+            help="Don't link, save as separate",
+        ):
+            current_item["data"]["_related_policy_candidates"] = [
+                m
+                for m in (current_item["data"].get("_related_policy_candidates") or [])
+                if (m.get("policy") or {}).get("id") != existing_id
+            ]
+            st.rerun()
 
 
 def page_process_policies(api_key):
@@ -464,6 +562,7 @@ def page_process_policies(api_key):
             col1, col2 = st.columns(2)
             with col1:
                 m_carrier = st.text_input("Carrier Name")
+                m_underwriter = st.text_input("Underwriter Name (Legal Entity)")
                 m_pol_num = st.text_input("Policy Number *")
                 m_naic = st.text_input("NAIC Code")
                 m_premium = st.text_input("Premium", value="$0.00")
@@ -516,6 +615,7 @@ def page_process_policies(api_key):
                         
                         policy_payload = {
                             "carrier_name": m_carrier,
+                            "underwriter_name": m_underwriter,
                             "naic_number": m_naic,
                             "policy_number": m_pol_num,
                             "effective_date": m_eff,
@@ -728,7 +828,11 @@ def page_process_policies(api_key):
                         {
                             "index": idx,
                             "policy_type": row.get("policy_type"),
-                            "carrier_name": row.get("carrier_name"),
+                            "carrier_name": _carrier_display(
+                                row.get("carrier_name"),
+                                row.get("underwriter_name"),
+                            ),
+                            "underwriter_name": row.get("underwriter_name"),
                             "policy_number": row.get("policy_number"),
                             "effective_date": row.get("effective_date"),
                             "expiration_date": row.get("expiration_date"),
@@ -747,6 +851,7 @@ def page_process_policies(api_key):
                     p = {
                         **p,
                         "carrier_name": selected_row.get("carrier_name"),
+                        "underwriter_name": selected_row.get("underwriter_name"),
                         "naic_number": selected_row.get("naic_number"),
                         "policy_number": selected_row.get("policy_number"),
                         "effective_date": selected_row.get("effective_date"),
@@ -807,7 +912,8 @@ def page_process_policies(api_key):
                 
                 locs = p.get('field_locations', [])
                 
-                r_carrier = c1.text_input(_confidence_label("Carrier", "carrier_name", confidence_map), value=p.get('carrier_name', ''), help=get_source_help("carrier_name", locs))
+                r_carrier = c1.text_input(_confidence_label("Carrier (Brand)", "carrier_name", confidence_map), value=p.get('carrier_name', ''), help=get_source_help("carrier_name", locs))
+                r_underwriter = c2.text_input("Underwriter (Legal Entity)", value=p.get("underwriter_name", ""))
                 r_pol_num = c2.text_input(_confidence_label("Policy Number", "policy_number", confidence_map), value=p.get('policy_number', ''), help=get_source_help("policy_number", locs))
                 
                 cc1, cc2 = st.columns(2)
@@ -1022,7 +1128,7 @@ def page_process_policies(api_key):
                                     icon = "✅" if (op.policy_status or "") == "active" else "⏰"
                                     st.markdown(
                                         f"{icon} `{op.policy_number}` {op.policy_type} "
-                                        f"— {op.carrier_name}"
+                                        f"— {_carrier_display(op.carrier_name, getattr(op, 'underwriter_name', None))}"
                                     )
                     elif suggestion and suggestion.get("customer_id"):
                         customer = customer_session.query(Customer).get(suggestion["customer_id"])
@@ -1057,6 +1163,19 @@ def page_process_policies(api_key):
                 finally:
                     customer_session.close()
 
+                related = (current_item["data"].get("_related_policy_candidates") or [])[:3]
+                if related:
+                    st.divider()
+                    st.subheader("🔗 Potential Related Policies")
+                    st.caption("Found existing policies that may be related to this one.")
+                    relationship_session = get_session(st.session_state.db_engine)
+                    relationship_service = PolicyService(relationship_session)
+                    try:
+                        for match in related:
+                            render_related_policy(match, current_item, relationship_service)
+                    finally:
+                        relationship_session.close()
+
                 st.divider()
                 
                 b_col_warn = st.container()
@@ -1074,12 +1193,13 @@ def page_process_policies(api_key):
                         if existing:
                             b_col_warn.warning(
                                 f"⚡ **Duplicate Detected:** Policy `{r_pol_num}` already exists "
-                                f"(Insured: {existing.insured_name}, Carrier: {existing.carrier_name}). "
+                                f"(Insured: {existing.insured_name}, Carrier: {_carrier_display(existing.carrier_name, getattr(existing, 'underwriter_name', None))}). "
                                 f"Saving will **update** the existing record."
                             )
                         
                         policy_payload = {
                             "carrier_name": r_carrier,
+                            "underwriter_name": r_underwriter,
                             "naic_number": r_naic,
                             "policy_number": r_pol_num,
                             "effective_date": r_eff, # Factory handles parsing

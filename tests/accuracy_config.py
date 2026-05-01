@@ -8,7 +8,7 @@ CARRIER_FIELD_WEIGHTS = {
             "insured_name",
             "liability_limit",
         ],
-        "variable": ["drivers", "vehicles", "coverages"],
+        "variable": ["drivers", "vehicles", "coverages", "underwriter_name"],
         "skip": [],
     },
     "progressive": {
@@ -18,6 +18,7 @@ CARRIER_FIELD_WEIGHTS = {
             "expiration_date",
             "liability_limit",
             "carrier_name",
+            "underwriter_name",
             "insured_name",
         ],
         "variable": ["drivers", "vehicles"],

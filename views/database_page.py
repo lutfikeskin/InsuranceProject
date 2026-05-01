@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import date
 from sqlalchemy import or_
 from core.services import PolicyService
-from core.database import Customer, CustomerEntity, get_session
+from core.database import Customer, CustomerEntity, Policy, PolicyRelationship, get_session
 from core.customer_resolver import CustomerResolver
 from utils.exporter import create_excel_report
 
@@ -12,6 +12,20 @@ from core.constants import POLICY_SEARCH_PAGE_LIMIT, POLICY_DELETE_CANDIDATE_LIM
 
 
 CUSTOMER_PAGE_SIZE = 25
+RELATIONSHIP_DISPLAY = {
+    "renewal": ("🔄", "Possible Renewal"),
+    "canceled_replaced": ("📋", "Possible Replacement"),
+    "rewrite": ("✏️", "Possible Rewrite"),
+    "same_customer_new_policy": ("👤", "Same Customer, New Policy"),
+}
+
+
+def _carrier_display(carrier_name: str | None, underwriter_name: str | None) -> str:
+    carrier = (carrier_name or "").strip()
+    underwriter = (underwriter_name or "").strip()
+    if underwriter and carrier and underwriter.lower() != carrier.lower():
+        return f"{carrier} ({underwriter})"
+    return carrier or underwriter or "Unknown Carrier"
 
 
 def render_customer_row(customer, session):
@@ -66,7 +80,7 @@ def render_customer_row(customer, session):
                 c1, c2 = st.columns([3, 2])
                 c1.markdown(
                     f"`{p.policy_number}` — {p.policy_type or 'unknown'} — "
-                    f"{p.carrier_name or 'Unknown Carrier'}"
+                    f"{_carrier_display(p.carrier_name, getattr(p, 'underwriter_name', None))}"
                 )
                 c2.markdown(f"{p.effective_date} → {p.expiration_date}")
 
@@ -134,6 +148,33 @@ def render_customers_view(session):
 
     for customer in customers:
         render_customer_row(customer, session)
+
+
+def render_related_section(policy, session):
+    relationships = (
+        session.query(PolicyRelationship)
+        .filter(
+            or_(
+                PolicyRelationship.policy_id == policy.id,
+                PolicyRelationship.related_policy_id == policy.id,
+            )
+        )
+        .all()
+    )
+    if not relationships:
+        return
+
+    st.markdown("#### Related Policies")
+    for rel in relationships:
+        other_id = rel.related_policy_id if rel.policy_id == policy.id else rel.policy_id
+        other = session.query(Policy).get(other_id)
+        if not other:
+            continue
+        icon = RELATIONSHIP_DISPLAY.get(rel.relationship_type, ("🔗", "Related"))[0]
+        st.markdown(
+            f"{icon} `{other.policy_number}` "
+            f"({rel.relationship_type}, {rel.confidence})"
+        )
 
 
 def _render_policies_tab(api_key):
@@ -272,6 +313,7 @@ def _render_policies_tab(api_key):
             completeness = PolicyService.compute_completeness_score(
                 {
                     "carrier_name": p.carrier_name,
+                    "underwriter_name": p.underwriter_name,
                     "policy_number": p.policy_number,
                     "effective_date": str(p.effective_date) if p.effective_date else None,
                     "expiration_date": str(p.expiration_date) if p.expiration_date else None,
@@ -305,7 +347,8 @@ def _render_policies_tab(api_key):
                 "Status": status_display,
                 "StatusText": status_text,
                 "Policy#": p.policy_number,
-                "Carrier": p.carrier_name,
+                "Carrier": _carrier_display(p.carrier_name, p.underwriter_name),
+                "Underwriter": p.underwriter_name,
                 "NAIC": p.naic_number,
                 "Insured": p.insured_name,
                 "Business Name": p.business_name,
@@ -339,6 +382,7 @@ def _render_policies_tab(api_key):
             dict_data = {
                 "policy": {
                     "carrier_name": p.carrier_name,
+                    "underwriter_name": p.underwriter_name,
                     "naic_number": p.naic_number,
                     "policy_number": p.policy_number,
                     "effective_date": str(p.effective_date),
@@ -526,6 +570,7 @@ def _render_policies_tab(api_key):
                         st.dataframe(pd.DataFrame(end_rows), hide_index=True, use_container_width=True)
                     else:
                         st.caption("No endorsements linked to this policy yet.")
+                    render_related_section(target_pol, session)
             else:
                 st.button("✏️ Select a policy above to edit", disabled=True, width="stretch")
 

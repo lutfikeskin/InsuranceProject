@@ -1,7 +1,7 @@
 """add premium_audit_flag
 
 Revision ID: b9a1c3d4e5f6
-Revises: 4b8a6d2f1c30
+Revises: 7c1a9d5e4b2f
 Create Date: 2026-04-30 20:23:00.000000
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "b9a1c3d4e5f6"
-down_revision: Union[str, Sequence[str], None] = "4b8a6d2f1c30"
+down_revision: Union[str, Sequence[str], None] = "7c1a9d5e4b2f"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
