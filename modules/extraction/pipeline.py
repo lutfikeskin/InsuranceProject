@@ -1,3 +1,4 @@
+import re
 from google import genai
 from google.genai import types
 from typing import Optional
@@ -125,21 +126,41 @@ class GeminiExtractionPipeline:
                     )
                     logger.info("Skipping cache create (small/non-cacheable document).")
 
+            doc_type_hint = self._infer_document_type_hint(processor)
+            policy_type_hint = self._infer_policy_type_hint(processor)
+
             if user_policy_type:
-                # When the user manually pinned a policy_type they have already
-                # reviewed the document, so skip the standalone classifier round
-                # trip. The combined extraction call still emits its own
-                # classification block and overwrites this stub below.
+                # User manually pinned policy_type; trust the regex doc_type
+                # hint when present so misuploaded COIs/endorsements still
+                # route correctly. Default to declarations_page otherwise.
+                detected_doc = doc_type_hint or "declarations_page"
                 ctx.classification = {
-                    "document_type": "declarations_page",
+                    "document_type": detected_doc,
                     "policy_type": user_policy_type,
                     "confidence": "high",
-                    "signals": ["user_selected"],
+                    "signals": ["user_selected"]
+                    + ([f"text_hint:{doc_type_hint}"] if doc_type_hint else []),
                 }
                 scoped_policy_type = user_policy_type
                 logger.info(
                     "User-selected policy type: "
-                    f"{user_policy_type}; classifier skipped (assumed declarations_page)"
+                    f"{user_policy_type}; classifier skipped "
+                    f"(document_type={detected_doc}, source={'text_hint' if doc_type_hint else 'default'})"
+                )
+            elif doc_type_hint and policy_type_hint:
+                # Auto mode but both regex hints are confident; skip the
+                # standalone LLM classifier. Combined extraction call still
+                # emits its own classification block and may refine these.
+                ctx.classification = {
+                    "document_type": doc_type_hint,
+                    "policy_type": policy_type_hint,
+                    "confidence": "high",
+                    "signals": ["text_hint"],
+                }
+                scoped_policy_type = policy_type_hint
+                logger.info(
+                    "Classifier skipped via text hints: "
+                    f"document_type={doc_type_hint}, policy_type={policy_type_hint}"
                 )
             else:
                 if status_callback:
@@ -151,16 +172,15 @@ class GeminiExtractionPipeline:
                     f"Routing classification: {ctx.policy_type} ({ctx.confidence})"
                 )
 
-                policy_hint = self._infer_policy_type_hint(processor)
                 scoped_policy_type = None
                 if ctx.policy_type != "unknown" and ctx.confidence in {"high", "medium"}:
                     scoped_policy_type = ctx.policy_type
-                elif policy_hint in {"personal_auto", "commercial_auto"}:
-                    scoped_policy_type = policy_hint
-                elif policy_hint in {"general_liability", "bop"} and (
+                elif policy_type_hint in {"personal_auto", "commercial_auto"}:
+                    scoped_policy_type = policy_type_hint
+                elif policy_type_hint in {"general_liability", "bop"} and (
                     ctx.policy_type == "unknown" or ctx.confidence == "low"
                 ):
-                    scoped_policy_type = policy_hint
+                    scoped_policy_type = policy_type_hint
 
             doc_type = ctx.classification.get("document_type", "unknown")
             doc_meta = DOCUMENT_TYPES.get(doc_type, DOCUMENT_TYPES["unknown"])
@@ -387,7 +407,11 @@ class GeminiExtractionPipeline:
             return "commercial_auto"
         if "cargo" in text:
             return "commercial_auto"
-        if "personal auto" in text or "personal automobile" in text:
+        if (
+            "personal auto" in text
+            or "personal automobile" in text
+            or "private passenger auto" in text
+        ):
             return "personal_auto"
         if (
             "general liability coverage part" in text
@@ -408,6 +432,76 @@ class GeminiExtractionPipeline:
             return "umbrella"
         if "cargo" in text and "auto" in text:
             return "commercial_auto"
+        if "your car" in text and (
+            "automobile policy" in text or "automobile insurance" in text
+        ):
+            return "personal_auto"
+        return None
+
+    _ENDORSEMENT_FORM_RE = re.compile(
+        r"\b(ca|cg|cp|bp|il|gl|um|ue|ur|mp|ho)\s*\d{2}\s*\d{2}\b"
+    )
+
+    def _infer_document_type_hint(self, processor: PdfProcessor) -> Optional[str]:
+        """
+        Deterministic pre-pass: infer document_type from early-page text.
+
+        Returns one of declarations_page, renewal_declarations,
+        certificate_of_insurance, memorandum, endorsement, quote, application,
+        or None when ambiguous (multiple competing signals).
+        Conservative: only returns a value when the cue is unambiguous.
+        """
+        text = processor.extract_text([0, 1]).lower()
+        if not text:
+            return None
+
+        matches: list[str] = []
+
+        if "memorandum of insurance" in text:
+            matches.append("memorandum")
+        if (
+            "this certificate is issued as a matter of information" in text
+            or "certificate of liability insurance" in text
+            or ("acord" in text and re.search(r"\bacord\s*25\b", text))
+            or "certificate holder" in text
+        ):
+            matches.append("certificate_of_insurance")
+        if (
+            "this is not a binder" in text
+            or "this is a quote" in text
+            or "quotation" in text
+            or "indication of coverage" in text
+        ):
+            matches.append("quote")
+        if "application for insurance" in text or "applicant signature" in text:
+            matches.append("application")
+
+        has_dec_marker = (
+            "declarations page" in text
+            or "policy declarations" in text
+            or "automobile policy declarations" in text
+            or "auto policy declarations" in text
+        )
+        has_renewal_marker = "renewal" in text and has_dec_marker
+        has_endorsement_marker = bool(
+            "endorsement" in text and self._ENDORSEMENT_FORM_RE.search(text)
+        )
+
+        if has_renewal_marker:
+            matches.append("renewal_declarations")
+        elif has_dec_marker:
+            matches.append("declarations_page")
+
+        if has_endorsement_marker and not has_dec_marker:
+            matches.append("endorsement")
+
+        matches = list(dict.fromkeys(matches))
+        if not matches:
+            return None
+        if len(matches) == 1:
+            return matches[0]
+        if set(matches) == {"declarations_page", "renewal_declarations"}:
+            return "renewal_declarations"
         return None
 
     def _classify_policy(self, uploaded_file) -> dict:

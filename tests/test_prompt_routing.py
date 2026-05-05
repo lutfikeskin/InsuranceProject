@@ -1,5 +1,74 @@
+from types import SimpleNamespace
+
 from modules.extraction.pipeline import GeminiExtractionPipeline
 from modules.extraction.prompts import get_extract_all_prompt, get_extract_coi_prompt
+
+
+class _StubProcessor:
+    def __init__(self, text: str):
+        self._text = text
+
+    def extract_text(self, _pages):
+        return self._text
+
+
+def _hints(text: str):
+    pipe = GeminiExtractionPipeline.__new__(GeminiExtractionPipeline)
+    proc = _StubProcessor(text)
+    return (
+        pipe._infer_document_type_hint(proc),
+        pipe._infer_policy_type_hint(proc),
+    )
+
+
+def test_doc_type_hint_detects_state_farm_personal_auto_dec_page():
+    text = (
+        "STATE FARM AUTOMOBILE INSURANCE COMPANY\n"
+        "DECLARATIONS PAGE\n"
+        "Policy Number 483 3497-E30-53F\n"
+        "YOUR CAR\n"
+        "Bodily Injury Liability Limits 50/100\n"
+    )
+    doc, policy = _hints(text)
+    assert doc == "declarations_page"
+    assert policy == "personal_auto"
+
+
+def test_doc_type_hint_detects_acord_coi():
+    text = (
+        "ACORD 25 (2016/03)\n"
+        "CERTIFICATE OF LIABILITY INSURANCE\n"
+        "this certificate is issued as a matter of information only\n"
+        "Certificate Holder XYZ Trucking\n"
+    )
+    doc, _policy = _hints(text)
+    assert doc == "certificate_of_insurance"
+
+
+def test_doc_type_hint_detects_endorsement_form_number():
+    text = (
+        "ENDORSEMENT\n"
+        "This endorsement modifies insurance provided under the policy.\n"
+        "Form CA 99 10 03 06 — Drive Other Car Coverage\n"
+    )
+    doc, _policy = _hints(text)
+    assert doc == "endorsement"
+
+
+def test_doc_type_hint_returns_none_when_ambiguous():
+    text = "some random insurance document"
+    doc, _policy = _hints(text)
+    assert doc is None
+
+
+def test_doc_type_hint_renewal_wins_over_dec_when_both_present():
+    text = (
+        "Renewal Declarations\n"
+        "Policy Declarations\n"
+        "Effective 2026-01-01\n"
+    )
+    doc, _policy = _hints(text)
+    assert doc == "renewal_declarations"
 
 
 def test_manual_policy_type_preserves_detected_document_type():
