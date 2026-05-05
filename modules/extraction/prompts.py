@@ -79,6 +79,8 @@ def get_extract_all_prompt(
     unreliable_fields: Optional[list[str]] = None,
 ) -> str:
     prompt_policy_type = user_policy_type or scoped_policy_type or "unknown"
+    is_personal_auto = prompt_policy_type == "personal_auto"
+
     if user_policy_type:
         classification_block = f"""
     --- CLASSIFICATION ---
@@ -114,18 +116,32 @@ def get_extract_all_prompt(
     - Fields: Carrier Name, NAIC, Policy #, Effective/Expiration Dates, Insured Name, Address, City, State, Zip, Business Name, Premium (GRAND TOTAL).
     """
 
-    confidence_block = """
+    if is_personal_auto:
+        confidence_fields = (
+            "    - policy_number\n"
+            "    - effective_date\n"
+            "    - expiration_date\n"
+            "    - premium\n"
+            "    - insured_name\n"
+            "    - carrier_name\n"
+            "    - underwriter_name"
+        )
+    else:
+        confidence_fields = (
+            "    - policy_number\n"
+            "    - effective_date\n"
+            "    - expiration_date\n"
+            "    - liability_limit\n"
+            "    - cargo_limit\n"
+            "    - premium\n"
+            "    - insured_name\n"
+            "    - carrier_name\n"
+            "    - underwriter_name"
+        )
+    confidence_block = f"""
     --- FIELD CONFIDENCE ---
     For each critical field below, also return a sibling <fieldname>_confidence value:
-    - policy_number
-    - effective_date
-    - expiration_date
-    - liability_limit
-    - cargo_limit
-    - premium
-    - insured_name
-    - carrier_name
-    - underwriter_name
+{confidence_fields}
     Confidence scale:
     - high: value is clearly stated and unambiguous
     - medium: value is present but partial, abbreviated, or required interpretation
@@ -145,27 +161,40 @@ def get_extract_all_prompt(
 
     policy_scope_block = _get_policy_scope_block(prompt_policy_type)
 
+    coverage_block = f"""
+    --- COVERAGE MAPPING ---
+    - Map every visible coverage to a valid coverage_code from the registry below.
+    - If a row says Included/Yes without a numeric limit, keep limits null; do not invent dollar amounts.
+    - On personal auto, "Uninsured/Underinsured Motorists Bodily Injury" maps to UM_BI (not UIM_BI) unless the document explicitly separates UIM as its own coverage line.
+    - REGISTRY: {registry_text}
+    """
+
+    if is_personal_auto:
+        compliance_block = ""
+        output_keys = "classification, policy, coverages, vehicles, drivers"
+        compliance_note = ""
+    else:
+        compliance_block = """
+    --- COMPLIANCE (optional) ---
+    - If MCS-90, MC #, USDOT, or Drive Other Car (e.g. CA 99 10) is visible, set compliance and/or policy motor_carrier_id / mcs90_noted / drive_other_car_note. For multiple DOC individuals/forms, set compliance.doc_endorsements as a list of { "form_id", "named_individuals" }.
+    """
+        output_keys = "classification, policy, compliance, coverages, vehicles, drivers"
+        compliance_note = '\n    Use "compliance": {} if nothing applies.'
+
     core = GLOBAL_EXTRACTION_PRINCIPLES + f"""
     You are an expert insurance underwriter and data extraction specialist.
     Extract the COMPLETE policy information from the provided document in a single pass.
     {classification_block}
     {NULL_HANDLING_RULE}
     {declarations_block}
+    {policy_scope_block}
+    {coverage_block}
     {confidence_block}
     {unreliable_block}
-    {policy_scope_block}
-
-    --- COVERAGE MAPPING ---
-    - Map every visible coverage to a valid coverage_code from the registry below.
-    - If a row says Included/Yes without a numeric limit, keep limits null; do not invent dollar amounts.
-    - REGISTRY: {registry_text}
-
-    --- COMPLIANCE (optional) ---
-    - If MCS-90, MC #, USDOT, or Drive Other Car (e.g. CA 99 10) is visible, set compliance and/or policy motor_carrier_id / mcs90_noted / drive_other_car_note. For multiple DOC individuals/forms, set compliance.doc_endorsements as a list of {{ "form_id", "named_individuals" }}.
+    {compliance_block}
 
     OUTPUT: Return a single JSON object with exactly these top-level keys:
-    classification, policy, compliance, coverages, vehicles, drivers
-    Use "compliance": {{}} if nothing applies.
+    {output_keys}{compliance_note}
     """
     suffix = (carrier_hints_suffix or "").strip()
     if suffix:

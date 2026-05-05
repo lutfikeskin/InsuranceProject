@@ -9,6 +9,7 @@ from core.logger import logger
 from .schemas import (
     CLASSIFICATION_SCHEMA,
     COMPLETE_POLICY_SCHEMA,
+    PERSONAL_AUTO_POLICY_SCHEMA,
     COI_SUMMARY_SCHEMA,
     ENDORSEMENT_SCHEMA,
 )
@@ -39,6 +40,7 @@ def _compute_cache_version() -> str:
         + get_extract_endorsement_prompt()
         + full_prompt_variants
         + json.dumps(COMPLETE_POLICY_SCHEMA, sort_keys=True)
+        + json.dumps(PERSONAL_AUTO_POLICY_SCHEMA, sort_keys=True)
         + json.dumps(COI_SUMMARY_SCHEMA, sort_keys=True)
         + json.dumps(ENDORSEMENT_SCHEMA, sort_keys=True)
     )

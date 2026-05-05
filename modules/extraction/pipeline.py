@@ -37,6 +37,7 @@ from .schemas import (
     COMPLETE_POLICY_SCHEMA,
     COI_SUMMARY_SCHEMA,
     ENDORSEMENT_SCHEMA,
+    build_complete_policy_schema,
 )
 from .prompts import (
     CLASSIFY_POLICY_PROMPT,
@@ -125,19 +126,20 @@ class GeminiExtractionPipeline:
                     logger.info("Skipping cache create (small/non-cacheable document).")
 
             if user_policy_type:
-                if status_callback:
-                    status_callback(" Classifying document type...")
-                route_classification = self._classify_policy_input(
-                    active_cache, uploaded_file
-                )
-                ctx.classification = self._classification_with_user_policy_type(
-                    route_classification,
-                    user_policy_type,
-                )
+                # When the user manually pinned a policy_type they have already
+                # reviewed the document, so skip the standalone classifier round
+                # trip. The combined extraction call still emits its own
+                # classification block and overwrites this stub below.
+                ctx.classification = {
+                    "document_type": "declarations_page",
+                    "policy_type": user_policy_type,
+                    "confidence": "high",
+                    "signals": ["user_selected"],
+                }
                 scoped_policy_type = user_policy_type
                 logger.info(
                     "User-selected policy type: "
-                    f"{user_policy_type}; document_type={ctx.classification.get('document_type', 'unknown')}"
+                    f"{user_policy_type}; classifier skipped (assumed declarations_page)"
                 )
             else:
                 if status_callback:
@@ -481,7 +483,7 @@ class GeminiExtractionPipeline:
         )
         config = types.GenerateContentConfig(
             response_mime_type="application/json",
-            response_schema=COMPLETE_POLICY_SCHEMA,
+            response_schema=build_complete_policy_schema(scoped_policy_type),
             thinking_config=types.ThinkingConfig(thinking_budget=0),
         )
         contents = [prompt]

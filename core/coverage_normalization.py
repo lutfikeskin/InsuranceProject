@@ -262,43 +262,35 @@ def merge_autoliability_split_rows(
     coverages: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """
-    Merge split BI/PD auto liability rows into a single canonical row.
+    Pair split BI/PD auto liability rows for downstream summary helpers.
+
+    AUTO_LIAB_BI's registry only allows per_person/per_accident, so we cannot
+    fold PD's per_occurrence into BI's limits without failing validation.
+    Both rows are preserved; summarize_auto_liability reads them independently.
+    Audit notes record that a paired BI+PD was detected.
 
     Contract:
     - Input: list of coverage rows.
-    - Output: `(merged_coverages, audit_notes)`.
-    - Keeps deterministic order and records merge notes for extraction audit.
+    - Output: `(coverages, audit_notes)` with order preserved.
     """
-    merged: list[dict[str, Any]] = []
     notes: list[str] = []
-    bi_rows: dict[tuple[Any, Any, Any], dict[str, Any]] = {}
-
+    bi_keys: set[tuple[Any, Any, Any]] = set()
+    for cov in coverages or []:
+        if isinstance(cov, dict) and cov.get("coverage_code") == "AUTO_LIAB_BI":
+            bi_keys.add(
+                (cov.get("vehicle_vin"), cov.get("hnoa_basis"), cov.get("hnoa_attached_to"))
+            )
     for cov in coverages or []:
         if not isinstance(cov, dict):
             continue
-        code = cov.get("coverage_code")
+        if cov.get("coverage_code") != "AUTO_LIAB_PD":
+            continue
         key = (cov.get("vehicle_vin"), cov.get("hnoa_basis"), cov.get("hnoa_attached_to"))
-
-        if code == "AUTO_LIAB_BI":
-            bi_rows[key] = cov
-            merged.append(cov)
-            continue
-
-        if code == "AUTO_LIAB_PD" and key in bi_rows:
-            bi = bi_rows[key]
-            bi_limits = dict(bi.get("limits") or {})
-            pd_limits = dict(cov.get("limits") or {})
-            if pd_limits.get("per_occurrence") and not bi_limits.get("per_occurrence"):
-                bi_limits["per_occurrence"] = pd_limits.get("per_occurrence")
-                bi["limits"] = bi_limits
+        if key in bi_keys:
             notes.append(
-                f"Merged AUTO_LIAB_PD into AUTO_LIAB_BI for vin={key[0] or 'all'}"
+                f"Paired AUTO_LIAB_BI + AUTO_LIAB_PD for vin={key[0] or 'all'}"
             )
-            continue
-
-        merged.append(cov)
-
-    return merged, notes
+    return list(coverages or []), notes
 
 
 def effective_stacked_um_limit(c: dict[str, Any]) -> Optional[int]:

@@ -1,3 +1,5 @@
+from typing import Optional
+
 
 CLASSIFICATION_SCHEMA = {
     "type": "OBJECT",
@@ -29,78 +31,104 @@ CLASSIFICATION_SCHEMA = {
 }
 
 
+_CONF = {"type": "STRING", "enum": ["high", "medium", "low"]}
+
+
+def _nstr(description: Optional[str] = None) -> dict:
+    """Optional string field. Gemini emits real JSON null instead of the literal "null"."""
+    schema = {"type": "STRING", "nullable": True}
+    if description:
+        schema["description"] = description
+    return schema
+
+
+def _nint() -> dict:
+    return {"type": "INTEGER", "nullable": True}
+
+
+def _nbool() -> dict:
+    return {"type": "BOOLEAN", "nullable": True}
+
+
+# Declarations fields shared by all policy types.
+_BASE_DECLARATIONS_FIELDS = {
+    "carrier_name": _nstr(),
+    "carrier_name_confidence": _CONF,
+    "underwriter_name": _nstr(),
+    "underwriter_name_confidence": _CONF,
+    "naic_number": _nstr(),
+    "policy_number": _nstr(),
+    "policy_number_confidence": _CONF,
+    "effective_date": _nstr(),
+    "effective_date_confidence": _CONF,
+    "expiration_date": _nstr(),
+    "expiration_date_confidence": _CONF,
+    "account_type": _nstr(),
+    "insured_name": _nstr(),
+    "insured_name_confidence": _CONF,
+    "insured_address": _nstr(),
+    "insured_city": _nstr(),
+    "insured_state_code": _nstr(),
+    "insured_zip": _nstr(),
+    "business_name": _nstr(),
+    "premium": _nstr(),
+    "premium_confidence": _CONF,
+    "financial_responsibility_name": _nstr(),
+    "state": _nstr(),
+}
+
+_BASE_DECLARATIONS_REQUIRED = [
+    "carrier_name_confidence",
+    "underwriter_name_confidence",
+    "policy_number_confidence",
+    "effective_date_confidence",
+    "expiration_date_confidence",
+    "premium_confidence",
+    "insured_name_confidence",
+]
+
+# Fields only relevant to commercial-line policies. Excluded from personal auto schema.
+_COMMERCIAL_DECLARATIONS_EXTRAS = {
+    "liability_limit": _nstr(),
+    "liability_limit_confidence": _CONF,
+    "cargo_limit": _nstr(),
+    "cargo_limit_confidence": _CONF,
+    "mcs90_noted": _nstr("yes if MCS-90 endorsement mentioned; else null."),
+    "motor_carrier_id": _nstr("MC number if shown."),
+    "dot_number": _nstr(),
+    "drive_other_car_note": _nstr("DOC / CA 99 10: named individuals if present."),
+}
 
 DECLARATIONS_SCHEMA = {
     "type": "OBJECT",
-    "properties": {
-        "carrier_name": {"type": "STRING"},
-        "carrier_name_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
-        "underwriter_name": {"type": "STRING", "nullable": True},
-        "underwriter_name_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
-        "naic_number": {"type": "STRING"},
-        "policy_number": {"type": "STRING"},
-        "policy_number_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
-        "effective_date": {"type": "STRING"},
-        "effective_date_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
-        "expiration_date": {"type": "STRING"},
-        "expiration_date_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
-        "account_type": {"type": "STRING"},
-        "insured_name": {"type": "STRING"},
-        "insured_name_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
-        "insured_address": {"type": "STRING"},
-        "insured_city": {"type": "STRING"},
-        "insured_state_code": {"type": "STRING"},
-        "insured_zip": {"type": "STRING"},
-        "business_name": {"type": "STRING"},
-        "premium": {"type": "STRING"},
-        "premium_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
-        "financial_responsibility_name": {"type": "STRING"},
-        "state": {"type": "STRING"},
-        "liability_limit": {"type": "STRING"},
-        "liability_limit_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
-        "cargo_limit": {"type": "STRING"},
-        "cargo_limit_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
-        "mcs90_noted": {
-            "type": "STRING",
-            "description": "yes if MCS-90 endorsement mentioned; else null."
-        },
-        "motor_carrier_id": {"type": "STRING", "description": "MC number if shown."},
-        "dot_number": {"type": "STRING"},
-        "drive_other_car_note": {
-            "type": "STRING",
-            "description": "DOC / CA 99 10: named individuals if present."
-        }
-    },
-    "required": [
-        "carrier_name_confidence",
-        "underwriter_name_confidence",
-        "policy_number_confidence",
-        "effective_date_confidence",
-        "expiration_date_confidence",
+    "properties": {**_BASE_DECLARATIONS_FIELDS, **_COMMERCIAL_DECLARATIONS_EXTRAS},
+    "required": _BASE_DECLARATIONS_REQUIRED + [
         "liability_limit_confidence",
         "cargo_limit_confidence",
-        "premium_confidence",
-        "insured_name_confidence",
     ],
 }
+
+PERSONAL_AUTO_DECLARATIONS_SCHEMA = {
+    "type": "OBJECT",
+    "properties": dict(_BASE_DECLARATIONS_FIELDS),
+    "required": list(_BASE_DECLARATIONS_REQUIRED),
+}
+
 
 COMPLIANCE_SCHEMA = {
     "type": "OBJECT",
     "properties": {
-        "mcs90_noted": {"type": "STRING"},
-        "motor_carrier_id": {"type": "STRING"},
-        "dot_number": {"type": "STRING"},
-        "doc_endorsement_text": {
-            "type": "STRING",
-            "description": "Drive Other Car or similar endorsement summary."
-        },
+        "mcs90_noted": _nstr(),
+        "motor_carrier_id": _nstr(),
+        "dot_number": _nstr(),
+        "doc_endorsement_text": _nstr("Drive Other Car or similar endorsement summary."),
         "doc_endorsements": {
             "type": "ARRAY",
             "description": "Structured CA 99 10 or similar: form id and named individuals.",
             "items": {
                 "type": "OBJECT",
                 "properties": {
-                    "form_id": {"type": "STRING"},
+                    "form_id": _nstr(),
                     "named_individuals": {
                         "type": "ARRAY",
                         "items": {"type": "STRING"},
@@ -111,6 +139,45 @@ COMPLIANCE_SCHEMA = {
     }
 }
 
+
+_LIMIT_STRUCTURE_ENUM = ["csl", "split", "per_occurrence", "aggregate", "deductible_only", "scheduled"]
+_FAMILY_ENUM = [
+    "auto_liability", "uninsured_motorist", "underinsured_motorist",
+    "physical_damage", "general_liability", "cargo",
+    "medical_payments", "pip", "other"
+]
+
+_BASE_COVERAGE_ITEM_PROPS = {
+    "coverage_code": _nstr("Must be one of the explicitly allowed registry codes."),
+    "display_name": _nstr(),
+    "family": {"type": "STRING", "enum": _FAMILY_ENUM, "nullable": True},
+    "limit_structure": {"type": "STRING", "enum": _LIMIT_STRUCTURE_ENUM, "nullable": True},
+    "limits": {
+        "type": "OBJECT",
+        "properties": {
+            "per_person": _nint(),
+            "per_accident": _nint(),
+            "per_occurrence": _nint(),
+            "combined_single_limit": _nint(),
+            "aggregate": _nint(),
+        }
+    },
+    "deductible": _nint(),
+    "vehicle_vin": _nstr("If coverage applies to a specific vehicle/unit, provide the VIN here. Otherwise null."),
+}
+
+_COMMERCIAL_COVERAGE_EXTRAS = {
+    "limit_descriptor": _nstr("If limits are Statutory/Minimum/Unlimited, set this instead of fabricating numbers."),
+    "is_stacked": _nbool(),
+    "stacked_vehicle_count": _nint(),
+    "hnoa_basis": _nstr("Hired/Non-Owned: primary or excess if stated."),
+    "hnoa_attached_to": _nstr("bap or gl if the document states which policy the endorsement attaches to."),
+    "full_glass_waiver": _nbool(),
+    "deductible_scope": _nstr("per_vehicle or per_occurrence for physical damage if stated."),
+    "fl_pip_tier": _nstr("Florida PIP: basic, extended, or additional if stated."),
+    "valuation_method": _nstr("ACV, replacement cost, or stated amount for physical damage if shown."),
+}
+
 COVERAGE_SCHEMA = {
     "type": "OBJECT",
     "properties": {
@@ -118,70 +185,42 @@ COVERAGE_SCHEMA = {
             "type": "ARRAY",
             "items": {
                 "type": "OBJECT",
-                "properties": {
-                    "coverage_code": {
-                        "type": "STRING", 
-                        "description": "Must be one of the explicitly allowed registry codes."
-                    },
-                    "display_name": {"type": "STRING"},
-                    "family": {
-                        "type": "STRING",
-                        "enum": [
-                            "auto_liability", "uninsured_motorist", "underinsured_motorist",
-                            "physical_damage", "general_liability", "cargo",
-                            "medical_payments", "pip", "other"
-                        ]
-                    },
-                    "limit_structure": {
-                        "type": "STRING",
-                        "enum": ["csl", "split", "per_occurrence", "aggregate", "deductible_only", "scheduled"]
-                    },
-                    "limits": {
-                        "type": "OBJECT",
-                        "properties": {
-                            "per_person": {"type": "INTEGER"},
-                            "per_accident": {"type": "INTEGER"},
-                            "per_occurrence": {"type": "INTEGER"},
-                            "combined_single_limit": {"type": "INTEGER"},
-                            "aggregate": {"type": "INTEGER"}
-                        }
-                    },
-                    "deductible": {"type": "INTEGER"},
-                    "vehicle_vin": {
-                        "type": "STRING",
-                        "description": "If coverage applies to a specific vehicle/unit, provide the VIN here. Otherwise null."
-                    },
-                    "limit_descriptor": {
-                        "type": "STRING",
-                        "description": "If limits are Statutory/Minimum/Unlimited, set this instead of fabricating numbers."
-                    },
-                    "is_stacked": {"type": "BOOLEAN", "description": "UM/UIM: stacked when permitted."},
-                    "stacked_vehicle_count": {"type": "INTEGER"},
-                    "hnoa_basis": {
-                        "type": "STRING",
-                        "description": "Hired/Non-Owned: primary or excess if stated."
-                    },
-                    "hnoa_attached_to": {
-                        "type": "STRING",
-                        "description": "bap or gl if the document states which policy the endorsement attaches to."
-                    },
-                    "full_glass_waiver": {"type": "BOOLEAN"},
-                    "deductible_scope": {
-                        "type": "STRING",
-                        "description": "per_vehicle or per_occurrence for physical damage if stated."
-                    },
-                    "fl_pip_tier": {
-                        "type": "STRING",
-                        "description": "Florida PIP: basic, extended, or additional if stated."
-                    },
-                    "valuation_method": {
-                        "type": "STRING",
-                        "description": "ACV, replacement cost, or stated amount for physical damage if shown."
-                    }
-                }
+                "properties": {**_BASE_COVERAGE_ITEM_PROPS, **_COMMERCIAL_COVERAGE_EXTRAS},
             }
         }
     }
+}
+
+PERSONAL_AUTO_COVERAGE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "coverages": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": dict(_BASE_COVERAGE_ITEM_PROPS),
+            }
+        }
+    }
+}
+
+
+_BASE_VEHICLE_ITEM_PROPS = {
+    "year": _nint(),
+    "make": _nstr(),
+    "model": _nstr(),
+    "vin": _nstr(),
+    "gvw": _nint(),
+    "type": _nstr(),
+    "chassis": _nstr(),
+    "body": _nstr(),
+}
+
+_COMMERCIAL_VEHICLE_EXTRAS = {
+    "covered_auto_symbols": _nstr("BAP: comma-separated covered auto designation symbols, e.g. 1,2,7."),
+    "radius_of_operation": _nstr("local, intermediate, long distance, or as printed."),
+    "business_use_class": _nstr(),
+    "valuation_basis": _nstr("ACV, replacement cost, or stated value if shown for this unit."),
 }
 
 VEHICLE_SCHEMA = {
@@ -191,29 +230,20 @@ VEHICLE_SCHEMA = {
             "type": "ARRAY",
             "items": {
                 "type": "OBJECT",
-                "properties": {
-                    "year": {"type": "INTEGER"},
-                    "make": {"type": "STRING"},
-                    "model": {"type": "STRING"},
-                    "vin": {"type": "STRING"},
-                    "gvw": {"type": "INTEGER"},
-                    "type": {"type": "STRING"},
-                    "chassis": {"type": "STRING"},
-                    "body": {"type": "STRING"},
-                    "covered_auto_symbols": {
-                        "type": "STRING",
-                        "description": "BAP: comma-separated covered auto designation symbols, e.g. 1,2,7."
-                    },
-                    "radius_of_operation": {
-                        "type": "STRING",
-                        "description": "local, intermediate, long distance, or as printed."
-                    },
-                    "business_use_class": {"type": "STRING"},
-                    "valuation_basis": {
-                        "type": "STRING",
-                        "description": "ACV, replacement cost, or stated value if shown for this unit."
-                    }
-                }
+                "properties": {**_BASE_VEHICLE_ITEM_PROPS, **_COMMERCIAL_VEHICLE_EXTRAS},
+            }
+        }
+    }
+}
+
+PERSONAL_AUTO_VEHICLE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "vehicles": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": dict(_BASE_VEHICLE_ITEM_PROPS),
             }
         }
     }
@@ -227,9 +257,9 @@ DRIVER_SCHEMA = {
             "items": {
                 "type": "OBJECT",
                 "properties": {
-                    "full_name": {"type": "STRING"},
-                    "license_number": {"type": "STRING"},
-                    "is_excluded": {"type": "BOOLEAN"}
+                    "full_name": _nstr(),
+                    "license_number": _nstr(),
+                    "is_excluded": _nbool(),
                 }
             }
         }
@@ -263,8 +293,6 @@ UNIVERSAL_SCOUT_SCHEMA = {
 }
 
 
-
-
 COMPLETE_POLICY_SCHEMA = {
     "type": "OBJECT",
     "properties": {
@@ -277,6 +305,30 @@ COMPLETE_POLICY_SCHEMA = {
     },
     "required": ["classification", "policy", "compliance", "coverages", "vehicles", "drivers"]
 }
+
+PERSONAL_AUTO_POLICY_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "classification": CLASSIFICATION_SCHEMA,
+        "policy": PERSONAL_AUTO_DECLARATIONS_SCHEMA,
+        "coverages": PERSONAL_AUTO_COVERAGE_SCHEMA["properties"]["coverages"],
+        "vehicles": PERSONAL_AUTO_VEHICLE_SCHEMA["properties"]["vehicles"],
+        "drivers": DRIVER_SCHEMA["properties"]["drivers"],
+    },
+    "required": ["classification", "policy", "coverages", "vehicles", "drivers"],
+}
+
+
+def build_complete_policy_schema(policy_type: Optional[str]) -> dict:
+    """Return the response schema scoped to the given policy type.
+
+    Personal auto strips commercial-only fields (compliance block, motor_carrier_id,
+    hnoa, fl_pip_tier, covered_auto_symbols, etc.) so Gemini doesn't waste output
+    tokens emitting null placeholders for fields that never apply.
+    """
+    if policy_type == "personal_auto":
+        return PERSONAL_AUTO_POLICY_SCHEMA
+    return COMPLETE_POLICY_SCHEMA
 
 
 COI_SUMMARY_SCHEMA = {
