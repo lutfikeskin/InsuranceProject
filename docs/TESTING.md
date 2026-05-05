@@ -18,7 +18,6 @@ pytest tests/test_policy_search.py -v
 pytest tests/test_customer_database.py -v
 pytest tests/test_duplicate_detection.py -v
 pytest tests/test_policy_update_diff.py -v
-pytest tests/test_review_source_locator.py -v
 pytest tests/test_prompt_routing.py -v
 pytest tests/test_customer_resolver.py -v
 pytest tests/test_extraction.py -v
@@ -36,8 +35,6 @@ pytest tests/test_accuracy.py -v
   - normalized duplicate matching, conflict detection, possible related policies, and duplicate save intent behavior
 - `tests/test_policy_update_diff.py`
   - non-mutating update diff previews for policy fields and child collections
-- `tests/test_review_source_locator.py`
-  - local-only Review/Save PDF text matching, bbox extraction, and ambiguous match handling
 - `tests/test_prompt_routing.py`
   - document-type routing with manual policy type, policy-scoped prompt assembly, COI prompt guardrails, and COI normalization edge cases including insured address splitting, Med Pay included, and GL/Auto inference
 - `tests/test_customer_resolver.py`
