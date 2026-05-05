@@ -795,27 +795,25 @@ def page_process_policies(api_key):
         
         with c_pdf:
             st.markdown(f"**Viewing:** `{fname}`")
-            show_highlights = st.toggle("✨ Show Field Locations", value=False, help="Highlight extracted fields on the PDF. May affect performance.")
-            
-            annotations = []
-            if show_highlights:
-                locs = p.get('field_locations', [])
-                for loc in locs:
-                    page = loc.get('page_number', 1)
-                    bbox = loc.get('bbox') # [ymin, xmin, ymax, xmax] 0-1000 scale
-                    
-                    if bbox and len(bbox) == 4:
-                        annotations.append({
-                            "page": page,
-                            "x": bbox[1], # xmin
-                            "y": bbox[0], # ymin
-                            "width": bbox[3] - bbox[1], # xmax - xmin
-                            "height": bbox[2] - bbox[0], # ymax - ymin
-                            "color": "rgba(255, 0, 0, 0.3)",
-                            "type": "rect"
-                        })
-
-            pdf_viewer(input=current_item['pdf_bytes'], width=600, height=800, annotations=annotations if show_highlights else [])
+            render_text = st.toggle(
+                "Selectable text",
+                value=True,
+                key=f"pdf_render_text_{fname}",
+                help=(
+                    "PDF viewer display only: lets you select/copy text in the preview when supported. "
+                    "Does not run extraction again or change saved policy data."
+                ),
+            )
+            pdf_viewer(
+                input=current_item['pdf_bytes'],
+                width="100%",
+                height=850,
+                zoom_level=None,
+                render_text=render_text,
+                resolution_boost=1,
+                viewer_align="center",
+                show_page_separator=True,
+            )
             
         with c_form:
             st.markdown("#### Verify Extracted Data")

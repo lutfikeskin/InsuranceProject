@@ -18,6 +18,30 @@
 - [x] Phase 14: Related Policies UI
 - [ ] Phase 15: Documentation Updates
 
+## Change Blast Radius Map
+
+When changing any of the following, ALSO update the listed downstream files. This table reflects real dependencies discovered during implementation.
+
+| Change This                              | Must Also Update                                                |
+|------------------------------------------|------------------------------------------------------------------|
+| modules/extraction/schemas.py            | prompts.py, services.py, goldens, docs/PROMPTS.md, ui display    |
+| modules/extraction/prompts.py            | goldens (test_accuracy.py), docs/PROMPTS.md                      |
+| core/database.py (model add/modify)      | Alembic migration, services.py, ui display, docs/DATABASE.md     |
+| core/database.py (relationship change)   | Late imports at file bottom (PolicyHistory pattern)              |
+| modules/extraction/pipeline.py imports   | Backing module exists, grep for refactored locations             |
+| views/*.py (Streamlit widgets)           | No key collisions, form vs non-form consistency                  |
+| core/services.py (save flow)             | Both new-save AND update-save branches                           |
+| core/document_taxonomy.py                | prompts.py classification prompt, accuracy_config.py             |
+| Customer model fields                    | customer_resolver.py, ui display, services.py save flow          |
+
+## Cache Version Hash Dependencies
+
+The auto-cache version derives from prompt + schema hash. Files that trigger cache invalidation when modified:
+- modules/extraction/prompts.py (any function)
+- modules/extraction/schemas.py (any schema dict)
+
+This is INTENTIONAL. Old cache entries become stale and rebuild on next run.
+
 ## Architecture Constraints (Do Not Violate)
 
 - Stack: Streamlit + SQLite (PostgreSQL planned) + SQLAlchemy + Gemini 2.5 Flash
