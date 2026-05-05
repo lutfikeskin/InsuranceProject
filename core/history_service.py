@@ -1,23 +1,62 @@
-import json
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from .database import Policy, Coverage, Vehicle, Driver
+from .database import Policy
 from .history_model import PolicyHistory
 
 class HistoryService:
+    SCALAR_FIELD_MAP = {
+        'carrier_name': 'carrier_name',
+        'underwriter_name': 'underwriter_name',
+        'naic_number': 'naic_number',
+        'effective_date': 'effective_date',
+        'expiration_date': 'expiration_date',
+        'premium': 'premium',
+        'liability_limit': 'liability_limit',
+        'general_liability_limit': 'general_liability_limit',
+        'cargo_limit': 'cargo_limit',
+        'cargo_deductible': 'cargo_deductible',
+        'um_uim_limit': 'um_uim_limit',
+        'med_pay_limit': 'med_pay_limit',
+        'pip_limit': 'pip_limit',
+        'comp_deductible': 'comp_deductible',
+        'coll_deductible': 'coll_deductible',
+        'has_full_collision': 'has_full_collision',
+        'has_general_liability': 'has_general_liability',
+        'has_auto_liability': 'has_auto_liability',
+        'insured_name': 'insured_name',
+        'business_name': 'business_name',
+        'insured_address': 'insured_address',
+        'insured_city': 'insured_city',
+        'insured_state_code': 'insured_state_code',
+        'insured_zip': 'insured_zip',
+        'financial_responsibility_name': 'financial_responsibility_name',
+        'policy_type': 'policy_type',
+        'account_type': 'account_type',
+        'document_type': 'document_type',
+        'classification_confidence': 'classification_confidence',
+        'classification_signals': 'classification_signals',
+        'field_confidences': 'field_confidences',
+        'premium_audit_flag': 'premium_audit_flag',
+        'status': 'status',
+    }
+
     def __init__(self, session: Session):
         self.session = session
 
     def _normalize(self, val):
         """Reduces '100,000' and 100000 to same value for comparison."""
-        from utils.text_utils import normalize_string, parse_currency
+        from utils.text_utils import normalize_string
         
         # Special case for currency-like values
         if isinstance(val, str) and ('$' in val or ',' in val):
              pass
 
         return normalize_string(val)
+
+    def _sig_value(self, val):
+        normalized = self._normalize(val)
+        return "" if normalized is None else str(normalized)
 
     def _get_next_version(self, policy_id: int) -> int:
         """Calculates next version number."""
@@ -26,152 +65,170 @@ class HistoryService:
         ).scalar()
         return (max_ver or 0) + 1
 
+    def _parse_field_value(self, json_key, value):
+        if "date" in json_key and isinstance(value, str) and value:
+            try:
+                return datetime.fromisoformat(str(value)).date()
+            except ValueError:
+                return value
+        return value
 
-
-    def compare_and_record(self, policy: Policy, new_data: dict, source: str = "AI_Extraction", event_type: str = "AI_EXTRACTION"):
-        """
-        Compares existing policy with new_data. 
-        Returns (is_changed, change_log, metadata)
-        Mutates SCALAR fields here, but returns flags for COLLECTIONS to be mutated by caller.
-        """
-        changes = []
-        collection_changes = {
+    def _collection_changes_template(self):
+        return {
             "vehicles": False,
             "drivers": False,
             "coverages": False,
             "additional_interests": False
         }
-        
+
+    def _vehicle_sig(self, vehicle):
+        if isinstance(vehicle, dict):
+            return (
+                self._sig_value(vehicle.get("vin")),
+                self._sig_value(vehicle.get("year")),
+                self._sig_value(vehicle.get("make")),
+                self._sig_value(vehicle.get("model")),
+                self._sig_value(vehicle.get("gvw")),
+                self._sig_value(vehicle.get("type") or vehicle.get("vehicle_type")),
+                self._sig_value(vehicle.get("chassis")),
+                self._sig_value(vehicle.get("body")),
+            )
+        return (
+            self._sig_value(getattr(vehicle, "vin", None)),
+            self._sig_value(getattr(vehicle, "year", None)),
+            self._sig_value(getattr(vehicle, "make", None)),
+            self._sig_value(getattr(vehicle, "model", None)),
+            self._sig_value(getattr(vehicle, "gvw", None)),
+            self._sig_value(getattr(vehicle, "vehicle_type", None)),
+            self._sig_value(getattr(vehicle, "chassis", None)),
+            self._sig_value(getattr(vehicle, "body", None)),
+        )
+
+    def _driver_sig(self, driver):
+        if isinstance(driver, dict):
+            return (
+                self._sig_value(driver.get("full_name")),
+                self._sig_value(driver.get("license_number")),
+                self._sig_value(driver.get("is_excluded")),
+            )
+        return (
+            self._sig_value(getattr(driver, "full_name", None)),
+            self._sig_value(getattr(driver, "license_number", None)),
+            self._sig_value(getattr(driver, "is_excluded", None)),
+        )
+
+    def _coverage_sig(self, coverage):
+        if isinstance(coverage, dict):
+            limits = coverage.get("limits") if isinstance(coverage.get("limits"), dict) else {}
+            return (
+                self._sig_value(coverage.get("coverage_code")),
+                self._sig_value(coverage.get("family")),
+                self._sig_value(coverage.get("type") or coverage.get("display_name")),
+                self._sig_value(coverage.get("vehicle_vin")),
+                self._sig_value(coverage.get("per_person") if coverage.get("per_person") is not None else limits.get("per_person")),
+                self._sig_value(coverage.get("per_accident") if coverage.get("per_accident") is not None else limits.get("per_accident")),
+                self._sig_value(coverage.get("per_occurrence") if coverage.get("per_occurrence") is not None else limits.get("per_occurrence")),
+                self._sig_value(coverage.get("combined_single_limit") if coverage.get("combined_single_limit") is not None else limits.get("combined_single_limit")),
+                self._sig_value(coverage.get("aggregate") if coverage.get("aggregate") is not None else limits.get("aggregate")),
+                self._sig_value(coverage.get("deductible")),
+            )
+        vehicle = getattr(coverage, "vehicle", None)
+        return (
+            self._sig_value(getattr(coverage, "coverage_code", None)),
+            self._sig_value(getattr(coverage, "family", None)),
+            self._sig_value(getattr(coverage, "type", None)),
+            self._sig_value(getattr(vehicle, "vin", None)),
+            self._sig_value(getattr(coverage, "per_person", None)),
+            self._sig_value(getattr(coverage, "per_accident", None)),
+            self._sig_value(getattr(coverage, "per_occurrence", None)),
+            self._sig_value(getattr(coverage, "combined_single_limit", None)),
+            self._sig_value(getattr(coverage, "aggregate", None)),
+            self._sig_value(getattr(coverage, "deductible", None)),
+        )
+
+    def _additional_interest_sig(self, interest):
+        if isinstance(interest, dict):
+            return (
+                self._sig_value(interest.get("name")),
+                self._sig_value(interest.get("address")),
+                self._sig_value(interest.get("interest_type")),
+            )
+        return (
+            self._sig_value(getattr(interest, "name", None)),
+            self._sig_value(getattr(interest, "address", None)),
+            self._sig_value(getattr(interest, "interest_type", None)),
+        )
+
+    def _sorted_sigs(self, rows, sig_func):
+        return sorted(sig_func(row) for row in rows)
+
+    def preview_changes(self, policy: Policy, new_data: dict):
+        """
+        Compares an existing policy with new_data without mutating rows or writing history.
+        Returns (is_changed, change_log, metadata).
+        """
+        changes = []
+        collection_changes = self._collection_changes_template()
+
         p_data = new_data.get('policy', {})
-        
-        scalar_map = {
-            'carrier_name': 'carrier_name',
-            'naic_number': 'naic_number',
-            'effective_date': 'effective_date',
-            'expiration_date': 'expiration_date',
-            'premium': 'premium',
-            'liability_limit': 'liability_limit',
-            'general_liability_limit': 'general_liability_limit',
-            'cargo_limit': 'cargo_limit',
-            'cargo_deductible': 'cargo_deductible',
-            'um_uim_limit': 'um_uim_limit',
-            'med_pay_limit': 'med_pay_limit',
-            'pip_limit': 'pip_limit',
-            'comp_deductible': 'comp_deductible',
-            'coll_deductible': 'coll_deductible',
-            'has_full_collision': 'has_full_collision',
-            'insured_name': 'insured_name',
-            'insured_address': 'insured_address',
-            'document_type': 'document_type',
-            'premium_audit_flag': 'premium_audit_flag',
-            'status': 'status' # New Field
-        }
 
-        for json_key, attr in scalar_map.items():
-            if json_key in p_data: # ONLY compare if present in update payload
-                new_val = p_data.get(json_key)
+        for json_key, attr in self.SCALAR_FIELD_MAP.items():
+            if json_key in p_data:
+                parsed_new = self._parse_field_value(json_key, p_data.get(json_key))
                 old_val = getattr(policy, attr)
-                
-                parsed_new = new_val
-                if "date" in json_key and isinstance(new_val, str) and new_val:
-                    try:
-                        parsed_new = datetime.fromisoformat(str(new_val)).date()
-                    except ValueError:
-                        pass
 
-                norm_new = self._normalize(parsed_new)
-                norm_old = self._normalize(old_val)
-
-                if norm_new != norm_old:
+                if self._normalize(parsed_new) != self._normalize(old_val):
                     changes.append({
                         "field": attr,
                         "old_value": str(old_val),
                         "new_value": str(parsed_new)
                     })
-                    setattr(policy, attr, parsed_new)
 
-        # CRITICAL FIX: If key is missing in new_data, ignore it (do not assume delete).
-        
-        # Only process if 'vehicles' is explicitly in new_data
         if 'vehicles' in new_data:
             new_vehs = new_data.get('vehicles', [])
-            old_vins = {v.vin for v in policy.vehicles if v.vin}
-            new_vins = {v.get('vin') for v in new_vehs if v.get('vin')}
-            
-            is_veh_diff = False
-            if old_vins or new_vins:
-                if old_vins != new_vins:
-                    is_veh_diff = True
-            else:
-                if len(policy.vehicles) != len(new_vehs):
-                    is_veh_diff = True
-            
-            if is_veh_diff:
+            old_sigs = self._sorted_sigs(policy.vehicles, self._vehicle_sig)
+            new_sigs = self._sorted_sigs(new_vehs, self._vehicle_sig)
+            if old_sigs != new_sigs:
                 changes.append({
                     "field": "vehicles",
-                    "old_value": f"{len(policy.vehicles)} vehicles (VINs: {sorted(list(old_vins))})",
-                    "new_value": f"{len(new_vehs)} vehicles (VINs: {sorted(list(new_vins))})"
+                    "old_value": old_sigs,
+                    "new_value": new_sigs
                 })
                 collection_changes["vehicles"] = True
 
         if 'coverages' in new_data:
             new_covs = new_data.get('coverages', [])
-            def _cov_sig_dict(cov):
-                if isinstance(cov, dict):
-                    limits = cov.get("limits") if isinstance(cov.get("limits"), dict) else {}
-                    return (
-                        cov.get("coverage_code"),
-                        cov.get("per_person") if cov.get("per_person") is not None else limits.get("per_person"),
-                        cov.get("per_accident") if cov.get("per_accident") is not None else limits.get("per_accident"),
-                        cov.get("per_occurrence") if cov.get("per_occurrence") is not None else limits.get("per_occurrence"),
-                        cov.get("combined_single_limit") if cov.get("combined_single_limit") is not None else limits.get("combined_single_limit"),
-                        cov.get("aggregate") if cov.get("aggregate") is not None else limits.get("aggregate"),
-                        cov.get("deductible"),
-                    )
-                return (
-                    getattr(cov, "coverage_code", None),
-                    getattr(cov, "per_person", None),
-                    getattr(cov, "per_accident", None),
-                    getattr(cov, "per_occurrence", None),
-                    getattr(cov, "combined_single_limit", None),
-                    getattr(cov, "aggregate", None),
-                    getattr(cov, "deductible", None),
-                )
-
-            old_cov_sigs = {_cov_sig_dict(c) for c in policy.coverages}
-            new_cov_sigs = {_cov_sig_dict(c) for c in new_covs}
-
-            if old_cov_sigs != new_cov_sigs:
+            old_sigs = self._sorted_sigs(policy.coverages, self._coverage_sig)
+            new_sigs = self._sorted_sigs(new_covs, self._coverage_sig)
+            if old_sigs != new_sigs:
                 changes.append({
                     "field": "coverages",
-                    "old_value": list(sorted(old_cov_sigs)),
-                    "new_value": list(sorted(new_cov_sigs))
+                    "old_value": old_sigs,
+                    "new_value": new_sigs
                 })
                 collection_changes["coverages"] = True
 
         if 'drivers' in new_data:
             new_drvs = new_data.get('drivers', [])
-            old_drvs_set = {f"{d.full_name}|{d.license_number}" for d in policy.drivers}
-            new_drvs_set = {f"{d.get('full_name')}|{d.get('license_number')}" for d in new_drvs}
-            
-            if old_drvs_set != new_drvs_set:
+            old_sigs = self._sorted_sigs(policy.drivers, self._driver_sig)
+            new_sigs = self._sorted_sigs(new_drvs, self._driver_sig)
+            if old_sigs != new_sigs:
                 changes.append({
                     "field": "drivers",
-                    "old_value": f"Count: {len(old_drvs_set)}",
-                    "new_value": f"Count: {len(new_drvs_set)}"
+                    "old_value": old_sigs,
+                    "new_value": new_sigs
                 })
                 collection_changes["drivers"] = True
-        
+
         if 'additional_interests' in new_data:
             new_ais = new_data.get('additional_interests', [])
-            old_ais_set = {f"{a.name}|{a.interest_type}" for a in policy.additional_interests}
-            new_ais_set = {f"{a.get('name')}|{a.get('interest_type')}" for a in new_ais}
-            
-            if old_ais_set != new_ais_set:
+            old_sigs = self._sorted_sigs(policy.additional_interests, self._additional_interest_sig)
+            new_sigs = self._sorted_sigs(new_ais, self._additional_interest_sig)
+            if old_sigs != new_sigs:
                 changes.append({
                     "field": "additional_interests",
-                    "old_value": f"Count: {len(old_ais_set)}",
-                    "new_value": f"Count: {len(new_ais_set)}"
+                    "old_value": old_sigs,
+                    "new_value": new_sigs
                 })
                 collection_changes["additional_interests"] = True
 
@@ -184,7 +241,24 @@ class HistoryService:
                     "old_value": str(old_ex)[:500] if old_ex else "",
                     "new_value": str(new_ex)[:500] if new_ex else "",
                 })
-                policy.extraction_extras = new_ex
+
+        return len(changes) > 0, changes, collection_changes
+
+    def compare_and_record(self, policy: Policy, new_data: dict, source: str = "AI_Extraction", event_type: str = "AI_EXTRACTION"):
+        """
+        Compares existing policy with new_data. 
+        Returns (is_changed, change_log, metadata)
+        Mutates SCALAR fields here, but returns flags for COLLECTIONS to be mutated by caller.
+        """
+        is_changed, changes, collection_changes = self.preview_changes(policy, new_data)
+        p_data = new_data.get('policy', {})
+
+        for json_key, attr in self.SCALAR_FIELD_MAP.items():
+            if json_key in p_data:
+                setattr(policy, attr, self._parse_field_value(json_key, p_data.get(json_key)))
+
+        if "extraction_extras" in new_data:
+            policy.extraction_extras = new_data.get("extraction_extras")
 
         if changes:
              version = self._get_next_version(policy.id)
@@ -197,4 +271,4 @@ class HistoryService:
              )
              self.session.add(history)
              
-        return len(changes) > 0, changes, collection_changes
+        return is_changed, changes, collection_changes

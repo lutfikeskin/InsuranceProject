@@ -78,6 +78,68 @@ def _coverages_from_editor_rows(c_data: list, edited_c: pd.DataFrame) -> list:
     return out
 
 
+def _stringify_diff_value(value):
+    if isinstance(value, (list, tuple)):
+        return json.dumps(value, default=str)
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _render_duplicate_preview(duplicate_info: dict, diff_preview: dict | None):
+    status = duplicate_info.get("status")
+    existing = duplicate_info.get("existing_policy") or {}
+    reason = duplicate_info.get("reason") or ""
+
+    if status == "no_match":
+        st.success("No existing policy has this policy number. Saving will create a new policy.")
+        return
+    if status == "missing_policy_number":
+        st.warning("Policy number is missing. Add a policy number before saving when possible.")
+        return
+    if status == "possible_related_policy":
+        st.info("No policy-number duplicate found, but an existing policy may be related.")
+    if status == "exact_number_carrier_conflict":
+        st.warning(
+            "Policy number already exists, but key identity fields differ. Review carefully before updating."
+        )
+    elif status == "exact_policy_match":
+        st.warning("Policy number already exists. Saving will update the current policy.")
+
+    if existing:
+        carrier = _carrier_display(existing.get("carrier_name"), existing.get("underwriter_name"))
+        st.caption(
+            f"Existing: `{existing.get('policy_number')}` | "
+            f"{existing.get('insured_name') or 'Unknown insured'} | "
+            f"{carrier or 'Unknown carrier'} | "
+            f"{existing.get('effective_date') or '?'} to {existing.get('expiration_date') or '?'}"
+        )
+    if reason:
+        st.caption(reason)
+
+    if status == "possible_related_policy" or not diff_preview:
+        return
+    changes = diff_preview.get("changes") or []
+    if not changes:
+        st.info("No field-level changes detected against the existing policy.")
+        return
+    with st.expander(f"Preview changes before updating ({len(changes)} change groups)", expanded=False):
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "field": c.get("field"),
+                        "existing": _stringify_diff_value(c.get("old_value")),
+                        "incoming": _stringify_diff_value(c.get("new_value")),
+                    }
+                    for c in changes
+                ]
+            ),
+            hide_index=True,
+            width='stretch',
+        )
+
+
 def _compute_parallel_workers(total_files: int) -> int:
     """
     Adaptive worker sizing:
@@ -580,13 +642,20 @@ def page_process_policies(api_key):
                                 icon="⚠️",
                             )
                             continue
-                        pol_num = item['data'].get('policy', {}).get('policy_number', '')
-                        existing = service.check_duplicate(pol_num) if pol_num else None
+                        duplicate_info = service.detect_duplicate_for_extraction(item["data"])
+                        if duplicate_info.get("status") == "exact_number_carrier_conflict":
+                            st.session_state["review_queue"].append(item)
+                            skipped_count += 1
+                            st.toast(
+                                f"Sent {item['filename']} to review: {duplicate_info.get('reason')}",
+                                icon="⚠️",
+                            )
+                            continue
                         
                         success, msg = service.save_policy_from_extraction(item['data'])
                         
                         if success:
-                            if existing:
+                            if duplicate_info.get("status") == "exact_policy_match":
                                 updated_count += 1
                             else:
                                 processed_count += 1
@@ -600,7 +669,7 @@ def page_process_policies(api_key):
                     if updated_count:
                         parts.append(f"**{updated_count}** existing {'policy' if updated_count == 1 else 'policies'} updated")
                     if skipped_count:
-                        parts.append(f"**{skipped_count}** skipped (no changes)")
+                        parts.append(f"**{skipped_count}** skipped or routed to review")
                     
                     st.success(" • ".join(parts) if parts else "No changes made.")
                     st.session_state["temp_extracted"] = []
@@ -1256,82 +1325,104 @@ def page_process_policies(api_key):
             st.divider()
             
             b_col_warn = st.container()
+
+            review_extraction_result = copy.deepcopy(current_item["data"])
+            pol_save = review_extraction_result.setdefault("policy", {})
+            pol_save.update(
+                {
+                    "carrier_name": r_carrier,
+                    "underwriter_name": r_underwriter,
+                    "naic_number": r_naic,
+                    "policy_number": r_pol_num,
+                    "effective_date": r_eff,
+                    "expiration_date": r_exp,
+                    "insured_name": r_ins_name,
+                    "insured_address": r_ins_addr,
+                    "insured_city": r_ins_city,
+                    "insured_state_code": r_ins_state,
+                    "insured_zip": r_ins_zip,
+                    "liability_limit": r_liab,
+                    "general_liability_limit": r_gl_limit,
+                    "cargo_limit": r_cargo,
+                    "cargo_deductible": r_cargo_ded,
+                    "um_uim_limit": r_um,
+                    "med_pay_limit": r_med,
+                    "pip_limit": r_pip,
+                    "comp_deductible": r_comp,
+                    "coll_deductible": r_coll,
+                    "has_general_liability": r_gl,
+                    "has_auto_liability": r_auto,
+                    "account_type": p.get("account_type"),
+                    "document_type": document_type,
+                    "premium": r_premium,
+                    "business_name": p.get("business_name"),
+                    "financial_responsibility_name": p.get("financial_responsibility_name"),
+                    "has_full_collision": p.get("has_full_collision"),
+                    "status": r_status,
+                    "field_confidences": confidence_map,
+                }
+            )
+            review_extraction_result["classification"] = dict(classification or {})
+            review_extraction_result["vehicles"] = _dataframe_to_record_list(edited_v)
+            review_extraction_result["drivers"] = _dataframe_to_record_list(edited_d)
+            review_extraction_result["coverages"] = _coverages_from_editor_rows(c_data, edited_c)
+            review_extraction_result["additional_interests"] = _dataframe_to_record_list(edited_ai)
+            review_extraction_result["_review_confirm_customer_id"] = st.session_state.get(confirm_key)
+            review_extraction_result["_review_commercial_owner_name"] = (
+                (st.session_state.get(owner_storage_key) or "").strip()
+            )
+
+            if (
+                review_extraction_result.get("policy_data_source") == "coi_summary"
+                and (review_extraction_result.get("coi_summary") or {}).get("policies")
+            ):
+                review_extraction_result.pop("coi_summary", None)
+                review_extraction_result["policy_data_source"] = (
+                    document_type or "certificate_of_insurance"
+                )
+
+            duplicate_info = {"status": "no_match"}
+            diff_preview = None
+            duplicate_session = get_session(st.session_state.db_engine)
+            duplicate_service = PolicyService(duplicate_session)
+            try:
+                duplicate_info = duplicate_service.detect_duplicate_for_extraction(review_extraction_result)
+                existing_id = duplicate_info.get("existing_policy_id")
+                if existing_id:
+                    existing_policy = duplicate_service.get_policy_by_id(existing_id)
+                    if existing_policy:
+                        diff_preview = duplicate_service.preview_update_from_extraction(
+                            existing_policy,
+                            review_extraction_result,
+                        )
+            finally:
+                duplicate_session.close()
+
+            with b_col_warn:
+                _render_duplicate_preview(duplicate_info, diff_preview)
             
             b_col1, b_col2, b_col3 = st.columns([1, 1, 1])
-            saved = b_col1.button("💾 Save", type="secondary", key=f"save_review_{fname}")
-            save_next = b_col2.button(
-                "💾⏩ Save & Next", type="primary", key=f"save_next_review_{fname}"
-            )
+            duplicate_status = duplicate_info.get("status")
+            has_existing_policy = duplicate_status in {
+                "exact_policy_match",
+                "exact_number_carrier_conflict",
+            }
+            primary_label = "Update Current Policy" if has_existing_policy else "Create New Policy"
+            next_label = "Update & Next" if has_existing_policy else "Create & Next"
+            saved = b_col1.button(primary_label, type="secondary", key=f"save_review_{fname}")
+            save_next = b_col2.button(next_label, type="primary", key=f"save_next_review_{fname}")
             discarded = b_col3.button("🗑️ Discard", key=f"discard_review_{fname}")
+            if has_existing_policy:
+                st.caption("To create a separate policy entry instead, edit the incoming policy number first.")
             
             if saved or save_next:
                 session = get_session(st.session_state.db_engine)
                 service = PolicyService(session)
                 try:
-                    existing = service.check_duplicate(r_pol_num)
-                    if existing:
-                        b_col_warn.warning(
-                            f"⚡ **Duplicate Detected:** Policy `{r_pol_num}` already exists "
-                            f"(Insured: {existing.insured_name}, Carrier: {_carrier_display(existing.carrier_name, getattr(existing, 'underwriter_name', None))}). "
-                            f"Saving will **update** the existing record."
-                        )
-                    
-                    extraction_result = copy.deepcopy(current_item["data"])
-                    pol_save = extraction_result.setdefault("policy", {})
-                    pol_save.update(
-                        {
-                            "carrier_name": r_carrier,
-                            "underwriter_name": r_underwriter,
-                            "naic_number": r_naic,
-                            "policy_number": r_pol_num,
-                            "effective_date": r_eff,
-                            "expiration_date": r_exp,
-                            "insured_name": r_ins_name,
-                            "insured_address": r_ins_addr,
-                            "insured_city": r_ins_city,
-                            "insured_state_code": r_ins_state,
-                            "insured_zip": r_ins_zip,
-                            "liability_limit": r_liab,
-                            "general_liability_limit": r_gl_limit,
-                            "cargo_limit": r_cargo,
-                            "cargo_deductible": r_cargo_ded,
-                            "um_uim_limit": r_um,
-                            "med_pay_limit": r_med,
-                            "pip_limit": r_pip,
-                            "comp_deductible": r_comp,
-                            "coll_deductible": r_coll,
-                            "has_general_liability": r_gl,
-                            "has_auto_liability": r_auto,
-                            "account_type": p.get("account_type"),
-                            "document_type": document_type,
-                            "premium": r_premium,
-                            "business_name": p.get("business_name"),
-                            "financial_responsibility_name": p.get("financial_responsibility_name"),
-                            "has_full_collision": p.get("has_full_collision"),
-                            "status": r_status,
-                            "field_confidences": confidence_map,
-                        }
+                    review_extraction_result["_duplicate_action"] = (
+                        "update_existing" if has_existing_policy else "create_new"
                     )
-                    extraction_result["classification"] = dict(classification or {})
-                    extraction_result["vehicles"] = _dataframe_to_record_list(edited_v)
-                    extraction_result["drivers"] = _dataframe_to_record_list(edited_d)
-                    extraction_result["coverages"] = _coverages_from_editor_rows(c_data, edited_c)
-                    extraction_result["additional_interests"] = _dataframe_to_record_list(edited_ai)
-                    extraction_result["_review_confirm_customer_id"] = st.session_state.get(confirm_key)
-                    extraction_result["_review_commercial_owner_name"] = (
-                        (st.session_state.get(owner_storage_key) or "").strip()
-                    )
-
-                    if (
-                        extraction_result.get("policy_data_source") == "coi_summary"
-                        and (extraction_result.get("coi_summary") or {}).get("policies")
-                    ):
-                        extraction_result.pop("coi_summary", None)
-                        extraction_result["policy_data_source"] = (
-                            document_type or "certificate_of_insurance"
-                        )
-
-                    success, msg = service.save_policy_from_extraction(extraction_result)
+                    success, msg = service.save_policy_from_extraction(review_extraction_result)
                     
                     if success:
                         st.toast(f"✅ Saved {r_pol_num}!")

@@ -18,6 +18,7 @@ from sqlalchemy import func, or_
 from utils.naic_utils import get_naic_for_carrier
 from .coverage_ontology import summarize_auto_liability, format_liability_limit
 from .customer_resolver import CustomerResolver
+from .duplicate_detection import DuplicateDetectionService
 from core.logger import logger
 from utils.vehicle_utils import refine_vehicle_type
 import pandas as pd
@@ -273,9 +274,20 @@ class PolicyService:
 
     def _save_single_extraction_payload(self, extraction_result):
         new_policy = self._create_policy_instance(extraction_result)
-        existing = self.get_policy_by_number(new_policy.policy_number)
+        duplicate_result = self.detect_duplicate_for_extraction(extraction_result, include_policy=True)
+        existing = (
+            duplicate_result.get("_policy_object")
+            if duplicate_result.get("status") in {"exact_policy_match", "exact_number_carrier_conflict"}
+            else None
+        )
+        duplicate_action = extraction_result.get("_duplicate_action") or "update_existing"
 
         if existing:
+            if duplicate_action == "create_new":
+                return (
+                    False,
+                    "Cannot create a new policy with the same policy number. Edit the policy number or update the existing policy.",
+                )
             return self._handle_policy_update(existing, new_policy, extraction_result)
 
         resolver = CustomerResolver(self.session)
@@ -690,7 +702,7 @@ class PolicyService:
         return self.search_policies(None, limit=10000, offset=0)
 
     def get_policy_by_number(self, policy_number):
-        return self.session.query(Policy).filter_by(policy_number=policy_number).first()
+        return DuplicateDetectionService(self.session).find_policy_by_normalized_number(policy_number)
 
     def get_policy_by_id(self, policy_id):
         return self.session.query(Policy).get(policy_id)
@@ -714,7 +726,28 @@ class PolicyService:
         """Returns existing policy with the same number, or None."""
         if not policy_number:
             return None
-        return self.session.query(Policy).filter_by(policy_number=policy_number).first()
+        return self.get_policy_by_number(policy_number)
+
+    def detect_duplicate_for_extraction(self, extraction_result: dict, include_policy: bool = False) -> dict:
+        """Returns structured duplicate status for UI previews and save decisions."""
+        return DuplicateDetectionService(self.session).analyze_payload(extraction_result).to_dict(
+            include_policy=include_policy
+        )
+
+    def preview_update_from_extraction(self, existing_policy: Policy, extraction_result: dict) -> dict:
+        """Builds a non-mutating diff preview for an incoming extraction payload."""
+        from .history_service import HistoryService
+
+        normalized = self.normalize_policy_data(extraction_result)
+        is_changed, changes, collection_changes = HistoryService(self.session).preview_changes(
+            existing_policy,
+            normalized,
+        )
+        return {
+            "is_changed": is_changed,
+            "changes": changes,
+            "collection_changes": collection_changes,
+        }
 
     def get_carrier_distribution(self):
         """Returns dict of {carrier_name: count} for all policies."""

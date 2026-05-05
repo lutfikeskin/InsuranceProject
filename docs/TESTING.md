@@ -15,6 +15,8 @@ Focused runs:
 
 ```bash
 pytest tests/test_policy_search.py -v
+pytest tests/test_duplicate_detection.py -v
+pytest tests/test_policy_update_diff.py -v
 pytest tests/test_extraction.py -v
 pytest tests/test_bulk_logic.py -v
 pytest tests/test_accuracy.py -v
@@ -24,6 +26,10 @@ pytest tests/test_accuracy.py -v
 
 - `tests/test_policy_search.py`
   - search behavior and coverage-to-vehicle VIN linking
+- `tests/test_duplicate_detection.py`
+  - normalized duplicate matching, conflict detection, possible related policies, and duplicate save intent behavior
+- `tests/test_policy_update_diff.py`
+  - non-mutating update diff previews for policy fields and child collections
 - `tests/test_extraction.py`
   - extraction helper behavior (including auto liability cleanup)
 - `tests/test_bulk_logic.py`

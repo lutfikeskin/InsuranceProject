@@ -16,6 +16,11 @@ For the Streamlit app, service calls happen in-process instead of HTTP:
   - `get_policy_by_number(policy_number)`
 - Save/update from extraction:
   - `save_policy_from_extraction(extraction_result)`
+  - exact policy-number matches update existing policy rows by default
+  - `_duplicate_action="create_new"` blocks saving when the same policy number already exists
+- Duplicate detection and preview:
+  - `detect_duplicate_for_extraction(extraction_result)`
+  - `preview_update_from_extraction(existing_policy, extraction_result)`
 - Manual update:
   - `update_policy(policy, updated_data)`
 - Natural language query:
