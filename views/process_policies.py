@@ -13,6 +13,11 @@ from modules.extraction import process_pdf
 from modules.extraction.pipeline import POLICY_TYPE_ENUM
 from utils.vehicle_utils import refine_vehicle_type
 from utils.naic_utils import get_naic_for_carrier
+from utils.review_source_locator import (
+    FIELD_LABELS,
+    extract_review_field_values,
+    locate_policy_field_sources,
+)
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from streamlit_pdf_viewer import pdf_viewer
 
@@ -325,11 +330,15 @@ def page_process_policies(api_key):
         """Helper to generate tooltip text for a field."""
         if not field_locations:
             return None
-        formatted_key = field_name
         for loc in field_locations:
              if loc.get("field") == field_name:
                  page = loc.get("page_number")
-                 return f"Found on Page {page}"
+                 parts = [f"Found on Page {page}"]
+                 if loc.get("match_quality") == "ambiguous":
+                     parts.append(f"Ambiguous: {loc.get('match_count', 2)} matches")
+                 if loc.get("snippet"):
+                     parts.append(f"Snippet: {loc.get('snippet')}")
+                 return " | ".join(parts)
         return None
 
     def _build_confidence_map(policy_payload: dict, fallback_map: dict | None = None) -> dict[str, str]:
@@ -354,6 +363,58 @@ def page_process_policies(api_key):
         if conf == "medium":
             return f"◐ {base_label}"
         return base_label
+
+    def _review_source_cache_key(fname: str, pdf_bytes: bytes, policy_payload: dict) -> str:
+        values = extract_review_field_values(policy_payload)
+        signature = json.dumps(values, sort_keys=True, default=str)
+        return f"review_source_locations::{fname}::{len(pdf_bytes or b'')}::{signature}"
+
+    def _get_review_source_result(current_item: dict, policy_payload: dict) -> dict:
+        pdf_bytes = current_item.get("pdf_bytes") or b""
+        fname = current_item.get("filename") or "uploaded.pdf"
+        cache_key = _review_source_cache_key(fname, pdf_bytes, policy_payload)
+        cache = st.session_state.setdefault("review_source_location_cache", {})
+        if cache_key not in cache:
+            cache[cache_key] = locate_policy_field_sources(pdf_bytes, policy_payload)
+        return cache[cache_key]
+
+    def _field_label_with_source(
+        base_label: str,
+        field_name: str,
+        confidence_map: dict[str, str],
+        source_map: dict[str, dict],
+    ) -> str:
+        label = _confidence_label(base_label, field_name, confidence_map)
+        loc = source_map.get(field_name)
+        if not loc:
+            return label
+        marker = f"p{loc.get('page_number')}"
+        if loc.get("match_quality") == "ambiguous":
+            marker += " ambiguous"
+        return f"{label} [{marker}]"
+
+    def _annotations_from_locations(locations: list[dict]) -> list[dict]:
+        annotations = []
+        for loc in locations:
+            bbox = loc.get("bbox")
+            if bbox and len(bbox) == 4:
+                color = (
+                    "rgba(255, 193, 7, 0.35)"
+                    if loc.get("match_quality") == "ambiguous"
+                    else "rgba(0, 123, 255, 0.28)"
+                )
+                annotations.append(
+                    {
+                        "page": loc.get("page_number", loc.get("page", 1)),
+                        "x": bbox[1],
+                        "y": bbox[0],
+                        "width": bbox[3] - bbox[1],
+                        "height": bbox[2] - bbox[0],
+                        "color": color,
+                        "type": "rect",
+                    }
+                )
+        return annotations
 
     with tab_upload:
         expanded_upload = not (bool(st.session_state["review_queue"]) or bool(st.session_state["temp_extracted"]))
@@ -790,32 +851,73 @@ def page_process_policies(api_key):
         current_item = st.session_state["review_queue"][0]
         p = current_item['data'].get('policy', {})
         fname = current_item['filename']
+        initial_confidence_map = _build_confidence_map(
+            p,
+            p.get("field_confidences")
+            or current_item["data"].get("field_confidences")
+            or current_item["data"].get("policy", {}).get("field_confidences"),
+        )
+        review_source_result = _get_review_source_result(current_item, p)
+        review_locations = review_source_result.get("locations", [])
+        review_source_map = {loc.get("field"): loc for loc in review_locations if loc.get("field")}
         
         c_pdf, c_form = st.columns([1, 1])
         
         with c_pdf:
             st.markdown(f"**Viewing:** `{fname}`")
-            show_highlights = st.toggle("✨ Show Field Locations", value=False, help="Highlight extracted fields on the PDF. May affect performance.")
-            
-            annotations = []
-            if show_highlights:
-                locs = p.get('field_locations', [])
-                for loc in locs:
-                    page = loc.get('page_number', 1)
-                    bbox = loc.get('bbox') # [ymin, xmin, ymax, xmax] 0-1000 scale
-                    
-                    if bbox and len(bbox) == 4:
-                        annotations.append({
-                            "page": page,
-                            "x": bbox[1], # xmin
-                            "y": bbox[0], # ymin
-                            "width": bbox[3] - bbox[1], # xmax - xmin
-                            "height": bbox[2] - bbox[0], # ymax - ymin
-                            "color": "rgba(255, 0, 0, 0.3)",
-                            "type": "rect"
-                        })
+            show_highlights = st.toggle(
+                "Show Field Locations",
+                value=False,
+                help="Locally highlight already-extracted values on the PDF. No AI/API call is made.",
+            )
 
-            pdf_viewer(input=current_item['pdf_bytes'], width=600, height=800, annotations=annotations if show_highlights else [])
+            highlight_locations = []
+            if show_highlights:
+                legacy_locations = p.get("field_locations") or []
+                source_locations = review_locations or legacy_locations
+                locator_status = (review_source_result.get("status") or {}).get("status")
+                if locator_status and locator_status != "ok":
+                    st.caption((review_source_result.get("status") or {}).get("message") or "No local source matches found.")
+                if source_locations:
+                    mode = st.selectbox(
+                        "Highlight mode",
+                        ["Selected field only", "Low/medium confidence fields", "All matched fields"],
+                        key=f"highlight_mode_{fname}",
+                    )
+                    location_fields = [loc.get("field") for loc in source_locations if loc.get("field")]
+                    selected_field = None
+                    if location_fields:
+                        selected_field = st.selectbox(
+                            "Field",
+                            options=location_fields,
+                            format_func=lambda f: FIELD_LABELS.get(f, f),
+                            key=f"highlight_field_{fname}",
+                        )
+                    if mode == "Selected field only" and selected_field:
+                        highlight_locations = [loc for loc in source_locations if loc.get("field") == selected_field]
+                    elif mode == "Low/medium confidence fields":
+                        flagged = {
+                            field
+                            for field, confidence in initial_confidence_map.items()
+                            if confidence in {"low", "medium"}
+                        }
+                        highlight_locations = [loc for loc in source_locations if loc.get("field") in flagged]
+                        if not highlight_locations:
+                            st.caption("No low/medium-confidence matched fields. Switch to All matched fields to inspect matches.")
+                    else:
+                        highlight_locations = source_locations
+                    matched_count = len(source_locations)
+                    ambiguous_count = sum(1 for loc in source_locations if loc.get("match_quality") == "ambiguous")
+                    st.caption(f"{matched_count} local source match(es). {ambiguous_count} ambiguous.")
+                else:
+                    st.caption("No local source matches found. Scanned PDFs without text are not OCR'd here.")
+
+            pdf_viewer(
+                input=current_item['pdf_bytes'],
+                width=600,
+                height=800,
+                annotations=_annotations_from_locations(highlight_locations) if show_highlights else [],
+            )
             
         with c_form:
             st.markdown("#### Verify Extracted Data")
@@ -1035,11 +1137,11 @@ def page_process_policies(api_key):
 
             c1, c2 = st.columns(2)
             
-            locs = p.get('field_locations', [])
+            locs = review_locations or p.get('field_locations', [])
             
-            r_carrier = c1.text_input(_confidence_label("Carrier (Brand)", "carrier_name", confidence_map), value=p.get('carrier_name', ''), help=get_source_help("carrier_name", locs))
+            r_carrier = c1.text_input(_field_label_with_source("Carrier (Brand)", "carrier_name", confidence_map, review_source_map), value=p.get('carrier_name', ''), help=get_source_help("carrier_name", locs))
             r_underwriter = c2.text_input("Underwriter (Legal Entity)", value=p.get("underwriter_name", ""))
-            r_pol_num = c2.text_input(_confidence_label("Policy Number", "policy_number", confidence_map), value=p.get('policy_number', ''), help=get_source_help("policy_number", locs))
+            r_pol_num = c2.text_input(_field_label_with_source("Policy Number", "policy_number", confidence_map, review_source_map), value=p.get('policy_number', ''), help=get_source_help("policy_number", locs))
             
             cc1, cc2 = st.columns(2)
             r_type = cc1.text_input("Policy Type", value=classification.get('policy_type', ''), disabled=True)
@@ -1051,7 +1153,7 @@ def page_process_policies(api_key):
             if not current_naic:
                 current_naic = get_naic_for_carrier(p.get('carrier_name', ''))
             
-            locs = p.get('field_locations', [])
+            locs = review_locations or p.get('field_locations', [])
             
             r_naic = c3.text_input("NAIC Code", value=current_naic)
             
@@ -1061,7 +1163,7 @@ def page_process_policies(api_key):
                 or {}
             )
             
-            prem_label = _confidence_label("Premium", "premium", confidence_map)
+            prem_label = _field_label_with_source("Premium", "premium", confidence_map, review_source_map)
             audit_flag = premium_audit.get("flag")
             if audit_flag == "PLAUSIBLE":
                 prem_label += " ✅"
@@ -1084,27 +1186,27 @@ def page_process_policies(api_key):
                     premium_audit.get("reason")
                     or f"Premium audit: {audit_flag}"
                 )
-            r_eff = c4.text_input(_confidence_label("Effective Date", "effective_date", confidence_map), value=p.get('effective_date', ''), help=get_source_help("effective_date", locs))
-            r_exp = c4.text_input(_confidence_label("Expiration Date", "expiration_date", confidence_map), value=p.get('expiration_date', ''), help=get_source_help("expiration_date", locs))
+            r_eff = c4.text_input(_field_label_with_source("Effective Date", "effective_date", confidence_map, review_source_map), value=p.get('effective_date', ''), help=get_source_help("effective_date", locs))
+            r_exp = c4.text_input(_field_label_with_source("Expiration Date", "expiration_date", confidence_map, review_source_map), value=p.get('expiration_date', ''), help=get_source_help("expiration_date", locs))
             
             st.divider()
-            r_ins_name = st.text_input(_confidence_label("Insured Name", "insured_name", confidence_map), value=p.get('insured_name', ''))
-            r_ins_addr = st.text_input("Insured Address", value=p.get('insured_address', ''))
+            r_ins_name = st.text_input(_field_label_with_source("Insured Name", "insured_name", confidence_map, review_source_map), value=p.get('insured_name', ''), help=get_source_help("insured_name", locs))
+            r_ins_addr = st.text_input(_field_label_with_source("Insured Address", "insured_address", confidence_map, review_source_map), value=p.get('insured_address', ''), help=get_source_help("insured_address", locs))
             ic1, ic2, ic3 = st.columns(3)
-            r_ins_city = ic1.text_input("City", value=p.get('insured_city', ''))
-            r_ins_state = ic2.text_input("State", value=p.get('insured_state_code', ''))
-            r_ins_zip = ic3.text_input("Zip", value=p.get('insured_zip', ''))
+            r_ins_city = ic1.text_input(_field_label_with_source("City", "insured_city", confidence_map, review_source_map), value=p.get('insured_city', ''), help=get_source_help("insured_city", locs))
+            r_ins_state = ic2.text_input(_field_label_with_source("State", "insured_state_code", confidence_map, review_source_map), value=p.get('insured_state_code', ''), help=get_source_help("insured_state_code", locs))
+            r_ins_zip = ic3.text_input(_field_label_with_source("Zip", "insured_zip", confidence_map, review_source_map), value=p.get('insured_zip', ''), help=get_source_help("insured_zip", locs))
             
             st.divider()
-            r_liab = st.text_input(_confidence_label("Auto Liability Limit", "liability_limit", confidence_map), value=p.get('liability_limit', ''))
+            r_liab = st.text_input(_field_label_with_source("Auto Liability Limit", "liability_limit", confidence_map, review_source_map), value=p.get('liability_limit', ''), help=get_source_help("liability_limit", locs))
             r_gl_limit = st.text_input("GL Limit", value=p.get('general_liability_limit', ''))
-            r_cargo = st.text_input(_confidence_label("Cargo Limit", "cargo_limit", confidence_map), value=p.get('cargo_limit', ''))
+            r_cargo = st.text_input(_field_label_with_source("Cargo Limit", "cargo_limit", confidence_map, review_source_map), value=p.get('cargo_limit', ''), help=get_source_help("cargo_limit", locs))
             r_cargo_ded = st.text_input("Cargo Ded", value=p.get('cargo_deductible', ''))
             
             st.markdown("##### Additional Coverages")
             rc1, rc2, rc3, rc4, rc5 = st.columns(5)
             r_um = rc1.text_input("UM/UIM", value=p.get('um_uim_limit', ''))
-            r_med = rc2.text_input("Med Pay", value=p.get('med_pay_limit', ''))
+            r_med = rc2.text_input(_field_label_with_source("Med Pay", "med_pay_limit", confidence_map, review_source_map), value=p.get('med_pay_limit', ''), help=get_source_help("med_pay_limit", locs))
             r_pip = rc3.text_input("PIP", value=p.get('pip_limit', ''))
             r_comp = rc4.text_input("Comp Ded", value=p.get('comp_deductible', ''))
             r_coll = rc5.text_input("Coll Ded", value=p.get('coll_deductible', ''))

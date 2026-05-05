@@ -64,6 +64,15 @@ COI/memorandum extraction uses `COI_SUMMARY_SCHEMA` and then normalizes the summ
 - Budget guard: `UsageService.is_over_budget(...)` against `DEFAULT_DAILY_BUDGET`
 - Daily usage stats used in Streamlit sidebar metrics
 
+## Review-Only Source Highlights
+
+The Review/Save PDF viewer can highlight already-extracted scalar values using local PDF text search. This is UI provenance only:
+
+- It runs after extraction from the uploaded PDF bytes already held in session.
+- It does not call Gemini or any external API.
+- It does not modify prompts, schemas, extraction cache versions, or saved policy data.
+- It does not OCR scanned PDFs; PDFs without a searchable text layer fail gracefully with no highlights.
+
 ## Validation and Cleaning Rules
 
 - Coverage eligibility by policy type (`is_coverage_allowed_for_policy_type`)
