@@ -37,6 +37,8 @@ flowchart TD
 ### 2) Service Layer
 - `PolicyService` in `core/services.py`
   - policy CRUD/search
+  - customer search/count with active/all/orphan filters
+  - safe cleanup of extraction-only orphan customer profiles after policy deletion
   - extraction persistence and duplicate update logic
   - structured duplicate detection and pre-save update previews
   - dashboard/statistics queries
@@ -92,6 +94,8 @@ flowchart TD
 ### Dashboard and Search
 
 - Dashboard and database pages call `PolicyService` query methods for counts, search, timeline, and distributions.
+- The customer portfolio tab uses server-side customer search and pagination. It hides customers with no policies by default, while still allowing retained orphan profiles to be inspected with an explicit filter.
+- Deleting the last policy for an extraction-only customer removes the empty customer profile. Customer profiles with manual aliases or contact data are retained.
 
 ## Storage and State
 

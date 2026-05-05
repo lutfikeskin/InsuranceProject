@@ -100,38 +100,45 @@ def render_customer_row(customer, session):
 
 def render_customers_view(session):
     st.subheader("👥 Customer Portfolio")
-    search = st.text_input("🔍 Search by name or business", key="customer_search")
+    service = PolicyService(session)
+    col_search, col_filter = st.columns([3, 1])
+    with col_search:
+        search = st.text_input("🔍 Search by name or business", key="customer_search")
+    with col_filter:
+        customer_filter = st.selectbox(
+            "Customer filter",
+            ["Active customers", "All customers", "Orphans only"],
+            key="customer_filter",
+            help="Orphans are customer profiles with no remaining policies.",
+        )
     search_lower = search.strip().lower()
+    filter_map = {
+        "Active customers": "active",
+        "All customers": "all",
+        "Orphans only": "orphans",
+    }
+    orphan_filter = filter_map[customer_filter]
 
     page_key = "customer_page_idx"
     if page_key not in st.session_state:
         st.session_state[page_key] = 0
 
     last_search_key = "customer_search_last"
-    if st.session_state.get(last_search_key) != search_lower:
+    last_filter_key = "customer_filter_last"
+    if (
+        st.session_state.get(last_search_key) != search_lower
+        or st.session_state.get(last_filter_key) != orphan_filter
+    ):
         st.session_state[page_key] = 0
         st.session_state[last_search_key] = search_lower
+        st.session_state[last_filter_key] = orphan_filter
 
-    query = session.query(Customer)
-    if search_lower:
-        like_term = f"%{search_lower}%"
-        query = (
-            query.outerjoin(CustomerEntity)
-            .filter(
-                or_(
-                    Customer.full_name.ilike(like_term),
-                    CustomerEntity.entity_name.ilike(like_term),
-                )
-            )
-            .distinct()
-        )
-
-    total_customers = query.count()
-    customers = (
-        query.order_by(Customer.full_name)
-        .offset(st.session_state[page_key] * CUSTOMER_PAGE_SIZE)
-        .limit(CUSTOMER_PAGE_SIZE)
-        .all()
+    total_customers = service.count_customers(search_lower or None, orphan_filter=orphan_filter)
+    customers = service.search_customers(
+        search_lower or None,
+        orphan_filter=orphan_filter,
+        offset=st.session_state[page_key] * CUSTOMER_PAGE_SIZE,
+        limit=CUSTOMER_PAGE_SIZE,
     )
 
     start = st.session_state[page_key] * CUSTOMER_PAGE_SIZE + 1 if total_customers else 0
@@ -145,6 +152,15 @@ def render_customers_view(session):
     if p2.button("Next ➡️", disabled=not has_next, key="customers_next"):
         st.session_state[page_key] += 1
         st.rerun()
+
+    if not customers:
+        if orphan_filter == "active":
+            st.info("No active customer profiles found. Switch to All customers or Orphans only to inspect retained profiles.")
+        elif orphan_filter == "orphans":
+            st.success("No orphan customer profiles found.")
+        else:
+            st.info("No customer profiles found for this search.")
+        return
 
     for customer in customers:
         render_customer_row(customer, session)
@@ -613,10 +629,23 @@ def _render_policies_tab(api_key):
                     type="primary",
                     disabled=not delete_ok,
                 ):
+                    cleanup_removed = []
+                    cleanup_retained = []
                     for k in selected_to_delete:
                         pol = policy_map_del[k]
-                        service.delete_policy(pol)
-                    st.success("Deleted!")
+                        result = service.delete_policy(pol)
+                        cleanup = result.get("customer_cleanup", {})
+                        customer_name = cleanup.get("customer_name")
+                        if cleanup.get("deleted") and customer_name:
+                            cleanup_removed.append(customer_name)
+                        elif cleanup.get("reason") == "manual_or_contact_data" and customer_name:
+                            cleanup_retained.append(customer_name)
+                    message = f"Deleted {len(selected_to_delete)} polic{'y' if len(selected_to_delete) == 1 else 'ies'}."
+                    if cleanup_removed:
+                        message += f" Removed {len(set(cleanup_removed))} empty customer profile(s)."
+                    if cleanup_retained:
+                        message += f" Retained {len(set(cleanup_retained))} customer profile(s) with manual/contact data."
+                    st.success(message)
                     st.rerun()
 
     finally:

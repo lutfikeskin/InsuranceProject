@@ -715,6 +715,51 @@ class PolicyService:
             )
         return q.count()
 
+    def _customer_query(self, term: str | None = None, *, orphan_filter: str = "active"):
+        """
+        Return a Customer query with optional server-side search and orphan filtering.
+
+        orphan_filter:
+        - active: customers with at least one policy
+        - all: all customers
+        - orphans: customers with no policies
+        """
+        q = self.session.query(Customer)
+        if term and str(term).strip():
+            t = f"%{str(term).strip()}%"
+            q = q.filter(
+                or_(
+                    Customer.full_name.ilike(t),
+                    Customer.entities.any(CustomerEntity.entity_name.ilike(t)),
+                )
+            )
+        if orphan_filter == "active":
+            q = q.filter(Customer.policies.any())
+        elif orphan_filter == "orphans":
+            q = q.filter(~Customer.policies.any())
+        return q
+
+    def search_customers(
+        self,
+        term: str | None = None,
+        *,
+        orphan_filter: str = "active",
+        limit: int = 25,
+        offset: int = 0,
+    ):
+        """Search customers by personal/business name without loading the full table."""
+        return (
+            self._customer_query(term, orphan_filter=orphan_filter)
+            .order_by(Customer.full_name)
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+    def count_customers(self, term: str | None = None, *, orphan_filter: str = "active") -> int:
+        """Count customers using the same filters as search_customers."""
+        return self._customer_query(term, orphan_filter=orphan_filter).count()
+
     def get_all_policies(self):
         """Backward-compatible: capped list of recent policies (newest first)."""
         return self.search_policies(None, limit=10000, offset=0)
@@ -725,9 +770,40 @@ class PolicyService:
     def get_policy_by_id(self, policy_id):
         return self.session.query(Policy).get(policy_id)
 
+    def _customer_has_manual_value(self, customer: Customer) -> bool:
+        if customer.primary_email or customer.primary_phone:
+            return True
+        for entity in customer.entities or []:
+            if (entity.source or "").lower() == "manual":
+                return True
+        return False
+
+    def _delete_orphan_customer_if_safe(self, customer_id: int | None) -> dict:
+        if not customer_id:
+            return {"deleted": False, "reason": "no_customer"}
+        customer = self.session.get(Customer, customer_id)
+        if not customer:
+            return {"deleted": False, "reason": "missing_customer"}
+        remaining = self.session.query(Policy).filter(Policy.customer_id == customer_id).count()
+        if remaining:
+            return {"deleted": False, "reason": "has_policies", "customer_name": customer.full_name}
+        if self._customer_has_manual_value(customer):
+            return {"deleted": False, "reason": "manual_or_contact_data", "customer_name": customer.full_name}
+        customer_name = customer.full_name
+        self.session.delete(customer)
+        return {"deleted": True, "reason": "orphan_extraction_profile", "customer_name": customer_name}
+
     def delete_policy(self, policy: Policy):
+        customer_id = policy.customer_id
+        policy_number = policy.policy_number
         self.session.delete(policy)
+        self.session.flush()
+        customer_cleanup = self._delete_orphan_customer_if_safe(customer_id)
         self.session.commit()
+        return {
+            "deleted_policy_number": policy_number,
+            "customer_cleanup": customer_cleanup,
+        }
 
     def get_expiring_policies(self, days=30):
         """Returns policies expiring within the given number of days."""

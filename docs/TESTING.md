@@ -15,6 +15,7 @@ Focused runs:
 
 ```bash
 pytest tests/test_policy_search.py -v
+pytest tests/test_customer_database.py -v
 pytest tests/test_duplicate_detection.py -v
 pytest tests/test_policy_update_diff.py -v
 pytest tests/test_prompt_routing.py -v
@@ -28,6 +29,8 @@ pytest tests/test_accuracy.py -v
 
 - `tests/test_policy_search.py`
   - search behavior and coverage-to-vehicle VIN linking
+- `tests/test_customer_database.py`
+  - customer search orphan filters and safe customer cleanup after policy deletion
 - `tests/test_duplicate_detection.py`
   - normalized duplicate matching, conflict detection, possible related policies, and duplicate save intent behavior
 - `tests/test_policy_update_diff.py`
