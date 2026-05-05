@@ -4,8 +4,16 @@ GLOBAL_EXTRACTION_PRINCIPLES = """
     GLOBAL EXTRACTION PRINCIPLES:
     - Extract from tables, key-value blocks, or prose.
     - Output MUST be valid JSON.
-    - Return null for any field not explicitly visible on the page. Never infer or guess.
+    - If a field is not explicitly visible, return JSON null (not the string "null", not the string "N/A", not empty string ""). Never infer or guess.
 """
+
+NULL_HANDLING_EXAMPLES = """
+    EXAMPLES OF NULL HANDLING:
+    Correct:   "premium": null
+    Wrong:     "premium": "null"
+    Wrong:     "premium": "N/A"
+    Wrong:     "premium": ""
+    """
 
 CLASSIFY_POLICY_PROMPT = GLOBAL_EXTRACTION_PRINCIPLES + """
     You are an insurance document taxonomy and policy classification system.
@@ -133,6 +141,7 @@ def get_extract_all_prompt(
     You are an expert insurance underwriter and data extraction specialist.
     Extract the COMPLETE policy information from the provided document in a single pass.
     {classification_block}
+    {NULL_HANDLING_EXAMPLES}
     {declarations_block}
     {confidence_block}
     {unreliable_block}
@@ -191,6 +200,7 @@ def get_extract_coi_prompt(
     Extract only explicitly visible information.
 
     {classification_block}
+    {NULL_HANDLING_EXAMPLES}
     --- FIELD CONFIDENCE ---
     For each critical field below, also return a sibling <fieldname>_confidence value:
     - policy_number
@@ -210,7 +220,7 @@ def get_extract_coi_prompt(
     --- CERTIFICATE FIELDS ---
     - certificate_holder: name and address.
     - insured: name and address.
-    - producer: name, address, and phone if shown.
+    - Producer field: If a clear producer/agency name and address appears in a dedicated PRODUCER box (ACORD 25 standard location: top-left), extract it. Otherwise return null for producer. Do NOT use the carrier/insurer as a fallback - they are different entities.
     - additional_insured_text: copy exact wording when present.
     - cancellation_notice_days: extract integer days if stated.
     - description_of_operations: copy exact text block if present.
@@ -225,8 +235,23 @@ def get_extract_coi_prompt(
       - Progressive commercial auto -> "United Financial Casualty Company"
       - Progressive personal auto -> "Progressive Direct Insurance Company" (or similar Progressive subsidiary)
       - GEICO commercial auto -> "GEICO Casualty Company" (or similar)
-    - If only one name appears, populate carrier_name with it and leave underwriter_name null.
-    - If both appear, populate both.
+    - CARRIER NAME vs UNDERWRITER NAME:
+      Some documents show only one name and that name is the full legal entity containing the brand (e.g. "Progressive Direct Insurance Company", "GEICO Casualty Company", "GEICO Marine Insurance Company").
+      In these cases:
+      - carrier_name should be the brand portion: "Progressive", "GEICO", "Allstate"
+      - underwriter_name should be the full legal entity shown on the document.
+      Examples:
+      - Document shows "GEICO Marine Insurance Company":
+        carrier_name = "GEICO"
+        underwriter_name = "GEICO Marine Insurance Company"
+      - Document shows "Progressive" as logo + "Underwritten by United Financial Casualty Company":
+        carrier_name = "Progressive"
+        underwriter_name = "United Financial Casualty Company"
+      - Document shows only "Allstate Insurance Company":
+        carrier_name = "Allstate"
+        underwriter_name = "Allstate Insurance Company"
+    - If both brand and legal entity appear separately, populate both.
+    - Never leave underwriter_name null when the visible carrier text is a full legal entity.
     - Never invent an underwriter; return null if unsure.
     - For each critical policy field, include sibling confidence values:
       carrier_name_confidence, policy_number_confidence, effective_date_confidence, expiration_date_confidence, insured_name_confidence, premium_confidence.
@@ -269,6 +294,7 @@ def get_extract_endorsement_prompt(
     Extract only lightweight endorsement metadata that is explicitly visible.
 
     {classification_block}
+    {NULL_HANDLING_EXAMPLES}
     --- ENDORSEMENT METADATA ---
     - parent_policy_number: the policy number this endorsement modifies.
     - endorsement_type: choose one from the allowed enum based on explicit content.
