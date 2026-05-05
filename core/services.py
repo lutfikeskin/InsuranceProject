@@ -354,12 +354,21 @@ class PolicyService:
                                 break
                         new_policy.customer_id = customer.id
                     else:
-                        customer = resolver.create_customer(
-                            full_name=insured_name,
-                            entity_name=insured_name,
-                            entity_type="business",
-                        )
-                        customer.needs_real_name_entry = True
+                        embedded_owner = resolver.extract_embedded_owner_name(insured_name)
+                        if embedded_owner:
+                            customer = resolver.create_customer(
+                                full_name=embedded_owner["owner_name"],
+                                entity_name=embedded_owner["full_insured_name"],
+                                entity_type="business",
+                            )
+                            customer.needs_real_name_entry = False
+                        else:
+                            customer = resolver.create_customer(
+                                full_name=insured_name,
+                                entity_name=insured_name,
+                                entity_type="business",
+                            )
+                            customer.needs_real_name_entry = True
                         new_policy.customer_id = customer.id
 
         self.session.commit()
@@ -621,12 +630,21 @@ class PolicyService:
                                     break
                             existing.customer_id = customer.id
                         else:
-                            customer = resolver.create_customer(
-                                full_name=insured_name,
-                                entity_name=insured_name,
-                                entity_type="business",
-                            )
-                            customer.needs_real_name_entry = True
+                            embedded_owner = resolver.extract_embedded_owner_name(insured_name)
+                            if embedded_owner:
+                                customer = resolver.create_customer(
+                                    full_name=embedded_owner["owner_name"],
+                                    entity_name=embedded_owner["full_insured_name"],
+                                    entity_type="business",
+                                )
+                                customer.needs_real_name_entry = False
+                            else:
+                                customer = resolver.create_customer(
+                                    full_name=insured_name,
+                                    entity_name=insured_name,
+                                    entity_type="business",
+                                )
+                                customer.needs_real_name_entry = True
                             existing.customer_id = customer.id
 
         update_type = self._classify_update(existing, new_policy)
@@ -902,6 +920,7 @@ class PolicyService:
         for policy_number, rows in grouped.items():
             merged_row = self._merge_coi_policy_rows(rows)
             limits = merged_row.get("limits") if isinstance(merged_row.get("limits"), dict) else {}
+            insured_summary = summary.get("insured") if isinstance(summary.get("insured"), dict) else {}
 
             policy_payload = {
                 "policy": {
@@ -915,9 +934,12 @@ class PolicyService:
                     "effective_date_confidence": merged_row.get("effective_date_confidence"),
                     "expiration_date": merged_row.get("expiration_date"),
                     "expiration_date_confidence": merged_row.get("expiration_date_confidence"),
-                    "insured_name": self._clean_text(merged_row.get("insured_name")) or self._clean_text((summary.get("insured") or {}).get("name")),
+                    "insured_name": self._clean_text(merged_row.get("insured_name")) or self._clean_text(insured_summary.get("name")),
                     "insured_name_confidence": merged_row.get("insured_name_confidence"),
-                    "insured_address": self._clean_text((summary.get("insured") or {}).get("address")),
+                    "insured_address": self._clean_text(insured_summary.get("address")),
+                    "insured_city": self._clean_text(insured_summary.get("city")),
+                    "insured_state_code": self._clean_text(insured_summary.get("state_code") or insured_summary.get("state")),
+                    "insured_zip": self._clean_text(insured_summary.get("zip")),
                     "premium": self._clean_text(merged_row.get("premium")),
                     "premium_confidence": merged_row.get("premium_confidence"),
                     "financial_responsibility_name": self._clean_text((summary.get("producer") or {}).get("name")),
@@ -933,6 +955,14 @@ class PolicyService:
                     "comp_deductible": self._clean_limit_text(limits.get("comp_deductible")),
                     "coll_deductible": self._clean_limit_text(limits.get("coll_deductible")),
                     "policy_type": merged_row.get("policy_type") or extraction_result.get("classification", {}).get("policy_type") or "unknown",
+                    "has_general_liability": bool(
+                        self._clean_limit_text(limits.get("general_liability_limit"))
+                        or "general" in str(merged_row.get("policy_type") or "").lower()
+                    ),
+                    "has_auto_liability": bool(
+                        self._clean_limit_text(limits.get("liability_limit"))
+                        or "auto" in str(merged_row.get("policy_type") or "").lower()
+                    ),
                     "document_type": extraction_result.get("classification", {}).get("document_type"),
                     "classification_confidence": extraction_result.get("classification", {}).get("confidence"),
                     "classification_signals": extraction_result.get("classification", {}).get("signals", []),
@@ -1282,8 +1312,8 @@ class COIService:
 
         cargo_ded_val = p.cargo_deductible if p.cargo_deductible else "1000"
         
-        has_gl = p.has_general_liability if p.has_general_liability is not None else True
-        has_auto = p.has_auto_liability if p.has_auto_liability is not None else True
+        has_gl = bool(p.has_general_liability)
+        has_auto = bool(p.has_auto_liability)
         
         current_naic = p.naic_number if p.naic_number else get_naic_for_carrier(p.carrier_name)
         

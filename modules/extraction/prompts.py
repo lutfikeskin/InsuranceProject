@@ -4,16 +4,18 @@ GLOBAL_EXTRACTION_PRINCIPLES = """
     GLOBAL EXTRACTION PRINCIPLES:
     - Extract from tables, key-value blocks, or prose.
     - Output MUST be valid JSON.
-    - If a field is not explicitly visible, return JSON null (not the string "null", not the string "N/A", not empty string ""). Never infer or guess.
+    - If a field is not explicitly visible, return JSON null. Never use "null", "N/A", or "" as placeholders.
+    - Never infer or guess.
 """
 
-NULL_HANDLING_EXAMPLES = """
-    EXAMPLES OF NULL HANDLING:
-    Correct:   "premium": null
-    Wrong:     "premium": "null"
-    Wrong:     "premium": "N/A"
-    Wrong:     "premium": ""
-    """
+NULL_HANDLING_RULE = """
+    --- NULL HANDLING ---
+    Missing field example: "premium": null. Do not output "null", "N/A", "-", or "".
+"""
+
+CLASSIFICATION_SIGNAL_RULE = """
+    Keep classification.signals to at most 3 short explicit cues from the document.
+"""
 
 CLASSIFY_POLICY_PROMPT = GLOBAL_EXTRACTION_PRINCIPLES + """
     You are an insurance document taxonomy and policy classification system.
@@ -60,7 +62,7 @@ CLASSIFY_POLICY_PROMPT = GLOBAL_EXTRACTION_PRINCIPLES + """
     PACKAGE CONFIRMATION:
     - If you choose 'commercial_package', you MUST confirm that it contains AT LEAST TWO of: General Liability, Property, or Auto.
     - If it only has Auto + Cargo, classify as 'commercial_auto' (dominance rule).
-    - List the detected cues used to justify document_type and policy_type in the 'signals' array.
+    - List up to 3 short detected cues used to justify document_type and policy_type in the 'signals' array.
 
     DISAMBIGUATION (brief):
     - umbrella: primary umbrella/excess liability policy form; not a following-form excess that only amends an underlying policy with no standalone umbrella declarations.
@@ -72,14 +74,17 @@ CLASSIFY_POLICY_PROMPT = GLOBAL_EXTRACTION_PRINCIPLES + """
 def get_extract_all_prompt(
     registry_text: str,
     user_policy_type: Optional[str] = None,
+    scoped_policy_type: Optional[str] = None,
     carrier_hints_suffix: str = "",
     unreliable_fields: Optional[list[str]] = None,
 ) -> str:
+    prompt_policy_type = user_policy_type or scoped_policy_type or "unknown"
     if user_policy_type:
         classification_block = f"""
     --- CLASSIFICATION ---
     policy_type is FIXED to "{user_policy_type}" (user or system). Set classification.policy_type to exactly this string,
     confidence to "high", and include "user_selected" in classification.signals. Do not output a different policy_type.
+    {CLASSIFICATION_SIGNAL_RULE}
     """
     else:
         classification_block = """
@@ -88,6 +93,7 @@ def get_extract_all_prompt(
     - Base decision on explicit wording.
     - PACKAGE RULE: If 'commercial_package', confirm AT LEAST TWO of: General Liability, Property, or Auto.
     - If Auto + Cargo only, classify as 'commercial_auto' (dominance rule).
+    - Keep classification.signals to at most 3 short explicit cues.
     """
 
     declarations_block = """
@@ -137,33 +143,22 @@ def get_extract_all_prompt(
     Pay special attention: {formatted}.
     """
 
+    policy_scope_block = _get_policy_scope_block(prompt_policy_type)
+
     core = GLOBAL_EXTRACTION_PRINCIPLES + f"""
     You are an expert insurance underwriter and data extraction specialist.
     Extract the COMPLETE policy information from the provided document in a single pass.
     {classification_block}
-    {NULL_HANDLING_EXAMPLES}
+    {NULL_HANDLING_RULE}
     {declarations_block}
     {confidence_block}
     {unreliable_block}
-    --- VEHICLES ---
-    - Extract ALL vehicles (VIN, Year, Make, Model, GVW, Type).
-    - Look for explicit schedules and vehicles mentioned in prose.
+    {policy_scope_block}
 
-    --- DRIVERS ---
-    - Extract ALL drivers (Name, License #, Excluded status).
-
-    --- COVERAGES ---
-    - Map every coverage to a valid coverage_code from the registry below.
-    - Link vehicle-specific coverages to vehicle_vin.
-    - For COMP and COLL, always extract the deductible amount — check schedules, tables, and endorsement pages.
+    --- COVERAGE MAPPING ---
+    - Map every visible coverage to a valid coverage_code from the registry below.
     - If a row says Included/Yes without a numeric limit, keep limits null; do not invent dollar amounts.
-    - Common label hints: BI/LIAB→AUTO_LIAB_BI, PD/Prop Damage→AUTO_LIAB_PD, UM/UIM, PIP, OTC/COMP, COLL, RR→RENTAL, Towing→TOWING.
-    - Michigan: Property Protection (PPI in-state) is not the same as PD liability; use code MI_PPI when clearly PPI.
-    - Hired/Non-Owned: use HIRED_AUTO / NON_OWNED_AUTO; set hnoa_basis if primary vs excess is stated; hnoa_attached_to bap or gl if the form says which policy it amends.
     - REGISTRY: {registry_text}
-
-    --- VEHICLES (commercial) ---
-    - BAP: if a schedule shows covered auto designation symbols, copy them to covered_auto_symbols (comma-separated), e.g. 1,7.
 
     --- COMPLIANCE (optional) ---
     - If MCS-90, MC #, USDOT, or Drive Other Car (e.g. CA 99 10) is visible, set compliance and/or policy motor_carrier_id / mcs90_noted / drive_other_car_note. For multiple DOC individuals/forms, set compliance.doc_endorsements as a list of {{ "form_id", "named_individuals" }}.
@@ -178,6 +173,56 @@ def get_extract_all_prompt(
     return core
 
 
+def _get_policy_scope_block(policy_type: Optional[str]) -> str:
+    policy_type = policy_type or "unknown"
+    auto_block = """
+    --- AUTO POLICY DETAILS ---
+    - Extract ALL visible vehicles: VIN, Year, Make, Model, GVW, Type.
+    - Extract ALL visible drivers: Name, License #, Excluded status.
+    - Link vehicle-specific coverages to vehicle_vin.
+    - Extract COMP/COLL deductibles from schedules, tables, and endorsement pages.
+    - Common labels: BI/LIAB→AUTO_LIAB_BI, PD/Prop Damage→AUTO_LIAB_PD, UM/UIM, PIP, OTC/COMP, COLL, RR→RENTAL, Towing→TOWING.
+    - Michigan PPI is not PD liability; use MI_PPI when clearly PPI.
+    """
+    commercial_auto_block = """
+    - BAP: copy covered auto designation symbols to covered_auto_symbols when visible, e.g. 1,7.
+    - Hired/Non-Owned: use HIRED_AUTO / NON_OWNED_AUTO; set hnoa_basis and hnoa_attached_to only when stated.
+    """
+    gl_block = """
+    --- LIABILITY POLICY DETAILS ---
+    - Focus on General Liability, BOP, package, or umbrella limits explicitly shown.
+    - Extract vehicles/drivers only when a schedule is actually present; otherwise return empty arrays.
+    - For GL: capture occurrence, aggregate, products/completed operations, and medical payments when visible.
+    """
+    cargo_block = """
+    --- MOTOR TRUCK CARGO DETAILS ---
+    - Focus on cargo limit, cargo deductible, covered commodities, radius/territory, and scheduled vehicles when visible.
+    - Capture DOT/MC/MCS-90 details only if explicitly shown.
+    - Do not convert cargo endorsements into a separate auto liability policy.
+    """
+    umbrella_block = """
+    --- UMBRELLA / EXCESS DETAILS ---
+    - Focus on umbrella/excess liability limits and underlying policy references.
+    - Do not treat following-form endorsements as standalone umbrella policies unless declarations clearly say so.
+    - Extract vehicles/drivers only when a schedule is actually present; otherwise return empty arrays.
+    """
+    default_block = """
+    --- SCHEDULE DETAILS ---
+    - Extract visible vehicles and drivers only when shown; otherwise return empty arrays.
+    - Extract visible coverages, limits, deductibles, and vehicle links when explicitly present.
+    """
+
+    if policy_type in {"personal_auto", "commercial_auto"}:
+        return auto_block + (commercial_auto_block if policy_type == "commercial_auto" else "")
+    if policy_type in {"general_liability", "bop", "commercial_package"}:
+        return gl_block
+    if policy_type == "motor_truck_cargo":
+        return cargo_block
+    if policy_type == "umbrella":
+        return umbrella_block
+    return default_block
+
+
 def get_extract_coi_prompt(
     user_policy_type: Optional[str] = None,
     carrier_hints_suffix: str = "",
@@ -187,6 +232,7 @@ def get_extract_coi_prompt(
     --- CLASSIFICATION ---
     policy_type is FIXED to "{user_policy_type}" (user or system). Set classification.policy_type to exactly this string,
     confidence to "high", and include "user_selected" in classification.signals. Do not output a different policy_type.
+    {CLASSIFICATION_SIGNAL_RULE}
     """
     else:
         classification_block = """
@@ -200,7 +246,7 @@ def get_extract_coi_prompt(
     Extract only explicitly visible information.
 
     {classification_block}
-    {NULL_HANDLING_EXAMPLES}
+    {NULL_HANDLING_RULE}
     --- FIELD CONFIDENCE ---
     For each critical field below, also return a sibling <fieldname>_confidence value:
     - policy_number
@@ -219,8 +265,8 @@ def get_extract_coi_prompt(
 
     --- CERTIFICATE FIELDS ---
     - certificate_holder: name and address.
-    - insured: name and address.
-    - Producer field: If a clear producer/agency name and address appears in a dedicated PRODUCER box (ACORD 25 standard location: top-left), extract it. Otherwise return null for producer. Do NOT use the carrier/insurer as a fallback - they are different entities.
+    - insured: name, street address, city, state_code, and zip when visible. If printed as one line, split only obvious US forms like "5074 LINDORA DR COLUMBUS, OH 43232".
+    - producer: extract only from a dedicated PRODUCER box/section; never fall back to carrier/insurer.
     - additional_insured_text: copy exact wording when present.
     - cancellation_notice_days: extract integer days if stated.
     - description_of_operations: copy exact text block if present.
@@ -229,34 +275,16 @@ def get_extract_coi_prompt(
     - Extract every policy row shown in the certificate/memorandum.
     - For each policy include:
       policy_type, carrier_name, underwriter_name, naic_number, policy_number, effective_date, expiration_date, limits.
-    - carrier_name: The brand name shown prominently on the document (e.g. "Progressive", "GEICO", "Allstate"). This is what the customer recognizes.
-    - underwriter_name: The legal underwriting entity, often shown in smaller text near declarations as "Underwritten by:" or in fine print.
-      Examples:
-      - Progressive commercial auto -> "United Financial Casualty Company"
-      - Progressive personal auto -> "Progressive Direct Insurance Company" (or similar Progressive subsidiary)
-      - GEICO commercial auto -> "GEICO Casualty Company" (or similar)
-    - CARRIER NAME vs UNDERWRITER NAME:
-      Some documents show only one name and that name is the full legal entity containing the brand (e.g. "Progressive Direct Insurance Company", "GEICO Casualty Company", "GEICO Marine Insurance Company").
-      In these cases:
-      - carrier_name should be the brand portion: "Progressive", "GEICO", "Allstate"
-      - underwriter_name should be the full legal entity shown on the document.
-      Examples:
-      - Document shows "GEICO Marine Insurance Company":
-        carrier_name = "GEICO"
-        underwriter_name = "GEICO Marine Insurance Company"
-      - Document shows "Progressive" as logo + "Underwritten by United Financial Casualty Company":
-        carrier_name = "Progressive"
-        underwriter_name = "United Financial Casualty Company"
-      - Document shows only "Allstate Insurance Company":
-        carrier_name = "Allstate"
-        underwriter_name = "Allstate Insurance Company"
-    - If both brand and legal entity appear separately, populate both.
-    - Never leave underwriter_name null when the visible carrier text is a full legal entity.
-    - Never invent an underwriter; return null if unsure.
+    - carrier_name is the customer-facing brand: Progressive, GEICO, Allstate.
+    - underwriter_name is the legal insurer shown, e.g. United Financial Casualty Company, GEICO Marine Insurance Company, Allstate Insurance Company.
+    - If one visible name is a full legal insurer containing a brand, split it: carrier_name = brand, underwriter_name = full legal name.
+    - If only a brand/logo is visible and no legal insurer is shown, set underwriter_name null.
+    - Never invent an underwriter.
     - For each critical policy field, include sibling confidence values:
       carrier_name_confidence, policy_number_confidence, effective_date_confidence, expiration_date_confidence, insured_name_confidence, premium_confidence.
     - For limits include liability_limit_confidence and cargo_limit_confidence.
     - limits should include only visible limit fields; keep missing limit fields null.
+    - If Medical Payments / Med Pay is marked INCL or Included with no dollar amount, set limits.med_pay_limit to "Included".
 
     --- VEHICLES / DRIVERS ---
     - Extract vehicle and driver schedules if present.
@@ -282,6 +310,7 @@ def get_extract_endorsement_prompt(
     --- CLASSIFICATION ---
     policy_type is FIXED to "{user_policy_type}" (user or system). Set classification.policy_type to exactly this string,
     confidence to "high", and include "user_selected" in classification.signals. Do not output a different policy_type.
+    {CLASSIFICATION_SIGNAL_RULE}
     """
     else:
         classification_block = """
@@ -294,7 +323,7 @@ def get_extract_endorsement_prompt(
     Extract only lightweight endorsement metadata that is explicitly visible.
 
     {classification_block}
-    {NULL_HANDLING_EXAMPLES}
+    {NULL_HANDLING_RULE}
     --- ENDORSEMENT METADATA ---
     - parent_policy_number: the policy number this endorsement modifies.
     - endorsement_type: choose one from the allowed enum based on explicit content.

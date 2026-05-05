@@ -157,6 +157,11 @@ def apply_alias_resolution(coverages: list[dict[str, Any]]) -> list[dict[str, An
         "comprehensive": "COMP",
         "collision": "COLL",
         "medical payments": "MED_PAY",
+        "medical payments incl": "MED_PAY",
+        "medical payments included": "MED_PAY",
+        "med pay": "MED_PAY",
+        "med pay incl": "MED_PAY",
+        "med pay included": "MED_PAY",
         "motor truck cargo": "CARGO_LEGAL_LIAB",
         "hired auto liability": "HIRED_AUTO",
         "non-owned auto liability": "NON_OWNED_AUTO",
@@ -185,6 +190,9 @@ def apply_alias_resolution(coverages: list[dict[str, Any]]) -> list[dict[str, An
                 continue
             if alias in alias_map:
                 replacement = alias_map[alias]
+                break
+            if "medical payments" in alias or "med pay" in alias:
+                replacement = "MED_PAY"
                 break
         if replacement:
             row["coverage_code"] = replacement

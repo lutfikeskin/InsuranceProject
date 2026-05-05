@@ -1,6 +1,7 @@
 {
   "policy": {
-    "carrier_name": "GEICO Marine Insurance Company",
+    "carrier_name": "GEICO",
+    "underwriter_name": "GEICO Marine Insurance Company",
     "naic_number": null,
     "policy_number": "9300317286",
     "effective_date": "04/22/2026",

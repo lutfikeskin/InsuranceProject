@@ -1,9 +1,26 @@
 from sqlalchemy import or_
+import re
 
 from core.database import Customer, CustomerEntity
 
 
 class CustomerResolver:
+    COMPANY_TOKENS = {
+        "llc",
+        "inc",
+        "corp",
+        "corporation",
+        "company",
+        "co",
+        "ltd",
+        "trucking",
+        "transport",
+        "logistics",
+        "services",
+        "service",
+        "enterprises",
+    }
+
     def __init__(self, session):
         self.session = session
 
@@ -52,6 +69,20 @@ class CustomerResolver:
         if entity_match:
             return self._matched(entity_match, "confirmed", f"Known business entity: '{insured_name}'")
 
+        embedded_owner = self.extract_embedded_owner_name(insured_name)
+        if embedded_owner:
+            owner_name = embedded_owner["owner_name"]
+            owner_match = self.session.query(Customer).filter(Customer.full_name.ilike(owner_name)).first()
+            if owner_match:
+                return self._matched(
+                    owner_match,
+                    "confirmed",
+                    f"DBA owner match: '{owner_name}' from '{insured_name}'",
+                )
+            fuzzy_owner = self._fuzzy_name_match(owner_name, entity_type="personal")
+            if fuzzy_owner:
+                return self._matched(fuzzy_owner["customer"], "suggested", fuzzy_owner["reason"])
+
         drivers = extraction_result.get("drivers", [])
         for driver in drivers:
             driver_name = (driver.get("full_name") or "").strip()
@@ -69,6 +100,39 @@ class CustomerResolver:
                 )
 
         return self._no_match(f"Business '{insured_name}' not linked to any known customer")
+
+    @classmethod
+    def extract_embedded_owner_name(cls, insured_name: str) -> dict | None:
+        """
+        Detect sole-proprietor/DBA insured names where the personal owner is before DBA.
+        Returns None for corporate-looking prefixes to avoid false customer anchors.
+        """
+        if not insured_name:
+            return None
+        match = re.search(r"\b(?:d\s*/\s*b\s*/\s*a|dba|doing business as)\b", insured_name, flags=re.IGNORECASE)
+        if not match:
+            return None
+        owner = " ".join(insured_name[: match.start()].split()).strip(" ,-/")
+        entity = " ".join(insured_name[match.end():].split()).strip(" ,-/") or insured_name.strip()
+        if not cls._looks_like_person_name(owner):
+            return None
+        return {
+            "owner_name": owner,
+            "entity_name": entity,
+            "full_insured_name": insured_name.strip(),
+        }
+
+    @classmethod
+    def _looks_like_person_name(cls, value: str) -> bool:
+        tokens = [t for t in re.split(r"\s+", value or "") if t]
+        if len(tokens) < 2 or len(tokens) > 5:
+            return False
+        normalized = [re.sub(r"[^A-Za-z'-]", "", t).lower() for t in tokens]
+        if any(not t for t in normalized):
+            return False
+        if any(t in cls.COMPANY_TOKENS for t in normalized):
+            return False
+        return True
 
     def _fuzzy_name_match(self, name: str, entity_type=None):
         tokens = [token for token in name.lower().split() if len(token) > 2]

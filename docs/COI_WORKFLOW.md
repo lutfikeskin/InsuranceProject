@@ -42,7 +42,7 @@ ACORD insurer behavior:
 
 ## Coverage Behavior
 
-- GL and Auto sections are controlled by boolean flags.
+- GL and Auto sections are controlled by boolean flags and are no longer assumed enabled when extraction evidence is missing.
 - Cargo section is enabled when cargo data is present/selected.
 - GL aggregate can be selected in UI and passed into payload.
 

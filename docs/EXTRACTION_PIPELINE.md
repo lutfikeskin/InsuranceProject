@@ -14,15 +14,36 @@ This document describes the implemented extraction path in `modules/extraction/p
 2. Compute file hash and check local extraction cache.
 3. Upload PDF to Gemini File API.
 4. Optionally create temporary Gemini cached content context.
-5. Build extraction prompt with registry JSON.
-6. Execute one-shot Gemini structured extraction.
-7. Parse JSON, map classification/policy/vehicles/drivers/coverages.
-8. Normalize:
+5. Classify document type and policy type for routing.
+6. Build the extraction prompt for the routed document type with registry JSON.
+7. Execute one-shot Gemini structured extraction.
+8. Parse JSON, map classification/policy/vehicles/drivers/coverages.
+9. Normalize:
    - vehicle refinement
    - zero-value cleanup
    - coverage validation and policy-type filtering
    - summary field computation
-9. Save output to local cache.
+10. Save output to local cache.
+
+## Document Routing
+
+The pipeline first determines `document_type` and routes to an extraction goal from `core/document_taxonomy.py`:
+
+- `declarations_page`, `renewal_declarations`, `unknown` -> full policy extraction
+- `certificate_of_insurance`, `memorandum` -> COI summary extraction
+- `endorsement` -> endorsement metadata extraction
+- `quote`, `application` -> non-extractable response
+
+When a user manually selects `policy_type`, the pipeline still classifies `document_type` so COIs and endorsements continue to use the smaller, specialized prompts. The selected policy type remains fixed in the final classification.
+
+## COI and Memorandum Normalization
+
+COI/memorandum extraction uses `COI_SUMMARY_SCHEMA` and then normalizes the summary into the standard `policy` shape used by review and save flows.
+
+- `insured.address`, `insured.city`, `insured.state_code`, and `insured.zip` are preserved when the model returns structured fields.
+- If a COI returns only one insured address line, normalization splits city/state/ZIP only for clear US endings such as `5074 LINDORA DR COLUMBUS, OH 43232`.
+- `MEDICAL PAYMENTS INCL` and similar Med Pay included signals are preserved as a textual `med_pay_limit` instead of being dropped.
+- `has_general_liability` and `has_auto_liability` are inferred from visible policy rows/limits and default to `False` when evidence is missing.
 
 ## Caching
 
@@ -32,7 +53,9 @@ This document describes the implemented extraction path in `modules/extraction/p
 
 ## Models and Schemas
 
-- Response schema: `COMPLETE_POLICY_SCHEMA`
+- Full policy response schema: `COMPLETE_POLICY_SCHEMA`
+- COI/memorandum response schema: `COI_SUMMARY_SCHEMA`
+- Endorsement response schema: `ENDORSEMENT_SCHEMA`
 - Classification and section schemas are in `modules/extraction/schemas.py`.
 
 ## Cost and Usage Controls

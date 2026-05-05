@@ -11,7 +11,8 @@
     "known_issues": []
   },
   "policy": {
-    "carrier_name": "GEICO Marine Insurance Company",
+    "carrier_name": "GEICO",
+    "underwriter_name": "GEICO Marine Insurance Company",
     "naic_number": "37923",
     "policy_number": "9300089751",
     "effective_date": "11/26/2025",

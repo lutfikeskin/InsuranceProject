@@ -5,6 +5,7 @@ import json
 import hashlib
 import tempfile
 import time
+import re
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -108,11 +109,19 @@ EXTRACTION_MODEL = "gemini-2.5-flash"
 
 
 def _compute_cache_version() -> str:
+    full_prompt_variants = "".join(
+        get_extract_all_prompt(
+            "__REGISTRY_PLACEHOLDER__",
+            scoped_policy_type=policy_type,
+            unreliable_fields=["__UNRELIABLE_FIELD__"],
+        )
+        for policy_type in POLICY_TYPE_ENUM
+    )
     content = (
         CLASSIFY_POLICY_PROMPT
         + get_extract_coi_prompt()
         + get_extract_endorsement_prompt()
-        + get_extract_all_prompt("__REGISTRY_PLACEHOLDER__", unreliable_fields=["__UNRELIABLE_FIELD__"])
+        + full_prompt_variants
         + json.dumps(COMPLETE_POLICY_SCHEMA, sort_keys=True)
         + json.dumps(COI_SUMMARY_SCHEMA, sort_keys=True)
         + json.dumps(ENDORSEMENT_SCHEMA, sort_keys=True)
@@ -323,15 +332,17 @@ class GeminiExtractionPipeline:
 
             if user_policy_type:
                 if status_callback:
-                    status_callback(" Using user-selected policy type...")
-                ctx.classification = {
-                    "document_type": "unknown",
-                    "policy_type": user_policy_type,
-                    "confidence": "high",
-                    "signals": ["user_selected"],
-                }
+                    status_callback(" Classifying document type...")
+                route_classification = self._classify_policy_input(active_cache, uploaded_file)
+                ctx.classification = self._classification_with_user_policy_type(
+                    route_classification,
+                    user_policy_type,
+                )
                 scoped_policy_type = user_policy_type
-                logger.info(f"User-selected policy type: {user_policy_type} (classifier skipped)")
+                logger.info(
+                    "User-selected policy type: "
+                    f"{user_policy_type}; document_type={ctx.classification.get('document_type', 'unknown')}"
+                )
             else:
                 if status_callback:
                     status_callback(" Classifying Policy Type...")
@@ -416,6 +427,7 @@ class GeminiExtractionPipeline:
                     active_cache=active_cache,
                     uploaded_file=uploaded_file,
                     user_policy_type=user_policy_type,
+                    scoped_policy_type=scoped_policy_type,
                     carrier_hint_block=carrier_hint_block,
                     registry_json=registry_json,
                     unreliable_fields=unreliable_fields,
@@ -447,10 +459,13 @@ class GeminiExtractionPipeline:
                         f"Model classification ({model_pt}) differs from user-selected ({user_policy_type})."
                     )
                 ctx.classification = {
-                    "document_type": extracted_classification.get("document_type", "unknown"),
+                    "document_type": (
+                        extracted_classification.get("document_type")
+                        or ctx.classification.get("document_type", "unknown")
+                    ),
                     "policy_type": user_policy_type,
                     "confidence": "high",
-                    "signals": ["user_selected"],
+                    "signals": ctx.classification.get("signals", ["user_selected"]),
                 }
             elif extracted_classification and extracted_classification.get("policy_type"):
                 ctx.classification = extracted_classification
@@ -726,11 +741,30 @@ class GeminiExtractionPipeline:
         )
         return self._parse_json_response(response.text)
 
+    @staticmethod
+    def _classification_with_user_policy_type(route_classification: dict, user_policy_type: str) -> dict:
+        """Preserve detected document_type while honoring manual policy_type selection."""
+        route_classification = route_classification or {}
+        route_signals = route_classification.get("signals") or []
+        if not isinstance(route_signals, list):
+            route_signals = [str(route_signals)]
+        signals = ["user_selected"]
+        for signal in route_signals:
+            if signal and signal not in signals and len(signals) < 3:
+                signals.append(signal)
+        return {
+            "document_type": route_classification.get("document_type", "unknown"),
+            "policy_type": user_policy_type,
+            "confidence": "high",
+            "signals": signals,
+        }
+
     def _run_full_extraction(
         self,
         active_cache,
         uploaded_file,
         user_policy_type: Optional[str],
+        scoped_policy_type: Optional[str],
         carrier_hint_block: str,
         registry_json: str,
         unreliable_fields: Optional[list[str]] = None,
@@ -738,6 +772,7 @@ class GeminiExtractionPipeline:
         prompt = get_extract_all_prompt(
             registry_json,
             user_policy_type=user_policy_type,
+            scoped_policy_type=scoped_policy_type,
             carrier_hints_suffix=carrier_hint_block,
             unreliable_fields=unreliable_fields,
         )
@@ -837,6 +872,32 @@ class GeminiExtractionPipeline:
                     return val
             return None
 
+        def _object_section(key: str) -> dict:
+            section = raw_data.get(key)
+            return section if isinstance(section, dict) else {}
+
+        def _parse_us_address(address: str | None) -> dict:
+            clean = _clean_text(address)
+            if not isinstance(clean, str):
+                return {"address": clean, "city": None, "state_code": None, "zip": None}
+            street_suffixes = (
+                "AVE|AVENUE|BLVD|BOULEVARD|CIR|CIRCLE|CT|COURT|DR|DRIVE|HWY|HIGHWAY|"
+                "LN|LANE|PKWY|PARKWAY|PL|PLACE|RD|ROAD|ST|STREET|TER|TERRACE|TRL|TRAIL|WAY"
+            )
+            match = re.match(
+                rf"^(?P<street>.+?\b(?:{street_suffixes})\.?(?:\s+(?:APT|UNIT|STE|SUITE|#)\s*\w+)?)\s+(?P<city>[A-Za-z][A-Za-z .'-]+),\s*(?P<state>[A-Z]{{2}})\s+(?P<zip>\d{{5}}(?:-\d{{4}})?)$",
+                clean,
+                flags=re.IGNORECASE,
+            )
+            if not match:
+                return {"address": clean, "city": None, "state_code": None, "zip": None}
+            return {
+                "address": match.group("street").strip(),
+                "city": match.group("city").strip(),
+                "state_code": match.group("state").strip(),
+                "zip": match.group("zip").strip(),
+            }
+
         aggregated_limits = {}
         for row in policy_rows:
             limits = row.get("limits") if isinstance(row.get("limits"), dict) else {}
@@ -844,20 +905,54 @@ class GeminiExtractionPipeline:
                 clean_limit = _clean_text(limit_val)
                 if clean_limit is not None and aggregated_limits.get(limit_key) in (None, ""):
                     aggregated_limits[limit_key] = clean_limit
+            row_text = " ".join(str(v) for v in row.values() if not isinstance(v, (dict, list)) and v)
+            limit_text = " ".join(str(v) for v in limits.values() if v)
+            medpay_evidence = f"{row_text} {limit_text}".lower()
+            if (
+                aggregated_limits.get("med_pay_limit") in (None, "")
+                and ("medical payments" in medpay_evidence or "med pay" in medpay_evidence)
+                and ("incl" in medpay_evidence or "included" in medpay_evidence)
+            ):
+                aggregated_limits["med_pay_limit"] = "Included"
 
         classification = raw_data.get("classification") or fallback_classification or {}
         if "document_type" not in classification:
             classification["document_type"] = "certificate_of_insurance"
 
+        insured_section = _object_section("insured")
+        parsed_insured_address = _parse_us_address(insured_section.get("address"))
+        insured_city = _clean_text(insured_section.get("city")) or parsed_insured_address["city"]
+        insured_state_code = (
+            _clean_text(insured_section.get("state_code"))
+            or _clean_text(insured_section.get("state"))
+            or parsed_insured_address["state_code"]
+        )
+        insured_zip = _clean_text(insured_section.get("zip")) or parsed_insured_address["zip"]
+        classified_policy_type = (classification.get("policy_type") or "").lower()
+        has_gl = bool(
+            aggregated_limits.get("general_liability_limit")
+            or classified_policy_type == "general_liability"
+            or any("general" in (row.get("policy_type") or "").lower() for row in policy_rows)
+        )
+        has_auto = bool(
+            aggregated_limits.get("liability_limit")
+            or classified_policy_type in {"personal_auto", "commercial_auto"}
+            or any("auto" in (row.get("policy_type") or "").lower() for row in policy_rows)
+        )
+
         normalized_policy = {
             "carrier_name": _pick_first_nonempty("carrier_name"),
+            "underwriter_name": _pick_first_nonempty("underwriter_name"),
             "naic_number": _pick_first_nonempty("naic_number"),
             "policy_number": _pick_first_nonempty("policy_number"),
             "effective_date": _pick_first_nonempty("effective_date"),
             "expiration_date": _pick_first_nonempty("expiration_date"),
-            "insured_name": _clean_text((raw_data.get("insured") or {}).get("name")),
-            "insured_address": _clean_text((raw_data.get("insured") or {}).get("address")),
-            "financial_responsibility_name": _clean_text((raw_data.get("producer") or {}).get("name")),
+            "insured_name": _clean_text(insured_section.get("name")),
+            "insured_address": parsed_insured_address["address"],
+            "insured_city": insured_city,
+            "insured_state_code": insured_state_code,
+            "insured_zip": insured_zip,
+            "financial_responsibility_name": _clean_text(_object_section("producer").get("name")),
             "liability_limit": aggregated_limits.get("liability_limit"),
             "general_liability_limit": aggregated_limits.get("general_liability_limit"),
             "cargo_limit": aggregated_limits.get("cargo_limit"),
@@ -867,6 +962,8 @@ class GeminiExtractionPipeline:
             "pip_limit": aggregated_limits.get("pip_limit"),
             "comp_deductible": aggregated_limits.get("comp_deductible"),
             "coll_deductible": aggregated_limits.get("coll_deductible"),
+            "has_general_liability": has_gl,
+            "has_auto_liability": has_auto,
         }
 
         return {
@@ -877,9 +974,15 @@ class GeminiExtractionPipeline:
             "vehicles": raw_data.get("vehicles") if isinstance(raw_data.get("vehicles"), list) else [],
             "drivers": raw_data.get("drivers") if isinstance(raw_data.get("drivers"), list) else [],
             "coi_summary": {
-                "certificate_holder": raw_data.get("certificate_holder") or {},
-                "insured": raw_data.get("insured") or {},
-                "producer": raw_data.get("producer") or {},
+                "certificate_holder": _object_section("certificate_holder"),
+                "insured": {
+                    **insured_section,
+                    "address": parsed_insured_address["address"],
+                    "city": insured_city,
+                    "state_code": insured_state_code,
+                    "zip": insured_zip,
+                },
+                "producer": _object_section("producer"),
                 "policies": policies,
                 "additional_insured_text": raw_data.get("additional_insured_text"),
                 "cancellation_notice_days": raw_data.get("cancellation_notice_days"),

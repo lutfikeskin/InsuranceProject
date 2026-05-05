@@ -1109,8 +1109,8 @@ def page_process_policies(api_key):
             r_comp = rc4.text_input("Comp Ded", value=p.get('comp_deductible', ''))
             r_coll = rc5.text_input("Coll Ded", value=p.get('coll_deductible', ''))
             
-            r_gl = st.checkbox("Has GL", value=p.get('has_general_liability', True))
-            r_auto = st.checkbox("Has Auto", value=p.get('has_auto_liability', True))
+            r_gl = st.checkbox("Has GL", value=bool(p.get('has_general_liability')))
+            r_auto = st.checkbox("Has Auto", value=bool(p.get('has_auto_liability')))
             r_status = st.selectbox("Status", ["Active", "Pending", "Quote", "Expired"], index=0)
 
             st.divider()
@@ -1248,6 +1248,7 @@ def page_process_policies(api_key):
             data_for_resolve["classification"] = dict(classification or {})
             if not edited_d.empty:
                 data_for_resolve["drivers"] = _dataframe_to_record_list(edited_d)
+            embedded_owner = CustomerResolver.extract_embedded_owner_name(r_ins_name)
 
             customer_session = get_session(st.session_state.db_engine)
             try:
@@ -1296,16 +1297,21 @@ def page_process_policies(api_key):
                 else:
                     st.info("🆕 New customer will be created")
                     if policy_type != "personal_auto":
-                        st.markdown("**Commercial — who is the owner?**")
-                        owner_name = st.text_input(
-                            "Owner / Principal Name",
-                            placeholder="e.g. Ayaz Demir",
-                            key=owner_widget_key,
-                        )
-                        if owner_name.strip():
-                            st.session_state[owner_storage_key] = owner_name.strip()
-                        else:
+                        if embedded_owner:
+                            st.success(f"Owner detected from DBA: **{embedded_owner['owner_name']}**")
+                            st.caption("The full insured/DBA name will be saved as a business entity.")
                             st.session_state[owner_storage_key] = ""
+                        else:
+                            st.markdown("**Commercial — who is the owner?**")
+                            owner_name = st.text_input(
+                                "Owner / Principal Name",
+                                placeholder="e.g. Ayaz Demir",
+                                key=owner_widget_key,
+                            )
+                            if owner_name.strip():
+                                st.session_state[owner_storage_key] = owner_name.strip()
+                            else:
+                                st.session_state[owner_storage_key] = ""
             finally:
                 customer_session.close()
 

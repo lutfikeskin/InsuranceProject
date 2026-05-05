@@ -295,14 +295,18 @@ COI_SUMMARY_SCHEMA = {
             "properties": {
                 "name": {"type": "STRING"},
                 "address": {"type": "STRING"},
+                "city": {"type": "STRING", "nullable": True},
+                "state_code": {"type": "STRING", "nullable": True},
+                "zip": {"type": "STRING", "nullable": True},
             },
         },
         "producer": {
             "type": "OBJECT",
+            "nullable": True,
             "properties": {
-                "name": {"type": "STRING"},
-                "address": {"type": "STRING"},
-                "phone": {"type": "STRING"},
+                "name": {"type": "STRING", "nullable": True},
+                "address": {"type": "STRING", "nullable": True},
+                "phone": {"type": "STRING", "nullable": True},
             },
         },
         "policies": {

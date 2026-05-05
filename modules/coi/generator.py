@@ -50,8 +50,8 @@ class COIGenerator:
                 cleaned = re.sub(r'[^\d,.]', '', str(val))
                 return f"${cleaned}" if cleaned else ""
 
-            has_gl = policy_data.get('has_general_liability', True) # Default to True if missing to be safe
-            has_auto = policy_data.get('has_auto_liability', True)
+            has_gl = bool(policy_data.get('has_general_liability'))
+            has_auto = bool(policy_data.get('has_auto_liability'))
             gl_occ = clean_limit(policy_data.get('liability_limit', '')) if has_gl else ""
             gl_agg = (
                 clean_limit(policy_data.get('gl_general_aggregate') or policy_data.get('liability_limit', ''))

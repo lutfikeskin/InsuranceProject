@@ -254,7 +254,7 @@ def page_create_coi():
         with gc1:
             ui_has_gl = st.checkbox(
                 "General Liability",
-                value=p.has_general_liability if p.has_general_liability is not None else True,
+                value=bool(p.has_general_liability),
             )
             gl_agg_key = f"coi_gl_gen_agg_{p.id}"
             if ui_has_gl:
@@ -269,7 +269,7 @@ def page_create_coi():
         with gc2:
             ui_has_auto = st.checkbox(
                 "Automobile Liability",
-                value=p.has_auto_liability if p.has_auto_liability is not None else True,
+                value=bool(p.has_auto_liability),
             )
         with gc3:
             ui_has_cargo = st.checkbox("Motor Truck Cargo", value=bool(p.cargo_limit))
