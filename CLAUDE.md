@@ -28,7 +28,7 @@ When changing any of the following, ALSO update the listed downstream files. Thi
 | modules/extraction/prompts.py            | goldens (test_accuracy.py), docs/PROMPTS.md                      |
 | core/database.py (model add/modify)      | Alembic migration, services.py, ui display, docs/DATABASE.md     |
 | core/database.py (relationship change)   | Late imports at file bottom (PolicyHistory pattern)              |
-| modules/extraction/pipeline.py imports   | Backing module exists, grep for refactored locations             |
+| modules/extraction/pipeline.py and pipeline helpers (`cache_version.py`, `gemini_transport.py`, `extraction_assembly.py`, `extraction_response.py`, `extraction_local_cache.py`, `coverage_registry_minify.py`, `extraction_types.py`) | Backing module exists, grep for refactored locations |
 | views/*.py (Streamlit widgets)           | No key collisions, form vs non-form consistency                  |
 | core/services.py (save flow)             | Both new-save AND update-save branches                           |
 | core/document_taxonomy.py                | prompts.py classification prompt, accuracy_config.py             |
@@ -39,6 +39,8 @@ When changing any of the following, ALSO update the listed downstream files. Thi
 The auto-cache version derives from prompt + schema hash. Files that trigger cache invalidation when modified:
 - modules/extraction/prompts.py (any function)
 - modules/extraction/schemas.py (any schema dict)
+
+Hash implementation: `modules/extraction/cache_version.py` (imports the above; do not duplicate hash logic elsewhere).
 
 This is INTENTIONAL. Old cache entries become stale and rebuild on next run.
 
