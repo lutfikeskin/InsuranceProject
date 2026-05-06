@@ -151,6 +151,7 @@ class GeminiTransport:
                 input_tokens=response.usage_metadata.prompt_token_count,
                 output_tokens=response.usage_metadata.candidates_token_count,
                 request_type=request_type,
+                cached_input_tokens=cached_tokens,
             )
         self._last_call_retries = attempt
 

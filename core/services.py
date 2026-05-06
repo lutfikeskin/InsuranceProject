@@ -1494,20 +1494,68 @@ class COIService:
 
 class UsageService:
     PRICING = {
-        "gemini-2.5-flash": {"input": 0.10 / 1_000_000, "output": 0.40 / 1_000_000},
-        "gemini-2.0-flash": {"input": 0.10 / 1_000_000, "output": 0.40 / 1_000_000},
-        "gemini-1.5-flash": {"input": 0.075 / 1_000_000, "output": 0.30 / 1_000_000},
-        "default": {"input": 0.10 / 1_000_000, "output": 0.40 / 1_000_000}
+        "gemini-2.5-flash": {
+            "input": 0.30 / 1_000_000,
+            "output": 2.50 / 1_000_000,
+            "cached_input": 0.03 / 1_000_000,
+        },
+        "gemini-2.5-flash-lite": {
+            "input": 0.10 / 1_000_000,
+            "output": 0.40 / 1_000_000,
+            "cached_input": 0.01 / 1_000_000,
+        },
+        "gemini-2.0-flash": {
+            "input": 0.10 / 1_000_000,
+            "output": 0.40 / 1_000_000,
+            "cached_input": 0.01 / 1_000_000,
+        },
+        "gemini-1.5-flash": {
+            "input": 0.075 / 1_000_000,
+            "output": 0.30 / 1_000_000,
+            "cached_input": 0.00937 / 1_000_000,  # 12.5% of input price
+        },
+        "default": {
+            "input": 0.30 / 1_000_000,
+            "output": 2.50 / 1_000_000,
+            "cached_input": 0.03 / 1_000_000,
+        },
     }
 
     def __init__(self, session: Session):
         self.session = session
 
-    def log_usage(self, model_name: str, input_tokens: int, output_tokens: int, request_type: str = "extraction"):
-        """Logs a single API request's token usage and estimated cost."""
+    def log_usage(
+        self,
+        model_name: str,
+        input_tokens: int,
+        output_tokens: int,
+        request_type: str = "extraction",
+        cached_input_tokens: int = 0,
+    ):
+        """Logs a single API request's token usage and estimated cost.
+
+        Args:
+            model_name: Model identifier (e.g. 'gemini-2.5-flash').
+            input_tokens: Total prompt tokens (includes cached tokens).
+            output_tokens: Generated tokens.
+            request_type: Tag for the request (e.g. 'extraction', 'classification').
+            cached_input_tokens: Number of input tokens from cached context.
+                Cost = (input_tokens - cached_input_tokens) * input_rate
+                      + cached_input_tokens * cached_input_rate
+                      + output_tokens * output_rate
+        """
         pricing = self.PRICING.get(model_name, self.PRICING["default"])
-        cost = (input_tokens * pricing["input"]) + (output_tokens * pricing["output"])
-        
+
+        # Separate cached and fresh input tokens
+        fresh_input = max(0, input_tokens - cached_input_tokens)
+        cached_input = min(input_tokens, cached_input_tokens)
+
+        cost = (
+            fresh_input * pricing["input"]
+            + cached_input * pricing.get("cached_input", pricing["input"])
+            + output_tokens * pricing["output"]
+        )
+
         usage = ApiUsage(
             model_name=model_name,
             input_tokens=input_tokens,
@@ -1515,7 +1563,7 @@ class UsageService:
             cost=cost,
             status="success",
             request_type=request_type,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.utcnow(),
         )
         self.session.add(usage)
         self.session.commit()
