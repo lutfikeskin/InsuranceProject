@@ -14,7 +14,21 @@ from .database import (
     CustomerEntity,
 )
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from sqlalchemy import func, or_
+
+EASTERN = ZoneInfo("America/New_York")
+
+
+def _today_start_utc_naive() -> datetime:
+    """Returns the UTC equivalent (naive) of midnight today in US Eastern time.
+
+    Stored ApiUsage timestamps are UTC-naive (datetime.utcnow), so we strip tzinfo
+    after converting back to UTC for direct comparison.
+    """
+    now_et = datetime.now(EASTERN)
+    midnight_et = now_et.replace(hour=0, minute=0, second=0, microsecond=0)
+    return midnight_et.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
 from utils.naic_utils import get_naic_for_carrier
 from .coverage_ontology import summarize_auto_liability, format_liability_limit
 from .customer_resolver import CustomerResolver
@@ -1508,12 +1522,19 @@ class UsageService:
         return usage
 
     def get_daily_usage(self):
-        """Returns the total cost for the current day."""
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        """Returns the total cost for today (US Eastern time window)."""
+        today_start = _today_start_utc_naive()
         total_cost = self.session.query(func.sum(ApiUsage.cost)).filter(
             ApiUsage.timestamp >= today_start
         ).scalar() or 0.0
         return total_cost
+
+    def get_todays_call_count(self) -> int:
+        """Returns the number of API calls today (US Eastern time window)."""
+        today_start = _today_start_utc_naive()
+        return self.session.query(func.count(ApiUsage.id)).filter(
+            ApiUsage.timestamp >= today_start
+        ).scalar() or 0
 
     def is_over_budget(self, daily_limit: float = 1.0):
         """Checks if the daily spend has exceeded the limit."""
@@ -1534,14 +1555,14 @@ class UsageService:
         return self.session.query(ApiUsage).order_by(ApiUsage.timestamp.desc()).limit(limit).all()
 
     def get_todays_token_stats(self):
-        """Returns tuple (total_input, total_output) for today."""
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        
+        """Returns tuple (total_input, total_output) for today (US Eastern window)."""
+        today_start = _today_start_utc_naive()
+
         result = self.session.query(
             func.sum(ApiUsage.input_tokens),
             func.sum(ApiUsage.output_tokens)
         ).filter(ApiUsage.timestamp >= today_start).first()
-        
+
         return (result[0] or 0, result[1] or 0)
 
 

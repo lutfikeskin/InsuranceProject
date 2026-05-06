@@ -120,63 +120,42 @@ with st.sidebar:
     
     if api_key:
         st.success("API Active", icon="✅")
-        
+
         try:
             from core.services import UsageService
-            import pandas as pd
-            
+            from zoneinfo import ZoneInfo
+
+            ET = ZoneInfo("America/New_York")
             usage_service = UsageService(get_session(st.session_state.db_engine))
             daily_spend = usage_service.get_daily_usage()
+            calls_today = usage_service.get_todays_call_count()
+            in_tok, out_tok = usage_service.get_todays_token_stats()
             budget_limit = DEFAULT_DAILY_BUDGET
-            progress = min(daily_spend / budget_limit, 1.0)
-            
+            progress = min(daily_spend / budget_limit, 1.0) if budget_limit else 0.0
+
             st.markdown("---")
-            st.markdown("### 📊 Cost Monitor")
-            
-            with st.container():
-                col_a, col_b = st.columns([2, 1])
-                with col_a:
-                    st.metric("Today's Spend", f"${daily_spend:.4f}")
-                with col_b:
-                     st.caption(f"Limit: ${budget_limit}")
-                
-                st.progress(progress, text=f"{progress*100:.1f}% Used")
-                if daily_spend >= budget_limit:
-                    st.error("Quota Exceeded! 🛑")
+            st.caption("USAGE TODAY · ET")
 
-            with st.expander("Details", expanded=True):
-                in_tok, out_tok = usage_service.get_todays_token_stats()
-                st.markdown(f"""
-                <div style="font-size: 0.8rem; color: #555;">
-                    <div>📥 <b>Input:</b> {in_tok:,} toks</div>
-                    <div>📤 <b>Output:</b> {out_tok:,} toks</div>
-                    <div style="margin-top:5px; font-weight:bold; color: #005AA9;">Verified Accurate ✅</div>
-                </div>
-                """, unsafe_allow_html=True)
+            c1, c2 = st.columns(2)
+            c1.metric("Spend", f"${daily_spend:.4f}")
+            c2.metric("Calls", f"{calls_today}")
 
-            st.markdown("##### Recent Activity")
+            st.progress(progress, text=f"${daily_spend:.4f} / ${budget_limit:.2f}")
+            if daily_spend >= budget_limit:
+                st.error("Daily limit reached")
+
+            st.caption(f"Tokens — in: {in_tok:,} · out: {out_tok:,}")
+
             recent_logs = usage_service.get_recent_usage(limit=5)
             if recent_logs:
-                for log in recent_logs:
-                     st.markdown(f"""
-                     <div style="
-                        background: #f8f9fa; 
-                        padding: 8px; 
-                        border-radius: 6px; 
-                        border-left: 3px solid #28a745; 
-                        margin-bottom: 6px; 
-                        font-size: 0.75rem;">
-                        <div style="display:flex; justify-content:space-between;">
-                            <b>{log.model_name.replace('gemini-', '')}</b>
-                            <span>${log.cost:.5f}</span>
-                        </div>
-                        <div style="color: #666; font-size: 0.7rem;">
-                            {log.timestamp.strftime('%H:%M:%S')} • {log.request_type}
-                        </div>
-                     </div>
-                     """, unsafe_allow_html=True)
-            else:
-                st.caption("No activity yet.")
+                with st.expander("Recent activity", expanded=False):
+                    for log in recent_logs:
+                        ts_et = log.timestamp.replace(tzinfo=ZoneInfo("UTC")).astimezone(ET)
+                        model = (log.model_name or "").replace("gemini-", "")
+                        st.caption(
+                            f"{ts_et.strftime('%b %d %H:%M')} · {log.request_type} · "
+                            f"{model} · ${log.cost:.5f}"
+                        )
 
         except Exception as e:
             st.error(f"Usage Error: {e}")
