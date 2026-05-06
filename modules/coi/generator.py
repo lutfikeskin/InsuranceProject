@@ -45,9 +45,23 @@ class COIGenerator:
                 return "" # Return empty string for None/Text to let explicit strings pass if needed, or handle elsewhere
             
             def clean_limit(val):
-                if not val: return ""
+                """Normalize limit text for PDF fields; preserves K/M/B (e.g. $100K, not $100)."""
+                if not val:
+                    return ""
                 import re
-                cleaned = re.sub(r'[^\d,.]', '', str(val))
+
+                s = str(val).strip()
+                # Embedded prose (e.g. "$100K Cargo w/ …") — take first monetary token with optional suffix.
+                m = re.search(
+                    r"(?i)\$?\s*([\d,]+(?:\.\d+)?)\s*([kmb])?\b",
+                    s,
+                )
+                if m:
+                    num, suffix = m.group(1), (m.group(2) or "")
+                    if suffix:
+                        return f"${num}{suffix.upper()}"
+                    return f"${num}"
+                cleaned = re.sub(r"[^\d,.]", "", s)
                 return f"${cleaned}" if cleaned else ""
 
             has_gl = bool(policy_data.get('has_general_liability'))
@@ -61,7 +75,11 @@ class COIGenerator:
             
             cargo_limit = clean_limit(policy_data.get('cargo_limit', ''))
             cargo_ded = clean_limit(policy_data.get('cargo_deductible', ''))
-            has_cargo = bool(cargo_limit)
+            want_cargo = policy_data.get("has_cargo")
+            if want_cargo is None:
+                has_cargo = bool(cargo_limit)
+            else:
+                has_cargo = bool(want_cargo) and bool(cargo_limit)
             
             desc_lines = []
             
