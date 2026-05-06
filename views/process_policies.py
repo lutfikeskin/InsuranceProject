@@ -363,10 +363,16 @@ def page_process_policies(api_key):
                  st.warning("⚠️ Access Restricted: Please add your Gemini API Key in Settings to proceed.")
 
             _ptype_labels, _ptype_map = _policy_type_selectbox_options()
+            preferred_default = "Commercial Auto"
+            default_index = (
+                _ptype_labels.index(preferred_default)
+                if preferred_default in _ptype_labels
+                else 0
+            )
             policy_type_label = st.selectbox(
                 "Policy type",
                 options=_ptype_labels,
-                index=0,
+                index=default_index,
                 help="Auto-detect runs classification then extraction (two model calls). "
                 "A manual type skips classification and uses one extraction call with a scoped coverage registry.",
             )

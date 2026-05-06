@@ -1,0 +1,216 @@
+================================================================================
+      INSURANCE DOCUMENT PLATFORM - ENTITY RELATIONSHIP DIAGRAM (ERD)
+================================================================================
+
+                              ┌──────────────────────┐
+                              │     CUSTOMERS        │
+                              │  ┌──────────────────┐ │
+                              │  │ id (PK)          │ │
+                              │  │ full_name (NN)   │ │
+                              │  │ primary_email    │ │
+                              │  │ primary_phone    │ │
+                              │  │ created_at       │ │
+                              │  └──────────────────┘ │
+                              └────────┬───────┬──────┘
+                                       │       │
+                    ┌──────────────────┘       └──────────────────┐
+                    │                                              │
+                    │ 1:M (Customer → Entities)                  │ 1:M (Customer → Policies)
+                    │                                              │
+        ┌───────────▼──────────────────┐          ┌───────────────▼──────────────────────┐
+        │  CUSTOMER_ENTITIES           │          │        POLICIES                      │
+        │ ┌──────────────────────────┐ │          │ ┌────────────────────────────────┐  │
+        │ │ id (PK)                  │ │          │ │ id (PK)                        │  │
+        │ │ customer_id (FK)         │ │          │ │ customer_id (FK, nullable)     │  │
+        │ │ entity_name (NN)         │ │          │ │ policy_number (UNIQUE)         │  │
+        │ │ entity_type              │ │          │ │ carrier_name (NN)              │  │
+        │ │ is_primary               │ │          │ │ underwriter_name               │  │
+        │ │ source                   │ │          │ │ naic_number                    │  │
+        │ │ first_seen               │ │          │ │ account_type                   │  │
+        │ └──────────────────────────┘ │          │ │ policy_type                    │  │
+        └──────────────────────────────┘          │ │ document_type                  │  │
+                                                  │ │ policy_status                  │  │
+                                                  │ │ effective_date                 │  │
+                                                  │ │ expiration_date                │  │
+                                                  │ │ premium                        │  │
+                                                  │ │                                │  │
+                                                  │ │ ─── INSURED INFO ───          │  │
+                                                  │ │ insured_name                   │  │
+                                                  │ │ insured_address                │  │
+                                                  │ │ insured_city                   │  │
+                                                  │ │ insured_state_code             │  │
+                                                  │ │ insured_zip                    │  │
+                                                  │ │                                │  │
+                                                  │ │ ─── COVERAGE SUMMARIES ───    │  │
+                                                  │ │ liability_limit                │  │
+                                                  │ │ general_liability_limit        │  │
+                                                  │ │ cargo_limit, cargo_deductible │  │
+                                                  │ │ um_uim_limit, med_pay_limit   │  │
+                                                  │ │ pip_limit                      │  │
+                                                  │ │ comp_deductible, coll_ded     │  │
+                                                  │ │                                │  │
+                                                  │ │ ─── FLAGS & METADATA ───      │  │
+                                                  │ │ has_auto_liability             │  │
+                                                  │ │ has_general_liability          │  │
+                                                  │ │ classification_confidence      │  │
+                                                  │ │ field_confidences (JSON)       │  │
+                                                  │ │ extraction_extras (JSON)       │  │
+                                                  │ │ created_at                     │  │
+                                                  │ └────────────────────────────────┘  │
+                                                  └────────┬──┬──┬───────┬────┬─────────┘
+                                                           │  │  │       │    │
+                    ┌──────────────────────────────────────┘  │  │       │    └─────────────────┐
+                    │                                         │  │       │                      │
+        1:M ┌───────▼──────────────────┐    1:M ┌────────────▼──┐  │    │        1:M ┌────────▼──────────────────┐
+    Policies│      VEHICLES            │   Policies│  DRIVERS     │  │    │           │  COVERAGES               │
+    Vehicles│ ┌──────────────────────┐ │         │ ┌─────────────┤  │    │           │ ┌────────────────────────┐│
+            │ │ id (PK)              │ │         │ │ id (PK)     │  │    │           │ │ id (PK)                ││
+            │ │ policy_id (FK)       │ │         │ │ policy_id   │  │    │           │ │ policy_id (FK)         ││
+            │ │ year                 │ │         │ │ full_name   │  │    │           │ │ vehicle_id (FK, null)  ││
+            │ │ make                 │ │         │ │ license_#   │  │    │           │ │ coverage_code          ││
+            │ │ model                │ │         │ │ is_excluded │  │    │           │ │ family                 ││
+            │ │ vin                  │ │         │ └─────────────┤  │    │           │ │ per_person             ││
+            │ │ vehicle_type         │ │         └────────────────  │    │           │ │ per_accident           ││
+            │ │ gvwr                 │ │                            │    │           │ │ combined_single_limit  ││
+            │ │ chassis              │ │                            │    │           │ │ aggregate              ││
+            │ │ body                 │ │                            │    │           │ │ deductible             ││
+            │ └──────────────────────┘ │                            │    │           │ └────────────────────────┘│
+            └────────┬─────────────────┘                            │    │           └────────────────────────────┘
+                     │ 1:M (Vehicle → Coverages)                   │    │
+                     └──────────────────────────────────────────────┘    │
+                                                                         │
+                            1:M ┌──────────────────────────────────────┘
+                        Policies│ POLICY_RELATIONSHIPS
+                                │ ┌──────────────────────────────────┐
+                                │ │ id (PK)                          │
+                                │ │ policy_id (FK) ──┐               │
+                                │ │ related_policy_id (FK) ──┐       │
+                                │ │ relationship_type         │       │
+                                │ │ confidence                │       │
+                                │ │ created_at                │       │
+                                │ └──────────────────────────────────┘
+                                │         ▲              ▲
+                                │         └──────┬───────┘
+                                │                │
+                                │          (Self-join to POLICIES)
+                                │          (Renewals, Rewrites)
+                                │
+                         ┌──────┴──────────────────────┐
+                         │                             │
+                    1:M  │                        1:M  │
+            Policies      │                    Policies │
+                          │                             │
+            ┌─────────────▼──────────────┐ ┌──────────▼──────────────────┐
+            │ POLICY_ENDORSEMENTS        │ │ ADDITIONAL_INTERESTS         │
+            │ ┌────────────────────────┐ │ │ ┌────────────────────────┐  │
+            │ │ id (PK)                │ │ │ │ id (PK)                │  │
+            │ │ parent_policy_id (FK)  │ │ │ │ policy_id (FK)         │  │
+            │ │ endorsement_type       │ │ │ │ name                   │  │
+            │ │ endorsement_form_#     │ │ │ │ address                │  │
+            │ │ effective_date         │ │ │ │ interest_type          │  │
+            │ │ changes_summary        │ │ │ │   (Certificate Holder, │  │
+            │ │ file_hash              │ │ │ │    Loss Payee, etc.)   │  │
+            │ │ created_at             │ │ │ │                        │  │
+            │ └────────────────────────┘ │ │ └────────────────────────┘  │
+            └────────────────────────────┘ └────────────────────────────┘
+
+                              ┌──────────────────────┐
+                              │     API_USAGE        │ (No FK - Monitoring)
+                              │ ┌──────────────────┐ │
+                              │ │ id (PK)          │ │
+                              │ │ timestamp        │ │
+                              │ │ model_name       │ │
+                              │ │ input_tokens     │ │
+                              │ │ output_tokens    │ │
+                              │ │ cost             │ │
+                              │ │ status           │ │
+                              │ │ request_type     │ │
+                              │ └──────────────────┘ │
+                              └──────────────────────┘
+
+================================================================================
+LEGEND
+================================================================================
+
+NN        = NOT NULL constraint
+PK        = Primary Key
+FK        = Foreign Key
+(null)    = Can be NULL
+1:M       = One-to-Many relationship
+M:1       = Many-to-One relationship (inverse of 1:M)
+──────    = Cascade delete on FK
+
+================================================================================
+KEY RELATIONSHIPS
+================================================================================
+
+1. Customer → Policies
+   One customer can have many policies.
+   When customer is deleted, related records handled by cascade.
+
+2. Customer → Customer_Entities
+   One customer can have many name variants (DBA, business, maiden).
+   Cascade delete when customer deleted.
+
+3. Policy → Vehicles
+   One policy can have many vehicles.
+   Cascade delete when policy deleted.
+
+4. Policy → Drivers
+   One policy can have many drivers.
+   Cascade delete when policy deleted.
+
+5. Policy → Coverages
+   One policy can have many coverage lines.
+   Cascade delete when policy deleted.
+
+6. Vehicle → Coverages
+   One vehicle can have vehicle-specific coverages.
+   Cascade delete when vehicle deleted.
+
+7. Policy → Policy_Relationships (Self-Join)
+   Links policy to related policies (renewals, rewrites).
+   Example: Policy #1 (2024) renewed_by Policy #2 (2025)
+
+8. Policy → Policy_Endorsements
+   One policy can have many amendments.
+   Cascade delete when policy deleted.
+
+9. Policy → Additional_Interests
+   One policy can have certificate holders, loss payees, etc.
+   Cascade delete when policy deleted.
+
+================================================================================
+SPECIAL NOTES
+================================================================================
+
+• Customer Resolution:
+  - Anchor: customer.full_name (personal name, immutable)
+  - Variants: customer_entities (business names, DBA, maiden names)
+  - Matching during extraction resolves new documents to existing customers
+
+• Policy Types:
+  - personal_auto: Light schema (no compliance, focused on vehicles/drivers)
+  - commercial_auto: Full schema (includes hired/non-owned, vehicle symbols)
+  - general_liability: Coverage-focused (buildings, operations, aggregates)
+  - other: umbrella, workers_comp, etc. (extensible)
+
+• Coverage Ontology:
+  - All coverages map to standardized codes (AUTO_LIAB_BI, UM_BI, COMP, etc.)
+  - Family groups coverages (auto_liability, physical_damage, general_liability)
+  - limit_* fields are legacy; new code uses per_person, per_accident, etc.
+
+• Policy Relationships:
+  - renewal: Policy #1 (old) → Policy #2 (new) [same customer, continuous coverage]
+  - rewrite: Complete policy reissuance
+  - mid_term_change: Coverage adjustment mid-policy
+  - same_customer_new_policy: New policy, same customer (not renewal)
+  - canceled_replaced: Policy canceled and replaced (often same day)
+  - confidence: "confirmed" (matched by name+dates) vs "suggested" (algorithmic)
+
+• JSON Fields:
+  - field_confidences: {field_name: score} mapping
+  - classification_signals: ["signal1", "signal2", ...] for audit
+  - extraction_extras: Unmapped fields from extraction (extended JSON)
+
+================================================================================
