@@ -23,6 +23,60 @@ def _reset_coi_holder_session():
 
 
 GL_AGGREGATE_OPTIONS = ("$1,000,000", "$2,000,000")
+COI_TYPE_OPTIONS = ("Additional Insured", "Certificate Holder", "Lienholder")
+LIENHOLDER_HOLDER_PLACEHOLDER = "[Certificate Holder Name]"
+
+
+def _format_vehicle_option(v) -> str:
+    """Render a vehicle for the Lienholder multiselect: 'Year Make Model - VIN'."""
+    parts = [str(v.year or "").strip(), (v.make or "").strip(), (v.model or "").strip()]
+    head = " ".join(p for p in parts if p) or "Vehicle"
+    return f"{head} - {v.vin or 'no VIN'}"
+
+
+def _format_vehicle_for_description(v) -> str:
+    """Render a vehicle inside the Loss Payee clause: 'Year Make Model (VIN: ...)'."""
+    parts = [str(v.year or "").strip(), (v.make or "").strip(), (v.model or "").strip()]
+    head = " ".join(p for p in parts if p) or "Vehicle"
+    return f"{head} (VIN: {v.vin or 'N/A'})"
+
+
+def _build_default_desc(coi_service, p, coi_type, selected_vehicle_objs, holder_name):
+    """Build the default Operations Description for a given COI type.
+
+    Reuses COIService.prepare_coi_data for the policy-derived lines (vehicles, drivers,
+    compliance) and only varies the trailing clause based on coi_type.
+    """
+    _, desc_lines = coi_service.prepare_coi_data(p)
+
+    # Lienholder: vehicles are named inline in the Loss Payee clause, so drop the
+    # redundant "Vehicle List: ..." line produced by prepare_coi_data.
+    if coi_type == "Lienholder":
+        desc_lines = [ln for ln in desc_lines if not ln.startswith("Vehicle List:")]
+
+    desc_lines.append("Radius of Operation: Unlimited")
+
+    if coi_type == "Additional Insured":
+        desc_lines.append("Certificate Holder is also listed as an additional insured")
+    elif coi_type == "Lienholder":
+        veh_str = " ".join(_format_vehicle_for_description(v) for v in (selected_vehicle_objs or []))
+        if not veh_str:
+            veh_str = "[Selected Vehicles]"
+
+        def _fmt_ded(val):
+            s = (val or "").strip().lstrip("$").strip()
+            return f"${s}" if s else "—"
+
+        comp = _fmt_ded(p.comp_deductible)
+        coll = _fmt_ded(p.coll_deductible)
+        holder_token = (holder_name or "").strip() or LIENHOLDER_HOLDER_PLACEHOLDER
+        desc_lines.append(
+            f"{holder_token} is also listed as a Loss Payee for {veh_str} "
+            f"with Comp Ded: {comp} / Coll Ded: {coll}"
+        )
+    # "Certificate Holder" → no extra clause appended.
+
+    return "\n".join(desc_lines)
 
 
 def _safe_coi_pdf_filename(insured_name: str, holder_name: str) -> str:
@@ -125,10 +179,17 @@ def page_create_coi():
         prev_id = st.session_state.get("coi_last_policy_id")
         if prev_id is not None and prev_id != p.id:
             _reset_coi_holder_session()
-            for suffix in ("coi_desc_area_", "coi_desc_bulk_"):
-                old_desc = f"{suffix}{prev_id}"
-                if old_desc in st.session_state:
-                    del st.session_state[old_desc]
+            for suffix in (
+                "coi_desc_area_",
+                "coi_desc_bulk_",
+                "coi_type_",
+                "coi_lien_vehicles_",
+                "coi_desc_state_",
+                "coi_desc_state_bulk_",
+            ):
+                old_key = f"{suffix}{prev_id}"
+                if old_key in st.session_state:
+                    del st.session_state[old_key]
             old_agg = f"coi_gl_gen_agg_{prev_id}"
             if old_agg in st.session_state:
                 del st.session_state[old_agg]
@@ -137,6 +198,34 @@ def page_create_coi():
         st.info(f"Filling COI for: **{p.insured_name}** ({p.policy_number})")
 
         st.subheader("Certificate Holder Details")
+
+        # COI Type selector — drives ADDL INSD column, description clause, and Cargo↔Comp/Coll swap.
+        coi_type_key = f"coi_type_{p.id}"
+        coi_type = st.radio(
+            "COI Type",
+            options=COI_TYPE_OPTIONS,
+            horizontal=True,
+            key=coi_type_key,
+            help=(
+                "Additional Insured: standard COI. "
+                "Certificate Holder: drops the 'also listed as additional insured' clause and clears the ADDL INSD column. "
+                "Lienholder: pick covered vehicles and replace Cargo with Comp/Coll deductibles."
+            ),
+        )
+
+        # Lienholder needs a per-vehicle picker so we know which units appear in the Loss Payee clause.
+        selected_vehicle_objs = []
+        if coi_type == "Lienholder":
+            policy_vehicles = list(p.vehicles or [])
+            if not policy_vehicles:
+                st.warning("This policy has no vehicles to list as Loss Payee items.")
+            veh_options = {_format_vehicle_option(v): v for v in policy_vehicles}
+            selected_labels = st.multiselect(
+                "Vehicles covered by Loss Payee clause",
+                options=list(veh_options.keys()),
+                key=f"coi_lien_vehicles_{p.id}",
+            )
+            selected_vehicle_objs = [veh_options[lbl] for lbl in selected_labels if lbl in veh_options]
 
         if "coi_companies" not in st.session_state:
             st.session_state.coi_companies = load_companies("data/Additionalinsuredcomps.xlsx")
@@ -184,14 +273,28 @@ def page_create_coi():
                 h_state = st.text_input("State", key="h_state")
                 h_zip = st.text_input("Zip", key="h_zip")
 
-                _, desc_lines = coi_service.prepare_coi_data(p)
-                desc_lines.append("Radius of Operation: Unlimited")
-                desc_lines.append("Certificate Holder is also listed as an additional insured")
-                default_desc = "\n".join(desc_lines)
-
+                # Regenerate the default description whenever the COI type, selected
+                # vehicles, or holder name changes. User edits inside the textarea are
+                # preserved as long as those inputs stay the same.
                 desc_key = f"coi_desc_area_{p.id}"
-                if desc_key not in st.session_state:
-                    st.session_state[desc_key] = default_desc
+                desc_state_key = f"coi_desc_state_{p.id}"
+                current_desc_state = (
+                    coi_type,
+                    tuple(v.id for v in selected_vehicle_objs),
+                    st.session_state.get("h_name", "") or "",
+                )
+                if (
+                    desc_key not in st.session_state
+                    or st.session_state.get(desc_state_key) != current_desc_state
+                ):
+                    st.session_state[desc_key] = _build_default_desc(
+                        coi_service,
+                        p,
+                        coi_type,
+                        selected_vehicle_objs,
+                        st.session_state.get("h_name", ""),
+                    )
+                    st.session_state[desc_state_key] = current_desc_state
 
                 h_desc = st.text_area(
                     "Operations Description",
@@ -208,14 +311,29 @@ def page_create_coi():
         else:
             selected_companies = st.multiselect("Select Companies", options=company_options)
 
-            _, desc_lines = coi_service.prepare_coi_data(p)
-            desc_lines.append("Radius of Operation: Unlimited")
-            desc_lines.append("Certificate Holder is also listed as an additional insured")
-            default_desc = "\n".join(desc_lines)
-
+            # Bulk mode applies the same description to many holders, so use the
+            # placeholder token; we substitute it per-company at generation time.
             bulk_desc_key = f"coi_desc_bulk_{p.id}"
-            if bulk_desc_key not in st.session_state:
-                st.session_state[bulk_desc_key] = default_desc
+            bulk_state_key = f"coi_desc_state_bulk_{p.id}"
+            bulk_state = (coi_type, tuple(v.id for v in selected_vehicle_objs))
+            if (
+                bulk_desc_key not in st.session_state
+                or st.session_state.get(bulk_state_key) != bulk_state
+            ):
+                st.session_state[bulk_desc_key] = _build_default_desc(
+                    coi_service,
+                    p,
+                    coi_type,
+                    selected_vehicle_objs,
+                    holder_name="",
+                )
+                st.session_state[bulk_state_key] = bulk_state
+
+            if coi_type == "Lienholder":
+                st.caption(
+                    f"Bulk Lienholder COIs replace `{LIENHOLDER_HOLDER_PLACEHOLDER}` "
+                    "with each company's name when generating."
+                )
 
             h_desc = st.text_area(
                 "Operations Description (applied to all)",
@@ -272,7 +390,17 @@ def page_create_coi():
                 value=bool(p.has_auto_liability),
             )
         with gc3:
-            ui_has_cargo = st.checkbox("Motor Truck Cargo", value=bool(p.cargo_limit))
+            cargo_disabled = coi_type == "Lienholder"
+            ui_has_cargo = st.checkbox(
+                "Motor Truck Cargo",
+                value=bool(p.cargo_limit) and not cargo_disabled,
+                disabled=cargo_disabled,
+                help=(
+                    "Disabled for Lienholder COIs — the Other Policy box is reused for Comp/Coll deductibles."
+                    if cargo_disabled
+                    else None
+                ),
+            )
 
         def prepare_p_data():
             gl_agg = None
@@ -290,9 +418,12 @@ def page_create_coi():
                 "gl_general_aggregate": gl_agg,
                 "cargo_limit": p.cargo_limit,
                 "cargo_deductible": p.cargo_deductible if p.cargo_deductible else "1000",
+                "comp_deductible": p.comp_deductible,
+                "coll_deductible": p.coll_deductible,
                 "has_general_liability": ui_has_gl,
                 "has_auto_liability": ui_has_auto,
-                "has_cargo": ui_has_cargo,
+                "has_cargo": ui_has_cargo and coi_type != "Lienholder",
+                "coi_type": coi_type,
                 "insured_name": i_name,
                 "insured_address": i_addr,
                 "insured_city": i_city,
@@ -306,16 +437,20 @@ def page_create_coi():
             if st.button("Generate & Download PDF", type="primary"):
                 if not h_name:
                     st.error("Holder Name is required.")
+                elif coi_type == "Lienholder" and not selected_vehicle_objs:
+                    st.error("Lienholder COIs require at least one selected vehicle.")
                 else:
                     gen = COIGenerator()
                     p_data = prepare_p_data()
+                    # Substitute the placeholder in case the user kept it after switching back to a holder.
+                    final_desc = (h_desc or "").replace(LIENHOLDER_HOLDER_PLACEHOLDER, h_name or "")
                     h_data = {
                         "name": h_name,
                         "address": h_addr,
                         "city": h_city,
                         "state": h_state,
                         "zip": h_zip,
-                        "description": h_desc,
+                        "description": final_desc,
                     }
 
                     try:
@@ -334,6 +469,8 @@ def page_create_coi():
             if st.button("Generate Bulk COIs", type="primary"):
                 if not selected_companies:
                     st.error("Please select at least one company.")
+                elif coi_type == "Lienholder" and not selected_vehicle_objs:
+                    st.error("Lienholder COIs require at least one selected vehicle.")
                 else:
                     gen = COIGenerator()
                     p_data = prepare_p_data()
@@ -343,13 +480,19 @@ def page_create_coi():
                         with zipfile.ZipFile(zip_buffer, "w") as zf:
                             for comp_name in selected_companies:
                                 comp_data = st.session_state.coi_companies.get(comp_name, {})
+                                holder_name = comp_data.get("name", "")
+                                # Substitute the holder placeholder per-company so each
+                                # bulk-generated COI carries the correct name.
+                                per_holder_desc = (h_desc or "").replace(
+                                    LIENHOLDER_HOLDER_PLACEHOLDER, holder_name
+                                )
                                 h_data = {
-                                    "name": comp_data.get("name", ""),
+                                    "name": holder_name,
                                     "address": comp_data.get("address", ""),
                                     "city": comp_data.get("city", ""),
                                     "state": comp_data.get("state", ""),
                                     "zip": comp_data.get("zip", ""),
-                                    "description": h_desc,
+                                    "description": per_holder_desc,
                                 }
                                 pdf = gen.generate_coi(p_data, h_data, desc_font_size=h_desc_font_size)
                                 if pdf:

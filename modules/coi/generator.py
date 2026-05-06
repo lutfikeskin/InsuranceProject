@@ -80,7 +80,29 @@ class COIGenerator:
                 has_cargo = bool(cargo_limit)
             else:
                 has_cargo = bool(want_cargo) and bool(cargo_limit)
-            
+
+            # COI type drives ADDL INSD column + Cargo/Comp-Coll swap.
+            coi_type = policy_data.get("coi_type", "Additional Insured")
+            is_lienholder = coi_type == "Lienholder"
+            # "Y" for Additional Insured and Lienholder, "N" for Certificate Holder.
+            if coi_type == "Additional Insured":
+                addl_y = "Y"
+            elif coi_type == "Certificate Holder":
+                addl_y = "N"
+            else:
+                addl_y = "Y"  # Lienholder also gets "Y"
+
+            if is_lienholder:
+                # Lienholder COI repurposes the OtherPolicy box for Comp/Coll deductibles.
+                has_cargo = False
+                has_comp_coll = True
+                comp_ded = clean_limit(policy_data.get('comp_deductible', ''))
+                coll_ded = clean_limit(policy_data.get('coll_deductible', ''))
+            else:
+                has_comp_coll = False
+                comp_ded = ""
+                coll_ded = ""
+
             desc_lines = []
             
             if policy_data.get('vehicle_list_str'):
@@ -108,7 +130,7 @@ class COIGenerator:
             fields["F[0].P1[0].GeneralLiability_InsurerLetterCode_A[0]"] = "A" if has_gl else ""
             fields["F[0].P1[0].Vehicle_InsurerLetterCode_A[0]"] = "A" if has_auto else ""
             
-            fields["F[0].P1[0].OtherPolicy_InsurerLetterCode_A[0]"] = "A" if has_cargo else ""
+            fields["F[0].P1[0].OtherPolicy_InsurerLetterCode_A[0]"] = "A" if (has_cargo or has_comp_coll) else ""
             
             data_map = {
                 "Insurer_Name_A": policy_data.get('carrier_name', ''),
@@ -142,11 +164,23 @@ class COIGenerator:
                 "Holder_Zip": holder_data.get('zip', ''),
                 "Holder_Description": full_description,
                 
-                "Cargo_Box": "Motor Truck Cargo" if has_cargo else "",
-                "Cargo_Limit": f"{cargo_limit} Cargo\n{cargo_ded} Ded" if has_cargo else "",
-                "Cargo_Effective": fmt_date(policy_data.get('effective_date')) if has_cargo else "",
-                "Cargo_Expires": fmt_date(policy_data.get('expiration_date')) if has_cargo else "",
-                "Cargo_PolicyNumber": policy_data.get('policy_number', '') if has_cargo else ""
+                "Cargo_Box": (
+                    "Motor Truck Cargo" if has_cargo
+                    else ("Comprehensive / Collision" if has_comp_coll else "")
+                ),
+                "Cargo_Limit": (
+                    f"{cargo_limit} Cargo\n{cargo_ded} Ded" if has_cargo
+                    else (f"Comp Ded: {comp_ded}\nColl Ded: {coll_ded}" if has_comp_coll else "")
+                ),
+                "Cargo_Effective": fmt_date(policy_data.get('effective_date')) if (has_cargo or has_comp_coll) else "",
+                "Cargo_Expires": fmt_date(policy_data.get('expiration_date')) if (has_cargo or has_comp_coll) else "",
+                "Cargo_PolicyNumber": policy_data.get('policy_number', '') if (has_cargo or has_comp_coll) else "",
+
+                # ADDL INSD column codes — "Y" only for Additional Insured COI type.
+                "AddlInsd_GL": addl_y if has_gl else "",
+                "AddlInsd_Auto": addl_y if has_auto else "",
+                "AddlInsd_Other": addl_y if (has_cargo or has_comp_coll) else "",
+                "AddlInsd_Excess": ""
             }
             
             for key, val in data_map.items():

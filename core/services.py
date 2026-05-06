@@ -1448,7 +1448,10 @@ class COIService:
             desc_lines.append(f"State minimum (reference): {st_disp}")
         for vrow in av.get("acord_127_vehicles") or []:
             sym = vrow.get("covered_auto_symbols")
-            if sym:
+            # Extraction stores absent values as the literal string "null"; treat both
+            # None and "null" (case-insensitive) as missing so the COI description
+            # doesn't render lines like 'BAP symbols (VIN): null'.
+            if sym and str(sym).strip().lower() not in ("null", "none", ""):
                 vlabel = vrow.get("vin") or "vehicle"
                 desc_lines.append(f"BAP symbols ({vlabel}): {sym}")
         auto25 = av.get("acord_25_automobile_liability") or {}

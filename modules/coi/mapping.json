@@ -34,6 +34,11 @@
     "Cargo_Limit": "OtherPolicy_CoverageLimitAmount_A[0]",
     "Cargo_Effective": "OtherPolicy_PolicyEffectiveDate_A[0]",
     "Cargo_Expires": "OtherPolicy_PolicyExpirationDate_A[0]",
-    "Cargo_PolicyNumber": "OtherPolicy_PolicyNumberIdentifier_A[0]"
+    "Cargo_PolicyNumber": "OtherPolicy_PolicyNumberIdentifier_A[0]",
+
+    "AddlInsd_GL": "F[0].P1[0].CertificateOfInsurance_GeneralLiability_AdditionalInsuredCode_A[0]",
+    "AddlInsd_Auto": "F[0].P1[0].CertificateOfInsurance_AutomobileLiability_AdditionalInsuredCode_A[0]",
+    "AddlInsd_Excess": "F[0].P1[0].CertificateOfInsurance_ExcessLiability_AdditionalInsuredCode_A[0]",
+    "AddlInsd_Other": "F[0].P1[0].CertificateOfInsurance_OtherPolicy_AdditionalInsuredCode_A[0]"
   }
 }
