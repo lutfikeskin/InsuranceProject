@@ -120,50 +120,42 @@ def edit_policy_dialog(policy, service: PolicyService):
                     
     with tab_covs:
         st.subheader("🛡️ Policy Coverages")
-        
-        global_covs = [c for c in policy.coverages if not c.vehicle_id]
-        
-        st.markdown(f"**Global / Policy-Level ({len(global_covs)})**")
-        if global_covs:
-            c_data = []
-            for c in global_covs:
-                 lim_disp = _coverage_limit_display(c)
-                 c_data.append({
-                     "Code": c.coverage_code,
-                     "Family": c.family,
-                     "Limit": lim_disp,
-                     "Deductible": c.deductible if c.deductible else "-"
-                 })
-            st.dataframe(pd.DataFrame(c_data), hide_index=True, use_container_width=True)
-        else:
-            st.caption("No global coverages found.")
 
-        st.divider()
-        st.subheader("🚙 Vehicle-Specific Coverages")
-        
-        has_veh_covs = False
-        for v in policy.vehicles:
-            if v.coverages:
-                has_veh_covs = True
-                with st.expander(f"{v.year} {v.make} {v.model} ({v.vin[-6:] if v.vin else 'NO VIN'})"):
-                    vc_data = []
-                    for c in v.coverages:
-                         lim_disp = "Included"
-                         if c.deductible:
-                             lim_disp = f"Ded: ${c.deductible}"
-                         else:
-                             alt = _coverage_limit_display(c)
-                             if alt != "N/A":
-                                 lim_disp = alt
-                         
-                         vc_data.append({
-                             "Coverage": c.coverage_code or c.type,
-                             "Details": lim_disp
-                         })
-                    st.dataframe(pd.DataFrame(vc_data), hide_index=True, use_container_width=True)
-        
-        if not has_veh_covs:
-             st.info("No vehicle-specific coverages found (e.g. Comp/Coll might be global or missing).")
+        all_covs = list(policy.coverages or [])
+        global_count = sum(1 for c in all_covs if not c.vehicle_id)
+        veh_count = len(all_covs) - global_count
+
+        if not all_covs:
+            st.info("No coverages recorded for this policy.")
+        else:
+            st.caption(
+                f"**{len(all_covs)}** total — {global_count} policy-level, "
+                f"{veh_count} vehicle-specific"
+            )
+
+            # Build a vehicle-id → label map once, so every row renders fast.
+            veh_label = {
+                v.id: (
+                    f"{v.year or ''} {v.make or ''} {v.model or ''}".strip()
+                    + (f" ({v.vin[-6:]})" if v.vin else "")
+                )
+                for v in policy.vehicles
+            }
+
+            rows = []
+            for c in all_covs:
+                rows.append({
+                    "Vehicle": veh_label.get(c.vehicle_id, "GLOBAL"),
+                    "Code": c.coverage_code or c.type or "—",
+                    "Family": c.family or "—",
+                    "Limit": _coverage_limit_display(c),
+                    "Deductible": f"${c.deductible}" if c.deductible else "—",
+                })
+
+            df = pd.DataFrame(rows).sort_values(
+                by=["Vehicle", "Family", "Code"], kind="stable"
+            )
+            st.dataframe(df, hide_index=True, use_container_width=True)
     with tab_vehs:
         st.subheader("Manage Vehicles")
         v_data = [{"year": v.year, "make": v.make, "model": v.model, "vin": v.vin, "type": v.vehicle_type, "gvw": v.gvw, "chassis": v.chassis, "body": v.body} for v in policy.vehicles]

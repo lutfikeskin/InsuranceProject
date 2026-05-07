@@ -113,6 +113,8 @@ def get_extract_all_prompt(
     - naic_number: insurer NAIC from declarations/schedules only; do not use producer/agency license numbers.
     - effective_date / expiration_date: use YYYY-MM-DD when the document shows a full parseable date; otherwise use the string as printed.
     - premium: copy the grand total as printed (string); do not compute or invent totals.
+    - insured_name: the named insured exactly as printed (the human or entity the policy is issued to).
+    - business_name: populate ONLY when the named insured is a business entity (LLC, Inc., Corp., Co., Ltd., Trust, or includes "DBA"/"trading as" with a company name). Capture the entity name exactly as printed. For "John Smith DBA Smith Trucking" set insured_name="John Smith" and business_name="Smith Trucking". If the named insured is one or more individuals with no business qualifier, leave business_name null.
     - Fields: Carrier Name, NAIC, Policy #, Effective/Expiration Dates, Insured Name, Address, City, State, Zip, Business Name, Premium (GRAND TOTAL).
     """
 

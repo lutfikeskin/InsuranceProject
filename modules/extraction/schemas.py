@@ -379,6 +379,8 @@ COI_SUMMARY_SCHEMA = {
                     "expiration_date_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
                     "insured_name": {"type": "STRING"},
                     "insured_name_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
+                    "business_name": {"type": "STRING", "nullable": True},
+                    "business_name_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
                     "premium": {"type": "STRING"},
                     "premium_confidence": {"type": "STRING", "enum": ["high", "medium", "low"]},
                     "limits": {
