@@ -166,8 +166,21 @@ def get_extract_all_prompt(
     coverage_block = f"""
     --- COVERAGE MAPPING ---
     - Map every visible coverage to a valid coverage_code from the registry below.
-    - If a row says Included/Yes without a numeric limit, keep limits null; do not invent dollar amounts.
+    - COMPLETENESS RULE: every coverage row that appears on the declarations or schedule, even rows showing "INCL", "Included", "REJECTED", "WAIVED", or partial limits, MUST be returned as an entry in `coverages[]` with the matching coverage_code. Use null for unknown sub-fields; do not skip the row.
+    - AUTO POLICIES — common rows you must not miss when visible (each becomes its own coverages[] entry):
+        Bodily Injury Liability -> AUTO_LIAB_BI
+        Property Damage Liability -> AUTO_LIAB_PD
+        Combined Single Limit Liability -> AUTO_LIAB_CSL
+        Uninsured Motorists BI -> UM_BI ; Uninsured Motorists PD -> UM_PD
+        Underinsured Motorists -> UIM_BI when separately shown (otherwise fold into UM_BI per the personal-auto rule below)
+        Personal Injury Protection -> PIP
+        Medical Payments -> MED_PAY
+        Comprehensive / Other Than Collision -> COMP
+        Collision -> COLL
+        Motor Truck Cargo -> CARGO
+    - If a row says Included/Yes without a numeric limit, keep its limits null and add the coverage_code with limit_descriptor where the registry supports it; do not invent dollar amounts.
     - On personal auto, "Uninsured/Underinsured Motorists Bodily Injury" maps to UM_BI (not UIM_BI) unless the document explicitly separates UIM as its own coverage line.
+    - CROSS-CHECK: if you populate any field under `policy.limits` (liability_limit, cargo_limit, um_uim_limit, med_pay_limit, pip_limit, comp_deductible, coll_deductible, general_liability_limit), the corresponding coverages[] entry MUST also be present. The flat policy.limits and the structured coverages[] are two views of the same data; never populate one without the other.
     - REGISTRY: {registry_text}
     """
 
