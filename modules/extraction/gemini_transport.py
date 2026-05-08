@@ -13,8 +13,8 @@ from core.services import UsageService
 
 from .extraction_local_cache import ExtractionCache
 
-ROUTING_MODEL = "gemini-2.5-flash"
-EXTRACTION_MODEL = "gemini-2.5-flash"
+ROUTING_MODEL = "gemini-3.1-flash-lite"
+EXTRACTION_MODEL = "gemini-3.1-flash-lite"
 
 
 class GeminiTransport:

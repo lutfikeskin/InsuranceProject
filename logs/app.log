@@ -1064,3 +1064,72 @@
 2026-04-30 22:00:18 | INFO     | modules.extraction.pipeline:run:471 - Policy Classified: commercial_auto (high)
 2026-04-30 22:00:18 | INFO     | core.variant_tracker:check_and_record:122 - VARIANT TRACKER: [new_carrier] unknown / memorandum / commercial_auto (key: f905227e9b9bfff687b5dcab...)
 2026-04-30 22:00:20 | DEBUG    | modules.extraction.pipeline:save:200 - CACHE SAVED: v_auto_af901341_auto_f905227e9b9bfff687b5dcaba7590d446669ae7ce912320f50f247adac264970
+2026-05-07 11:59:11 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-07 11:59:12 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-07 11:59:15 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-07 11:59:17 | INFO     | modules.extraction.extraction_assembly:apply_auto_liability_rules:43 - Refactor: Pruning Split limits in favor of CSL.
+2026-05-07 11:59:46 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-07 11:59:49 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-07 11:59:51 | INFO     | modules.extraction.extraction_assembly:apply_auto_liability_rules:43 - Refactor: Pruning Split limits in favor of CSL.
+2026-05-07 12:02:16 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-07 12:02:20 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-07 12:02:22 | INFO     | modules.extraction.extraction_assembly:apply_auto_liability_rules:43 - Refactor: Pruning Split limits in favor of CSL.
+2026-05-07 12:18:58 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-07 12:20:08 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-07 12:20:08 | DEBUG    | modules.extraction.extraction_local_cache:get_gemini_cache_meta:66 - Gemini cache meta read error: Expecting value: line 16 column 20 (char 720)
+2026-05-07 12:20:08 | INFO     | modules.extraction.pipeline:run:104 - Uploading to Gemini File API...
+2026-05-07 12:20:11 | INFO     | modules.extraction.pipeline:run:108 - File uploaded: files/l336ho6xs1ga
+2026-05-07 12:20:12 | DEBUG    | modules.extraction.extraction_local_cache:mark_non_cacheable:96 - Non-cacheable marker write error: Expecting value: line 16 column 20 (char 720)
+2026-05-07 12:20:12 | INFO     | modules.extraction.pipeline:run:127 - Skipping cache create (small/non-cacheable document).
+2026-05-07 12:20:16 | INFO     | modules.extraction.gemini_transport:call_gemini:143 - LLM usage | model=gemini-2.5-flash type=classification input=929 cached=0 output=45 latency_ms=2755 retries=0
+2026-05-07 12:20:16 | INFO     | modules.extraction.pipeline:run:171 - Routing classification: commercial_auto (high)
+2026-05-07 12:20:17 | INFO     | modules.extraction.pipeline:run:230 - Document taxonomy route: coi_summary
+2026-05-07 12:20:22 | INFO     | modules.extraction.gemini_transport:call_gemini:143 - LLM usage | model=gemini-2.5-flash type=coi_summary input=1134 cached=0 output=682 latency_ms=5110 retries=0
+2026-05-07 12:20:22 | INFO     | modules.extraction.pipeline:run:324 - Policy Classified: commercial_auto (high)
+2026-05-07 12:20:24 | DEBUG    | modules.extraction.extraction_local_cache:save:55 - CACHE SAVED: v_auto_8cae01fa_auto_37abce84c308d9535bdba8da66aa213ba0c31292f743bf4d9b15fff866982c1f
+2026-05-07 12:20:25 | DEBUG    | modules.extraction.extraction_local_cache:get_gemini_cache_meta:66 - Gemini cache meta read error: Expecting value: line 16 column 20 (char 720)
+2026-05-07 12:20:25 | INFO     | modules.extraction.pipeline:run:104 - Uploading to Gemini File API...
+2026-05-07 12:20:26 | INFO     | modules.extraction.pipeline:run:108 - File uploaded: files/mzsh5j9e9j9i
+2026-05-07 12:20:27 | WARNING  | modules.extraction.gemini_transport:create_cache:50 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=788, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-05-07 12:20:27 | INFO     | modules.extraction.pipeline:run:161 - Classifier skipped via text hints: document_type=declarations_page, policy_type=motor_truck_cargo
+2026-05-07 12:20:43 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-07 12:20:44 | INFO     | modules.extraction.extraction_local_cache:get:43 - CACHE HIT: v_auto_8cae01fa_auto_37abce84c308d9535bdba8da66aa213ba0c31292f743bf4d9b15fff866982c1f
+2026-05-07 12:20:45 | DEBUG    | modules.extraction.extraction_local_cache:get_gemini_cache_meta:66 - Gemini cache meta read error: Expecting value: line 16 column 20 (char 720)
+2026-05-07 12:20:45 | INFO     | modules.extraction.pipeline:run:104 - Uploading to Gemini File API...
+2026-05-07 12:20:47 | INFO     | modules.extraction.pipeline:run:108 - File uploaded: files/2ailfqp6j32p
+2026-05-07 12:20:48 | WARNING  | modules.extraction.gemini_transport:create_cache:50 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=788, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-05-07 12:20:48 | INFO     | modules.extraction.pipeline:run:161 - Classifier skipped via text hints: document_type=declarations_page, policy_type=motor_truck_cargo
+2026-05-07 12:21:00 | INFO     | modules.extraction.gemini_transport:call_gemini:143 - LLM usage | model=gemini-2.5-flash type=universal_one_shot input=2517 cached=2426 output=2755 latency_ms=12464 retries=0
+2026-05-07 12:21:00 | INFO     | modules.extraction.pipeline:run:324 - Policy Classified: commercial_auto (high)
+2026-05-07 12:21:03 | INFO     | modules.extraction.extraction_assembly:apply_auto_liability_rules:43 - Refactor: Pruning Split limits in favor of CSL.
+2026-05-07 12:21:03 | DEBUG    | modules.extraction.extraction_local_cache:save:55 - CACHE SAVED: v_auto_8cae01fa_auto_5cc4c030e8c72d4338c303e91e343dffefd5666d35b4a625842e4dd6abfe5818
+2026-05-07 12:21:03 | INFO     | modules.extraction.extraction_local_cache:get:43 - CACHE HIT: v_auto_8cae01fa_auto_5cc4c030e8c72d4338c303e91e343dffefd5666d35b4a625842e4dd6abfe5818
+2026-05-07 12:21:04 | DEBUG    | modules.extraction.extraction_local_cache:get_gemini_cache_meta:66 - Gemini cache meta read error: Expecting value: line 16 column 20 (char 720)
+2026-05-07 12:21:04 | INFO     | modules.extraction.pipeline:run:104 - Uploading to Gemini File API...
+2026-05-07 12:21:06 | INFO     | modules.extraction.pipeline:run:108 - File uploaded: files/m5sz61nn0xir
+2026-05-07 12:21:06 | WARNING  | modules.extraction.gemini_transport:create_cache:50 - Failed to create cache: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cached content is too small. total_token_count=272, min_total_token_count=1024', 'status': 'INVALID_ARGUMENT'}}. Falling back to standard upload.
+2026-05-07 12:21:06 | INFO     | modules.extraction.pipeline:run:161 - Classifier skipped via text hints: document_type=certificate_of_insurance, policy_type=motor_truck_cargo
+2026-05-07 12:21:06 | INFO     | modules.extraction.pipeline:run:230 - Document taxonomy route: coi_summary
+2026-05-07 12:21:13 | INFO     | modules.extraction.gemini_transport:call_gemini:143 - LLM usage | model=gemini-2.5-flash type=coi_summary input=1188 cached=0 output=1010 latency_ms=6276 retries=0
+2026-05-07 12:21:13 | INFO     | modules.extraction.pipeline:run:324 - Policy Classified: commercial_auto (high)
+2026-05-07 12:21:15 | DEBUG    | modules.extraction.extraction_local_cache:save:55 - CACHE SAVED: v_auto_8cae01fa_auto_84a54864d20c0da7ed156297d824f11a4cb6d12c9b6e4721acc4ff107617beef
+2026-05-07 12:22:00 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-07 12:22:03 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-07 12:22:05 | INFO     | modules.extraction.extraction_assembly:apply_auto_liability_rules:43 - Refactor: Pruning Split limits in favor of CSL.
+2026-05-07 17:01:10 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-07 17:01:13 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-07 17:01:16 | INFO     | modules.extraction.extraction_assembly:apply_auto_liability_rules:43 - Refactor: Pruning Split limits in favor of CSL.
+2026-05-07 17:01:22 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-08 11:40:32 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-08 11:40:35 | INFO     | modules.extraction.extraction_assembly:apply_auto_liability_rules:43 - Refactor: Pruning Split limits in favor of CSL.
+2026-05-08 11:41:00 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_8cae01fa
+2026-05-08 11:43:38 | DEBUG    | modules.extraction.extraction_local_cache:get_gemini_cache_meta:66 - Gemini cache meta read error: Expecting value: line 16 column 20 (char 720)
+2026-05-08 11:43:38 | INFO     | modules.extraction.pipeline:run:104 - Uploading to Gemini File API...
+2026-05-08 11:43:40 | INFO     | modules.extraction.pipeline:run:108 - File uploaded: files/looclxybtbtm
+2026-05-08 11:43:42 | INFO     | modules.extraction.gemini_transport:create_cache:47 - CACHE CREATED: cachedContents/2j2rbby9zf1lmgsgx95w31dg397gs599ocmkm6m4 (TTL: 300s)
+2026-05-08 11:43:42 | DEBUG    | modules.extraction.extraction_local_cache:save_gemini_cache_meta:84 - Gemini cache meta write error: Expecting value: line 16 column 20 (char 720)
+2026-05-08 11:43:42 | INFO     | modules.extraction.pipeline:run:145 - User-selected policy type: commercial_auto; classifier skipped (document_type=declarations_page, source=default)
+2026-05-08 11:43:47 | INFO     | modules.extraction.gemini_transport:call_gemini:143 - LLM usage | model=gemini-3.1-flash-lite type=universal_one_shot input=3377 cached=1694 output=908 latency_ms=4569 retries=0
+2026-05-08 11:43:47 | INFO     | modules.extraction.pipeline:run:324 - Policy Classified: commercial_auto (high)
+2026-05-08 11:43:47 | INFO     | core.variant_tracker:check_and_record:122 - VARIANT TRACKER: [new_carrier] unknown / quote / commercial_auto (key: 9e97986da699ff8f5349f80f...)
+2026-05-08 11:43:48 | DEBUG    | modules.extraction.extraction_local_cache:save:55 - CACHE SAVED: v_auto_8cae01fa_manual_commercial_auto_9e97986da699ff8f5349f80fa645f328bc9044849943e33baaccc79167cf7f06

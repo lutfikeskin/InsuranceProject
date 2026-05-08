@@ -1358,7 +1358,7 @@ class PolicyService:
         
         try:
             response = client.models.generate_content(
-                model='gemini-2.5-flash', 
+                model="gemini-3.1-flash-lite",
                 # Keep prefix stable to maximize implicit cache hits.
                 contents=[
                     SQL_SCHEMA_CONTEXT,
@@ -1371,7 +1371,7 @@ class PolicyService:
             usage_md = getattr(response, "usage_metadata", None)
             if usage_md:
                 UsageService(self.session).log_usage(
-                    model_name="gemini-2.5-flash",
+                    model_name="gemini-3.1-flash-lite",
                     input_tokens=usage_md.prompt_token_count or 0,
                     output_tokens=usage_md.candidates_token_count or 0,
                     request_type="query_sql",
@@ -1494,6 +1494,13 @@ class COIService:
 
 class UsageService:
     PRICING = {
+        # Gemini 3.1 Flash-Lite — Agent Platform standard tier, global endpoint,
+        # <=200K input context; text/image/video input (see GCP pricing tables).
+        "gemini-3.1-flash-lite": {
+            "input": 0.25 / 1_000_000,
+            "output": 1.50 / 1_000_000,
+            "cached_input": 0.025 / 1_000_000,
+        },
         "gemini-2.5-flash": {
             "input": 0.30 / 1_000_000,
             "output": 2.50 / 1_000_000,
@@ -1515,9 +1522,9 @@ class UsageService:
             "cached_input": 0.00937 / 1_000_000,  # 12.5% of input price
         },
         "default": {
-            "input": 0.30 / 1_000_000,
-            "output": 2.50 / 1_000_000,
-            "cached_input": 0.03 / 1_000_000,
+            "input": 0.25 / 1_000_000,
+            "output": 1.50 / 1_000_000,
+            "cached_input": 0.025 / 1_000_000,
         },
     }
 
@@ -1535,7 +1542,7 @@ class UsageService:
         """Logs a single API request's token usage and estimated cost.
 
         Args:
-            model_name: Model identifier (e.g. 'gemini-2.5-flash').
+            model_name: Model identifier (e.g. 'gemini-3.1-flash-lite').
             input_tokens: Total prompt tokens (includes cached tokens).
             output_tokens: Generated tokens.
             request_type: Tag for the request (e.g. 'extraction', 'classification').
