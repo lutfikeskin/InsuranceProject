@@ -1,22 +1,28 @@
 {
   "policy": {
-    "carrier_name": "GEICO Marine Insurance Company",
+    "carrier_name": "GEICO",
+    "underwriter_name": "GEICO Marine Insurance Company",
     "naic_number": null,
-    "policy_number": "9300317286",
-    "effective_date": "04/22/2026",
-    "expiration_date": "04/22/2027",
-    "insured_name": "A.O GRACE CORP.",
-    "insured_address": "2 VILLA VERDE DR APT 214 BUFFALO GROVE IL 60089",
-    "financial_responsibility_name": "Marble City Insurance DBA Truckers National",
+    "policy_number": "9300154763",
+    "effective_date": "05/16/2026",
+    "expiration_date": "05/16/2027",
+    "insured_name": "Noreldin Younis DBA Noreldin Younis",
+    "insured_address": "2270 W LAKE RD 204",
+    "insured_city": "NORTH LIBERTY",
+    "insured_state_code": "IA",
+    "insured_zip": "52317",
+    "financial_responsibility_name": null,
     "liability_limit": "$1,000,000",
     "general_liability_limit": null,
     "cargo_limit": "$100,000",
     "cargo_deductible": "$1000",
     "um_uim_limit": null,
-    "med_pay_limit": null,
+    "med_pay_limit": "Included",
     "pip_limit": null,
     "comp_deductible": null,
     "coll_deductible": null,
+    "has_general_liability": false,
+    "has_auto_liability": true,
     "has_full_collision": false
   },
   "compliance": {},
@@ -26,22 +32,22 @@
       "year": 2019,
       "make": "MERCEDES-BENZ",
       "model": "SPRINTER",
-      "vin": "WD4PF1CD4KT002262",
-      "gvw": 0,
+      "vin": "WD4PF1CD5KP037479",
+      "gvw": null,
       "type": "Straight Truck",
       "chassis": "Cab Chassis",
-      "body": "null",
-      "covered_auto_symbols": "null",
-      "radius_of_operation": "Unlimited",
-      "business_use_class": "null",
-      "valuation_basis": "null"
+      "body": null,
+      "covered_auto_symbols": null,
+      "radius_of_operation": null,
+      "business_use_class": null,
+      "valuation_basis": null
     }
   ],
   "drivers": [
     {
-      "full_name": "Andrian Opanovych",
-      "license_number": "null",
-      "is_excluded": false
+      "full_name": "Noreldin Younis",
+      "license_number": null,
+      "is_excluded": null
     }
   ],
   "audits": {
@@ -52,9 +58,13 @@
     }
   },
   "classification": {
-    "document_type": "certificate_of_insurance",
+    "document_type": "memorandum",
     "policy_type": "commercial_auto",
-    "confidence": "high"
+    "confidence": "high",
+    "signals": [
+      "user_selected",
+      "text_hint:memorandum"
+    ]
   },
   "page_dimensions": [
     {
@@ -66,9 +76,9 @@
     "errors": [],
     "rejected_coverages": [],
     "classification_warnings": [],
+    "user_selected_policy_type": "commercial_auto",
     "commercial_flags": {
-      "symbol1_any_auto_suggested": false,
-      "covered_auto_symbols_detected": "null"
+      "symbol1_any_auto_suggested": false
     }
   },
   "policy_data_source": "coi_summary",

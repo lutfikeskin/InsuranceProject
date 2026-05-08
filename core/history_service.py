@@ -67,10 +67,19 @@ class HistoryService:
 
     def _parse_field_value(self, json_key, value):
         if "date" in json_key and isinstance(value, str) and value:
+            s = value.strip()
+            # Carriers print dates in many formats. Try the common ones; if all
+            # fail, return None rather than the raw string so the SQLite Date
+            # column gets a valid value (or NULL) instead of crashing on flush.
+            for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y", "%Y/%m/%d"):
+                try:
+                    return datetime.strptime(s, fmt).date()
+                except ValueError:
+                    continue
             try:
-                return datetime.fromisoformat(str(value)).date()
+                return datetime.fromisoformat(s).date()
             except ValueError:
-                return value
+                return None
         return value
 
     def _collection_changes_template(self):

@@ -51,136 +51,6 @@ ACCOUNT_TYPE_BY_POLICY = {
 }
 
 
-def _backfill_coverages_from_flat_limits(existing, flat, policy_type):
-    """Synthesize Coverage entries for codes the LLM populated as flat fields
-    on `policy.*` but forgot to enumerate in `coverages[]`. Returns ONLY the
-    missing entries; each carries `_backfill_source` for the audit trail
-    (the caller pops it before persisting).
-
-    `existing` is the current coverages list (untouched), `flat` is the
-    flattened policy data dict (`liability_limit`, `cargo_limit`, ...).
-    """
-    have_codes = {
-        c.get("coverage_code")
-        for c in (existing or [])
-        if isinstance(c, dict) and c.get("coverage_code")
-    }
-    out = []
-
-    def _money(v):
-        if v is None:
-            return None
-        s = str(v).strip()
-        if not s or s.lower() == "included":
-            return None
-        s = s.lstrip("$").replace(",", "")
-        try:
-            return int(float(s))
-        except ValueError:
-            return None
-
-    # liability_limit -> AUTO_LIAB_CSL (most commercial decs print one CSL number)
-    if "AUTO_LIAB_BI" not in have_codes and "AUTO_LIAB_CSL" not in have_codes:
-        amt = _money(flat.get("liability_limit"))
-        if amt:
-            out.append({
-                "coverage_code": "AUTO_LIAB_CSL",
-                "family": "auto_liability",
-                "limits": {"combined_single_limit": amt},
-                "limit_structure": "csl",
-                "_backfill_source": "policy.liability_limit",
-            })
-
-    # cargo_limit / cargo_deductible -> CARGO
-    if "CARGO" not in have_codes:
-        cargo_amt = _money(flat.get("cargo_limit"))
-        cargo_ded = _money(flat.get("cargo_deductible"))
-        if cargo_amt or cargo_ded is not None:
-            out.append({
-                "coverage_code": "CARGO",
-                "family": "cargo",
-                "limits": {"per_occurrence": cargo_amt} if cargo_amt else {},
-                "deductible": cargo_ded,
-                "_backfill_source": "policy.cargo_limit",
-            })
-
-    # um_uim_limit -> UM_BI
-    if "UM_BI" not in have_codes and "UIM_BI" not in have_codes:
-        amt = _money(flat.get("um_uim_limit"))
-        if amt:
-            out.append({
-                "coverage_code": "UM_BI",
-                "family": "uninsured_motorist",
-                "limits": {"combined_single_limit": amt},
-                "_backfill_source": "policy.um_uim_limit",
-            })
-
-    # med_pay_limit -> MED_PAY (also captures "Included")
-    if "MED_PAY" not in have_codes:
-        v = flat.get("med_pay_limit")
-        amt = _money(v)
-        v_str = (str(v).strip().lower() if v is not None else "")
-        if amt or v_str == "included":
-            entry = {
-                "coverage_code": "MED_PAY",
-                "family": "medical_payments",
-                "limits": {"per_person": amt} if amt else {},
-                "_backfill_source": "policy.med_pay_limit",
-            }
-            if not amt and v_str == "included":
-                entry["limit_descriptor"] = "Included"
-            out.append(entry)
-
-    # pip_limit -> PIP
-    if "PIP" not in have_codes:
-        amt = _money(flat.get("pip_limit"))
-        if amt:
-            out.append({
-                "coverage_code": "PIP",
-                "family": "pip",
-                "limits": {"per_person": amt},
-                "_backfill_source": "policy.pip_limit",
-            })
-
-    # comp_deductible -> COMP, coll_deductible -> COLL (deductible-only rows)
-    if "COMP" not in have_codes:
-        ded = _money(flat.get("comp_deductible"))
-        if ded is not None:
-            out.append({
-                "coverage_code": "COMP",
-                "family": "physical_damage",
-                "deductible": ded,
-                "limit_structure": "deductible_only",
-                "_backfill_source": "policy.comp_deductible",
-            })
-    if "COLL" not in have_codes:
-        ded = _money(flat.get("coll_deductible"))
-        if ded is not None:
-            out.append({
-                "coverage_code": "COLL",
-                "family": "physical_damage",
-                "deductible": ded,
-                "limit_structure": "deductible_only",
-                "_backfill_source": "policy.coll_deductible",
-            })
-
-    # general_liability_limit -> GL_OCCURRENCE
-    gl_eligible = policy_type in ("general_liability", "commercial_package", "bop") or (
-        policy_type == "commercial_auto" and flat.get("general_liability_limit")
-    )
-    if gl_eligible and "GL_OCCURRENCE" not in have_codes:
-        amt = _money(flat.get("general_liability_limit"))
-        if amt:
-            out.append({
-                "coverage_code": "GL_OCCURRENCE",
-                "family": "general_liability",
-                "limits": {"per_occurrence": amt},
-                "_backfill_source": "policy.general_liability_limit",
-            })
-
-    return out
-
-
 def build_extraction_extras_json(extraction_result: dict) -> str | None:
     """
     JSON blob for compliance, statutory/UM policy annotations, and per-row vehicle/coverage
@@ -192,6 +62,15 @@ def build_extraction_extras_json(extraction_result: dict) -> str | None:
     coverages = extraction_result.get("coverages") or []
     vehicles = extraction_result.get("vehicles") or []
     audits = extraction_result.get("audits") or {}
+    # Slim view of extraction_audit — only fields we want persisted (the
+    # full dict has rejected_coverages, errors, classification_warnings, etc.
+    # which can be noisy; we save the items most useful for downstream review).
+    raw_audit = extraction_result.get("extraction_audit") or {}
+    extraction_audit = {
+        k: raw_audit[k]
+        for k in ("backfilled_coverages", "rejected_coverages", "liability_normalization")
+        if raw_audit.get(k)
+    }
     pol_ont = {k: pol.get(k) for k in (
         "um_stacked_effective_limit",
         "statutory_auto_liability_display",
@@ -219,15 +98,22 @@ def build_extraction_extras_json(extraction_result: dict) -> str | None:
     def _row_has_values(d: dict) -> bool:
         return any(v not in (None, "", [], {}) for v in d.values())
 
-    has_content = bool(comp) or bool(pol_ont) or bool(policy_data_source) or bool(audits) or any(
-        _row_has_values(d) for d in veh_ont
-    ) or any(_row_has_values(d) for d in cov_ont)
+    has_content = (
+        bool(comp)
+        or bool(pol_ont)
+        or bool(policy_data_source)
+        or bool(audits)
+        or bool(extraction_audit)
+        or any(_row_has_values(d) for d in veh_ont)
+        or any(_row_has_values(d) for d in cov_ont)
+    )
     if not has_content:
         return None
     payload = {
         "policy_data_source": policy_data_source,
         "compliance": comp,
         "audits": audits,
+        "extraction_audit": extraction_audit,
         "policy_ontology": pol_ont,
         "vehicles_ontology": veh_ont,
         "coverages_ontology": cov_ont,
@@ -1195,6 +1081,35 @@ class PolicyService:
                 "compliance": extraction_result.get("compliance") or {},
                 "coi_summary": {**summary, "merged_row_count": len(rows)},
             }
+
+            # Per-policy backfill: COI summaries share one top-level coverages[]
+            # array across all policies, but each policy_payload has its own flat
+            # limits. Synthesize per-policy Coverage rows from those flat fields.
+            # Local import avoids circular load (modules.extraction.__init__ pulls
+            # pipeline which pulls services).
+            from modules.extraction.coverage_backfill import (
+                backfill_coverages_from_flat_limits,
+            )
+            synth = backfill_coverages_from_flat_limits(
+                existing=policy_payload.get("coverages", []) or [],
+                flat=policy_payload["policy"],
+                policy_type=policy_payload["policy"].get("policy_type"),
+            )
+            if synth:
+                covs_list = list(policy_payload.get("coverages") or [])
+                audit_entries = []
+                for entry in synth:
+                    src = entry.pop("_backfill_source", None)
+                    covs_list.append(entry)
+                    audit_entries.append({
+                        "coverage_code": entry.get("coverage_code"),
+                        "source": src,
+                    })
+                policy_payload["coverages"] = covs_list
+                policy_payload["extraction_audit"] = {
+                    "backfilled_coverages": audit_entries
+                }
+
             success, msg = self._save_single_extraction_payload(policy_payload)
             if success and msg.startswith("Updated"):
                 updated_count += 1
@@ -1423,40 +1338,21 @@ class PolicyService:
             if nv:
                 vin_to_vehicle[nv] = veh
 
-        # Safety net: when the LLM populated flat policy.{liability_limit,
-        # cargo_limit, um_uim_limit, ...} but returned an empty / partial
-        # coverages[] array (e.g. coi_summary path or LLM under-reporting),
-        # synthesize the missing Coverage rows from the flat fields so the
-        # Edit Policy → Coverages tab and downstream COI generation aren't
-        # blank. Each synthesized row is tagged for the audit trail.
-        synthesized = _backfill_coverages_from_flat_limits(
-            existing=data.get('coverages', []) or [],
-            flat=data,
-            policy_type=data.get('policy_type'),
-        )
-        if synthesized:
-            covs_list = list(data.get('coverages') or [])
-            audit_entries = []
-            for entry in synthesized:
-                src = entry.pop('_backfill_source', None)
-                covs_list.append(entry)
-                audit_entries.append({
-                    'coverage_code': entry.get('coverage_code'),
-                    'source': src,
-                })
-            data['coverages'] = covs_list
-            # Best-effort audit trail; extraction_extras may be JSON or dict.
-            try:
-                ex = data.get('extraction_extras')
-                if isinstance(ex, str):
-                    ex = json.loads(ex) if ex else {}
-                if not isinstance(ex, dict):
-                    ex = {}
-                aud = ex.setdefault('extraction_audit', {})
-                aud.setdefault('backfilled_coverages', []).extend(audit_entries)
-                data['extraction_extras'] = json.dumps(ex)
-            except Exception:
-                pass
+        # Belt-and-braces: if the upstream paths produced an empty coverages
+        # list but flat policy fields are populated, synthesize the rows here
+        # as a last resort. Local import avoids the circular load that
+        # modules.extraction.__init__ -> pipeline -> core.services would create.
+        if not data.get('coverages'):
+            from modules.extraction.coverage_backfill import (
+                backfill_coverages_from_flat_limits,
+            )
+            synth = backfill_coverages_from_flat_limits(
+                existing=[], flat=data, policy_type=data.get('policy_type'),
+            )
+            if synth:
+                for entry in synth:
+                    entry.pop('_backfill_source', None)
+                data['coverages'] = synth
 
         covs = data.get('coverages', [])
         for c in covs:

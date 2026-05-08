@@ -3,21 +3,21 @@
     "carrier_name": "GEICO",
     "underwriter_name": "GEICO Marine Insurance Company",
     "naic_number": null,
-    "policy_number": "9300317286",
-    "effective_date": "04/22/2026",
-    "expiration_date": "04/22/2027",
-    "insured_name": "A.O GRACE CORP.",
-    "insured_address": "2 VILLA VERDE DR APT 214",
-    "insured_city": "BUFFALO GROVE",
-    "insured_state_code": "IL",
-    "insured_zip": "60089",
-    "financial_responsibility_name": "Marble City Insurance DBA Truckers National",
+    "policy_number": "9300324322",
+    "effective_date": "05/11/2026",
+    "expiration_date": "05/11/2027",
+    "insured_name": "FIVE STAR BROTHERS TRANSPORT LLC",
+    "insured_address": "1838 PARKLINE DR APT 21",
+    "insured_city": "PITTSBURGH",
+    "insured_state_code": "PA",
+    "insured_zip": "15227",
+    "financial_responsibility_name": null,
     "liability_limit": "$1,000,000",
     "general_liability_limit": null,
-    "cargo_limit": "$100,000",
+    "cargo_limit": "$100k",
     "cargo_deductible": "$1000",
     "um_uim_limit": null,
-    "med_pay_limit": null,
+    "med_pay_limit": "Included",
     "pip_limit": null,
     "comp_deductible": null,
     "coll_deductible": null,
@@ -29,23 +29,23 @@
   "coverages": [],
   "vehicles": [
     {
-      "year": 2019,
-      "make": "MERCEDES-BENZ",
-      "model": "SPRINTER",
-      "vin": "WD4PF1CD4KT002262",
+      "year": 2020,
+      "make": "FORD",
+      "model": "TRANSIT",
+      "vin": "1FTBR3X89LKA43871",
       "gvw": null,
       "type": "Straight Truck",
       "chassis": "Cab Chassis",
       "body": null,
       "covered_auto_symbols": null,
-      "radius_of_operation": "Unlimited",
+      "radius_of_operation": null,
       "business_use_class": null,
       "valuation_basis": null
     }
   ],
   "drivers": [
     {
-      "full_name": "Andrian Opanovych",
+      "full_name": "Anwar Salik",
       "license_number": null,
       "is_excluded": null
     }
@@ -58,9 +58,13 @@
     }
   },
   "classification": {
-    "document_type": "certificate_of_insurance",
+    "document_type": "memorandum",
     "policy_type": "commercial_auto",
-    "confidence": "high"
+    "confidence": "high",
+    "signals": [
+      "user_selected",
+      "text_hint:memorandum"
+    ]
   },
   "page_dimensions": [
     {
@@ -72,6 +76,7 @@
     "errors": [],
     "rejected_coverages": [],
     "classification_warnings": [],
+    "user_selected_policy_type": "commercial_auto",
     "commercial_flags": {
       "symbol1_any_auto_suggested": false
     }

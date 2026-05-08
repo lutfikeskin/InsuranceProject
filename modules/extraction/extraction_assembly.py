@@ -28,6 +28,7 @@ from utils.vehicle_utils import refine_vehicle_type
 from .extraction_types import ExtractionContext
 from .extraction_response import clean_coverage_zeros
 from .pdf_ops import PdfProcessor
+from .coverage_backfill import backfill_coverages_from_flat_limits
 
 
 def apply_auto_liability_rules(coverages, policy_type):
@@ -185,6 +186,28 @@ def assemble_extraction_result(ctx: ExtractionContext, processor: PdfProcessor) 
     apply_auto_liability_rules(final["coverages"], ctx.policy_type)
     if ctx.usage_metadata.get("policy_data_source") != "coi_summary":
         compute_summaries(final)
+
+    # Safety net: when the LLM under-reports `coverages[]` but flat policy
+    # fields are populated (own LLM output OR derived by compute_summaries),
+    # synthesize the missing entries so review screen, DB, and COI all see
+    # the same data. Skipped for coi_summary because per-policy backfill
+    # happens later in the save flow (one shared coverages[] vs many policies).
+    if ctx.usage_metadata.get("policy_data_source") != "coi_summary":
+        synthesized = backfill_coverages_from_flat_limits(
+            existing=final["coverages"],
+            flat=final["policy"],
+            policy_type=ctx.policy_type,
+        )
+        for entry in synthesized:
+            src = entry.pop("_backfill_source", None)
+            final["coverages"].append(entry)
+            final["extraction_audit"].setdefault(
+                "backfilled_coverages", []
+            ).append({
+                "coverage_code": entry.get("coverage_code"),
+                "source": src,
+            })
+
     enrich_statutory_policy_display(final)
 
     final["policy"]["has_full_collision"] = any(

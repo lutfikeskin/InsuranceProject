@@ -166,21 +166,8 @@ def get_extract_all_prompt(
     coverage_block = f"""
     --- COVERAGE MAPPING ---
     - Map every visible coverage to a valid coverage_code from the registry below.
-    - COMPLETENESS RULE: every coverage row that appears on the declarations or schedule, even rows showing "INCL", "Included", "REJECTED", "WAIVED", or partial limits, MUST be returned as an entry in `coverages[]` with the matching coverage_code. Use null for unknown sub-fields; do not skip the row.
-    - AUTO POLICIES — common rows you must not miss when visible (each becomes its own coverages[] entry):
-        Bodily Injury Liability -> AUTO_LIAB_BI
-        Property Damage Liability -> AUTO_LIAB_PD
-        Combined Single Limit Liability -> AUTO_LIAB_CSL
-        Uninsured Motorists BI -> UM_BI ; Uninsured Motorists PD -> UM_PD
-        Underinsured Motorists -> UIM_BI when separately shown (otherwise fold into UM_BI per the personal-auto rule below)
-        Personal Injury Protection -> PIP
-        Medical Payments -> MED_PAY
-        Comprehensive / Other Than Collision -> COMP
-        Collision -> COLL
-        Motor Truck Cargo -> CARGO
-    - If a row says Included/Yes without a numeric limit, keep its limits null and add the coverage_code with limit_descriptor where the registry supports it; do not invent dollar amounts.
+    - If a row says Included/Yes without a numeric limit, keep limits null; do not invent dollar amounts.
     - On personal auto, "Uninsured/Underinsured Motorists Bodily Injury" maps to UM_BI (not UIM_BI) unless the document explicitly separates UIM as its own coverage line.
-    - CROSS-CHECK: if you populate any field under `policy.limits` (liability_limit, cargo_limit, um_uim_limit, med_pay_limit, pip_limit, comp_deductible, coll_deductible, general_liability_limit), the corresponding coverages[] entry MUST also be present. The flat policy.limits and the structured coverages[] are two views of the same data; never populate one without the other.
     - REGISTRY: {registry_text}
     """
 
@@ -329,6 +316,29 @@ def get_extract_coi_prompt(
     - For limits include liability_limit_confidence and cargo_limit_confidence.
     - limits should include only visible limit fields; keep missing limit fields null.
     - If Medical Payments / Med Pay is marked INCL or Included with no dollar amount, set limits.med_pay_limit to "Included".
+    - LIMITS COMPLETENESS — populate every visible flat limit, even partial values:
+        liability_limit (auto liability CSL or split shown as one figure)
+        general_liability_limit (GL occurrence)
+        cargo_limit, cargo_deductible
+        um_uim_limit (Uninsured / Underinsured Motorists)
+        med_pay_limit (Medical Payments)
+        pip_limit (Personal Injury Protection)
+        comp_deductible, coll_deductible
+    - MOTORISTS DETECTION (frequently missed):
+        Rows labeled "UNINSURED MOTORISTS", "UNDERINSURED MOTORISTS", "UM",
+        "UIM", "U/M", "U/IM", or with typewriter / OCR typos like
+        "UNISURED MOTORISTS" (missing N) and "UNDERISURED MOTORISTS" all
+        produce a value for limits.um_uim_limit.
+        A row with "CSL (Each Accident)" or "COMBINED SINGLE LIMIT" next
+        to a MOTORISTS label gives the dollar value to use. If both UM
+        and UIM are shown with the same CSL value, use it once for
+        um_uim_limit.
+        A row labeled "MOTORISTS PD (Per accident)" or
+        "UNINSURED MOTORISTS PD" is a property-damage UM flavor; if there
+        is no separate place for it, treat its value as part of
+        um_uim_limit.
+        Capture motorist rows EVEN IF adjacent rows (PIP, MED PAY) are
+        blank; do not skip them as "the section is empty".
 
     --- VEHICLES / DRIVERS ---
     - Extract vehicle and driver schedules if present.

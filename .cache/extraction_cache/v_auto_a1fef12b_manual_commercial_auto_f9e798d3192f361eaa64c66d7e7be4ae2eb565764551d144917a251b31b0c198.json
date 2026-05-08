@@ -2,25 +2,25 @@
   "policy": {
     "carrier_name": "GEICO",
     "underwriter_name": "GEICO Marine Insurance Company",
-    "naic_number": "37923",
-    "policy_number": "9300089751",
-    "effective_date": "11/26/2025",
-    "expiration_date": "11/26/2026",
-    "insured_name": "ABC EXPRESS LLC",
-    "insured_address": "673 CUPPS BRIDGE RD",
-    "insured_city": "FRANKFORT",
-    "insured_state_code": "OH",
-    "insured_zip": "45628",
-    "financial_responsibility_name": "Marble City Insurance DBA Truckers National",
-    "liability_limit": "1,000,000",
+    "naic_number": null,
+    "policy_number": "9300323751",
+    "effective_date": "05/06/2026",
+    "expiration_date": "05/06/2027",
+    "insured_name": "Sedat Ozturk",
+    "insured_address": "1600 RONALD REAGAN BLVD, 7413 UNIT",
+    "insured_city": "CUMMING",
+    "insured_state_code": "GA",
+    "insured_zip": "30041",
+    "financial_responsibility_name": null,
+    "liability_limit": "$1,000,000",
     "general_liability_limit": null,
-    "cargo_limit": "100K",
-    "cargo_deductible": "1K",
-    "um_uim_limit": null,
-    "med_pay_limit": null,
+    "cargo_limit": "$100k",
+    "cargo_deductible": "$1,000",
+    "um_uim_limit": "$100,000",
+    "med_pay_limit": "$1,000",
     "pip_limit": null,
-    "comp_deductible": null,
-    "coll_deductible": null,
+    "comp_deductible": "$1,000",
+    "coll_deductible": "$1,000",
     "has_general_liability": false,
     "has_auto_liability": true,
     "has_full_collision": false
@@ -29,23 +29,23 @@
   "coverages": [],
   "vehicles": [
     {
-      "year": 2009,
-      "make": "CHEVROLET",
-      "model": "EXPRESS",
-      "vin": "1GBHG31KX91155554",
+      "year": 2022,
+      "make": "FORD",
+      "model": "TRANSIT",
+      "vin": "1FDBF6P85NKA68985",
       "gvw": null,
       "type": "Straight Truck",
       "chassis": "Cab Chassis",
       "body": null,
       "covered_auto_symbols": null,
-      "radius_of_operation": "More than 500 Miles",
+      "radius_of_operation": null,
       "business_use_class": null,
       "valuation_basis": null
     }
   ],
   "drivers": [
     {
-      "full_name": "DMITRIY PAVLOV",
+      "full_name": "Sedat Ozturk",
       "license_number": null,
       "is_excluded": null
     }
@@ -58,9 +58,13 @@
     }
   },
   "classification": {
-    "document_type": "certificate_of_insurance",
+    "document_type": "memorandum",
     "policy_type": "commercial_auto",
-    "confidence": "high"
+    "confidence": "high",
+    "signals": [
+      "user_selected",
+      "text_hint:memorandum"
+    ]
   },
   "page_dimensions": [
     {
@@ -72,6 +76,7 @@
     "errors": [],
     "rejected_coverages": [],
     "classification_warnings": [],
+    "user_selected_policy_type": "commercial_auto",
     "commercial_flags": {
       "symbol1_any_auto_suggested": false
     }
