@@ -523,7 +523,7 @@ def page_process_policies(api_key):
                                         {"filename": fname, "pdf_bytes": content, "data": data}
                                     )
                                     status.update(
-                                        label=f"`{fname}` Processed Successfully!",
+                                        label=f"Processed `{fname}`.",
                                         state="complete",
                                         expanded=False,
                                     )

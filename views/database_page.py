@@ -157,7 +157,8 @@ def render_customers_view(session):
         if orphan_filter == "active":
             st.info("No active customer profiles found. Switch to All customers or Orphans only to inspect retained profiles.")
         elif orphan_filter == "orphans":
-            st.success("No orphan customer profiles found.")
+            # Neutral information, not a success outcome — use info styling.
+            st.info("No orphan customer profiles found.")
         else:
             st.info("No customer profiles found for this search.")
         return

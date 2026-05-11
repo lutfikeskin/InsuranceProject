@@ -456,7 +456,7 @@ def page_create_coi():
                     try:
                         pdf = gen.generate_coi(p_data, h_data, desc_font_size=h_desc_font_size)
                         if pdf:
-                            st.success("Successfully generated COI!")
+                            st.success("COI generated.")
                             st.download_button(
                                 "📥 Download COI PDF",
                                 data=pdf,
@@ -501,7 +501,7 @@ def page_create_coi():
                                         pdf,
                                     )
 
-                        st.success(f"Successfully generated {len(selected_companies)} COIs!")
+                        st.success(f"Generated {len(selected_companies)} COIs.")
                         st.download_button(
                             "📥 Download All (ZIP)",
                             data=zip_buffer.getvalue(),
