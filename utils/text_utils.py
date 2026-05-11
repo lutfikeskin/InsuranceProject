@@ -40,6 +40,43 @@ def clean_limit_text(value):
     return normalized
 
 
+# Street suffix vocabulary recognized when a COI prints insured / certificate-
+# holder address as a single line (e.g. "5074 LINDORA DR COLUMBUS, OH 43232").
+_STREET_SUFFIXES = (
+    "AVE|AVENUE|BLVD|BOULEVARD|CIR|CIRCLE|CT|COURT|DR|DRIVE|HWY|HIGHWAY|"
+    "LN|LANE|PKWY|PARKWAY|PL|PLACE|RD|ROAD|ST|STREET|TER|TERRACE|TRL|TRAIL|WAY"
+)
+_US_ADDRESS_RE = re.compile(
+    rf"^(?P<street>.+?\b(?:{_STREET_SUFFIXES})\.?(?:\s+(?:APT|UNIT|STE|SUITE|#)\s*\w+)?)"
+    rf"\s+(?P<city>[A-Za-z][A-Za-z .'-]+),\s*(?P<state>[A-Z]{{2}})\s+(?P<zip>\d{{5}}(?:-\d{{4}})?)$",
+    flags=re.IGNORECASE,
+)
+
+
+def parse_us_address(address):
+    """
+    Best-effort split of a single-line US address into street / city / state / zip.
+
+    Used by COI normalization where the LLM sometimes returns the insured or
+    certificate-holder address as one string. On no match (e.g. PO box, foreign
+    address, or already-structured input) the original string passes through as
+    `address` with the other fields set to None — callers can still fall back
+    to whatever structured fields they had.
+    """
+    clean = clean_text(address)
+    if not isinstance(clean, str):
+        return {"address": clean, "city": None, "state_code": None, "zip": None}
+    match = _US_ADDRESS_RE.match(clean)
+    if not match:
+        return {"address": clean, "city": None, "state_code": None, "zip": None}
+    return {
+        "address": match.group("street").strip(),
+        "city": match.group("city").strip(),
+        "state_code": match.group("state").strip(),
+        "zip": match.group("zip").strip(),
+    }
+
+
 def parse_currency(val):
     """
     Parses a currency string (e.g. '$1,200.00' or '1000') into a float.

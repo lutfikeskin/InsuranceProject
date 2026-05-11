@@ -1,11 +1,10 @@
 """Parse and normalize Gemini JSON extraction payloads."""
 
 import json
-import re
 from typing import Optional
 
 from core.logger import logger
-from utils.text_utils import clean_text as _clean_text
+from utils.text_utils import clean_text as _clean_text, parse_us_address as _parse_us_address
 
 from .extraction_types import ExtractionContext
 
@@ -51,28 +50,6 @@ def normalize_coi_result(raw_data: dict, fallback_classification: dict) -> dict:
     def _object_section(key: str) -> dict:
         section = raw_data.get(key)
         return section if isinstance(section, dict) else {}
-
-    def _parse_us_address(address: str | None) -> dict:
-        clean = _clean_text(address)
-        if not isinstance(clean, str):
-            return {"address": clean, "city": None, "state_code": None, "zip": None}
-        street_suffixes = (
-            "AVE|AVENUE|BLVD|BOULEVARD|CIR|CIRCLE|CT|COURT|DR|DRIVE|HWY|HIGHWAY|"
-            "LN|LANE|PKWY|PARKWAY|PL|PLACE|RD|ROAD|ST|STREET|TER|TERRACE|TRL|TRAIL|WAY"
-        )
-        match = re.match(
-            rf"^(?P<street>.+?\b(?:{street_suffixes})\.?(?:\s+(?:APT|UNIT|STE|SUITE|#)\s*\w+)?)\s+(?P<city>[A-Za-z][A-Za-z .'-]+),\s*(?P<state>[A-Z]{{2}})\s+(?P<zip>\d{{5}}(?:-\d{{4}})?)$",
-            clean,
-            flags=re.IGNORECASE,
-        )
-        if not match:
-            return {"address": clean, "city": None, "state_code": None, "zip": None}
-        return {
-            "address": match.group("street").strip(),
-            "city": match.group("city").strip(),
-            "state_code": match.group("state").strip(),
-            "zip": match.group("zip").strip(),
-        }
 
     aggregated_limits = {}
     for row in policy_rows:
