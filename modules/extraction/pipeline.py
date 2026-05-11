@@ -504,19 +504,6 @@ class GeminiExtractionPipeline:
             return "renewal_declarations"
         return None
 
-    def _classify_policy(self, uploaded_file) -> dict:
-        response = self._transport.call_gemini(
-            model=ROUTING_MODEL,
-            contents=[uploaded_file, CLASSIFY_POLICY_PROMPT],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=CLASSIFICATION_SCHEMA,
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
-            ),
-            request_type="classification",
-        )
-        return parse_json_response(response.text)
-
     def _classify_policy_input(self, active_cache, uploaded_file) -> dict:
         """Runs a lightweight classification pass using cache when available."""
         config = types.GenerateContentConfig(
