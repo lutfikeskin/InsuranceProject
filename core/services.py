@@ -16,6 +16,7 @@ from .database import (
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from sqlalchemy import func, or_
+from sqlalchemy.exc import SQLAlchemyError
 
 EASTERN = ZoneInfo("America/New_York")
 
@@ -1439,11 +1440,15 @@ class PolicyService:
             result = self.session.execute(text(generated_sql))
             columns = result.keys()
             rows = [dict(zip(columns, row)) for row in result.fetchall()]
-            
+
             return rows, generated_sql
-            
-        except Exception as e:
-            return None, f"Error: {e}"
+
+        except SQLAlchemyError as e:
+            # SQL execution failure on LLM-generated SQL is the expected user-
+            # facing error here. Log with full traceback so the underlying cause
+            # is debuggable, then surface a clean message to the UI.
+            logger.exception(f"query_sql: SQL execution failed for {generated_sql!r}")
+            return None, f"SQL Error: {e}"
 class COIService:
     @staticmethod
     def prepare_coi_data(p: Policy):
@@ -1650,7 +1655,11 @@ class UsageService:
             self.session.query(ApiUsage).delete()
             self.session.commit()
             return True, "Usage logs cleared."
-        except Exception as e:
+        except SQLAlchemyError as e:
+            # DB-level delete/commit can fail (locked, constraint, disk). Rolled
+            # back state must remain visible — log the traceback then surface a
+            # clean message via the (success, msg) return shape callers expect.
+            logger.exception("clear_usage: failed to delete ApiUsage rows")
             self.session.rollback()
             return False, str(e)
 
