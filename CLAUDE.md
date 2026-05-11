@@ -1,23 +1,5 @@
 # Insurance Document Platform
 
-## Current Implementation Phase
-
-- [x] Phase 1: Schema Foundation
-- [x] Phase 2: Auto Cache Versioning
-- [x] Phase 3: Document Taxonomy
-- [x] Phase 4: COI Summary Extraction
-- [x] Phase 5: Variant Tracker
-- [x] Phase 6: Field Confidence Scoring
-- [x] Phase 7: Premium Sanity Audit
-- [x] Phase 8: Customer Resolver
-- [x] Phase 9: Policy Relationship Detection
-- [x] Phase 10: Endorsement Lightweight Capture
-- [x] Phase 11: Carrier Knowledge Base Bidirectional
-- [x] Phase 12: Golden Set Infrastructure
-- [x] Phase 13: Customer UI
-- [x] Phase 14: Related Policies UI
-- [ ] Phase 15: Documentation Updates
-
 ## Change Blast Radius Map
 
 When changing any of the following, ALSO update the listed downstream files. This table reflects real dependencies discovered during implementation.
@@ -28,11 +10,13 @@ When changing any of the following, ALSO update the listed downstream files. Thi
 | modules/extraction/prompts.py            | goldens (test_accuracy.py), docs/PROMPTS.md                      |
 | core/database.py (model add/modify)      | Alembic migration, services.py, ui display, docs/DATABASE.md     |
 | core/database.py (relationship change)   | Late imports at file bottom (PolicyHistory pattern)              |
-| modules/extraction/pipeline.py and pipeline helpers (`cache_version.py`, `gemini_transport.py`, `extraction_assembly.py`, `extraction_response.py`, `extraction_local_cache.py`, `coverage_registry_minify.py`, `extraction_types.py`) | Backing module exists, grep for refactored locations |
+| modules/extraction/pipeline.py and pipeline helpers (`cache_version.py`, `gemini_transport.py`, `extraction_assembly.py`, `extraction_response.py`, `extraction_local_cache.py`, `extraction_types.py`, `coverage_registry_minify.py`, `coverage_backfill.py`, `pdf_ops.py`, `auditor.py`) | Backing module exists, grep for refactored locations |
 | views/*.py (Streamlit widgets)           | No key collisions, form vs non-form consistency                  |
 | core/services.py (save flow)             | Both new-save AND update-save branches                           |
 | core/document_taxonomy.py                | prompts.py classification prompt, accuracy_config.py             |
 | Customer model fields                    | customer_resolver.py, ui display, services.py save flow          |
+| core/coverage_ontology.py                | coverage_normalization.py, schemas.py, services.py validation    |
+| core/history_model.py                    | history_service.py, services.py save flow, Alembic migration     |
 
 ## Cache Version Hash Dependencies
 
@@ -46,12 +30,19 @@ This is INTENTIONAL. Old cache entries become stale and rebuild on next run.
 
 ## Architecture Constraints (Do Not Violate)
 
-- Stack: Streamlit + SQLite (PostgreSQL planned) + SQLAlchemy + Gemini 2.5 Flash
+- Stack: Streamlit + SQLite (PostgreSQL planned) + SQLAlchemy + Gemini 3.1 Flash-Lite (see modules/extraction/gemini_transport.py)
 - Coverage ontology validation logic must not change
 - Existing Alembic migration files are immutable — only add new ones
 - One-shot extraction architecture in pipeline.py is preserved
 - Token efficiency is a hard constraint, not a nice-to-have
 - Extract only what is present; null for absent fields; never invent data
+
+## Local Run
+
+- Entry point: `streamlit run app.py`
+- Required env: `GEMINI_API_KEY` (read via `os.getenv` or `st.secrets`)
+- Streamlit config: `.streamlit/config.toml`
+- Deps: `pip install -r requirements.txt` (no pyproject.toml)
 
 ## Verification Standard (Future Phases)
 
@@ -61,6 +52,7 @@ Before merging or closing a phase, run this checklist:
 2. Run `streamlit run app.py` — must start without errors.
 3. Click through main UI flows — must not crash.
 4. If accuracy tests are relevant for the change, run with `GEMINI_API_KEY` set — note pass count (e.g. `5/5`).
+5. If you changed user-visible behavior or schemas, update the matching file under `docs/` (ARCHITECTURE, DATABASE_SCHEMA, PROMPTS, EXTRACTION_PIPELINE, etc.).
 
 ## Key Design Decisions
 
@@ -75,10 +67,13 @@ Before merging or closing a phase, run this checklist:
 
 ## Active Modules
 
-- Customer
-- CustomerEntity
-- PolicyRelationship
-- PolicyEndorsement
+- Customer, CustomerEntity, PolicyRelationship, PolicyEndorsement (database.py models)
+- PolicyHistory (core/history_model.py + core/history_service.py)
 - core/document_taxonomy.py
 - core/customer_resolver.py
+- core/coverage_ontology.py + core/coverage_normalization.py
+- core/variant_tracker.py
+- core/duplicate_detection.py
 - modules/extraction/knowledge_base.py
+- modules/extraction/auditor.py (premium sanity / QA)
+- modules/extraction/coverage_backfill.py (backfill safety net)
