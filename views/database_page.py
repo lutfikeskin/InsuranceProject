@@ -162,6 +162,67 @@ def render_customers_view(session):
             st.info("No customer profiles found for this search.")
         return
 
+    # Sortable scan view: a dataframe of this page's customers with the most-
+    # asked-for columns (policy counts, last-seen, created). Click a row to
+    # jump directly to that customer's expander below. Without a selection,
+    # the existing per-customer expander list renders normally.
+    summary_rows = []
+    for customer in customers:
+        policies = list(customer.policies)
+        active_count = sum(1 for p in policies if (p.policy_status or "").lower() == "active")
+        last_effective = max(
+            (p.effective_date for p in policies if p.effective_date),
+            default=None,
+        )
+        summary_rows.append(
+            {
+                "Customer": customer.full_name,
+                "Active policies": active_count,
+                "Total policies": len(policies),
+                "Policy types": ", ".join(
+                    sorted({p.policy_type for p in policies if p.policy_type})
+                ) or "—",
+                "Last effective": last_effective,
+                "Created": customer.created_at.date() if customer.created_at else None,
+                "_customer_id": customer.id,
+            }
+        )
+
+    summary_df = pd.DataFrame(summary_rows)
+
+    table_state = st.dataframe(
+        summary_df,
+        column_config={
+            "Customer": st.column_config.TextColumn("Customer", pinned=True),
+            "Active policies": st.column_config.NumberColumn("Active", format="%d"),
+            "Total policies": st.column_config.NumberColumn("Total", format="%d"),
+            "Policy types": st.column_config.TextColumn("Policy types"),
+            "Last effective": st.column_config.DateColumn("Last effective", format="YYYY-MM-DD"),
+            "Created": st.column_config.DateColumn("Created", format="YYYY-MM-DD"),
+            "_customer_id": None,  # internal — used to locate selection
+        },
+        hide_index=True,
+        width="stretch",
+        height=min(400, 38 * (len(summary_rows) + 1) + 4),
+        selection_mode="single-row",
+        on_select="rerun",
+        key="customers_summary_table",
+    )
+
+    selected_rows = (
+        table_state.selection.rows if hasattr(table_state, "selection") else []
+    )
+    if selected_rows:
+        idx = selected_rows[0]
+        selected_id = summary_df.iloc[idx]["_customer_id"]
+        focused = next((c for c in customers if c.id == selected_id), None)
+        if focused is not None:
+            st.markdown("---")
+            st.caption("Showing selected customer. Clear selection to see the full list.")
+            render_customer_row(focused, session)
+            return
+
+    st.markdown("---")
     for customer in customers:
         render_customer_row(customer, session)
 
