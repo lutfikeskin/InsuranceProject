@@ -15,6 +15,12 @@ from utils.naic_utils import get_naic_for_carrier
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from streamlit_pdf_viewer import pdf_viewer
 
+from views.ui_utils import (
+    CONFIDENCE_LEGEND_CAPTION,
+    build_confidence_map,
+    confidence_label as _confidence_label,
+)
+
 MAX_PARALLEL_WORKERS = 3
 
 RELATIONSHIP_DISPLAY = {
@@ -331,28 +337,10 @@ def page_process_policies(api_key):
                  return f"Found on Page {page}"
         return None
 
-    def _build_confidence_map(policy_payload: dict, fallback_map: dict | None = None) -> dict[str, str]:
-        confidence_map: dict[str, str] = {}
-        source_map = fallback_map if isinstance(fallback_map, dict) else {}
-        for key, value in source_map.items():
-            if value in {"high", "medium", "low"}:
-                confidence_map[str(key)] = value
-        if isinstance(policy_payload, dict):
-            for key, value in policy_payload.items():
-                if not key.endswith("_confidence"):
-                    continue
-                base_key = key[:-11]
-                if value in {"high", "medium", "low"}:
-                    confidence_map[base_key] = value
-        return confidence_map
-
-    def _confidence_label(base_label: str, field_name: str, confidence_map: dict[str, str]) -> str:
-        conf = confidence_map.get(field_name, "high")
-        if conf == "low":
-            return f"⚠️ {base_label}"
-        if conf == "medium":
-            return f"◐ {base_label}"
-        return base_label
+    # _confidence_label and build_confidence_map were lifted to views/ui_utils.py
+    # so future review screens render the same badge convention. The legend
+    # caption rendered in Step 2 explains the symbols.
+    _build_confidence_map = build_confidence_map
 
     with tab_upload:
         expanded_upload = not (bool(st.session_state["review_queue"]) or bool(st.session_state["temp_extracted"]))
@@ -822,6 +810,7 @@ def page_process_policies(api_key):
             
         with c_form:
             st.markdown("#### Verify Extracted Data")
+            st.caption(CONFIDENCE_LEGEND_CAPTION)
             classification = current_item['data'].get('classification', {})
             document_type = (
                 current_item['data'].get('document_type')
