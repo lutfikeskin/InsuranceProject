@@ -1,7 +1,5 @@
 
 from typing import Dict, List, Tuple, Any
-import requests
-import re
 from datetime import datetime
 from core.logger import logger
 from .prompts import GLOBAL_EXTRACTION_PRINCIPLES

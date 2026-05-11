@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import date
 from sqlalchemy import or_
 from core.services import PolicyService
-from core.database import Customer, CustomerEntity, Policy, PolicyRelationship, get_session
+from core.database import Policy, PolicyRelationship, get_session
 from core.customer_resolver import CustomerResolver
 from utils.exporter import create_excel_report
 

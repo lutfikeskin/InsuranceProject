@@ -1,7 +1,6 @@
 import io
 import json
 import os
-import textwrap
 
 import pypdf
 from datetime import datetime, date

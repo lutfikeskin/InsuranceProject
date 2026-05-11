@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 from .database import (
-    get_session,
     Policy,
     Vehicle,
     Driver,
@@ -31,7 +30,6 @@ def _today_start_utc_naive() -> datetime:
     midnight_et = now_et.replace(hour=0, minute=0, second=0, microsecond=0)
     return midnight_et.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
 from utils.naic_utils import get_naic_for_carrier
-from .coverage_ontology import summarize_auto_liability, format_liability_limit
 from .customer_resolver import CustomerResolver
 from .duplicate_detection import DuplicateDetectionService
 from core.logger import logger
@@ -39,7 +37,6 @@ from utils.vehicle_utils import refine_vehicle_type
 from utils.text_utils import clean_text as _shared_clean_text, clean_limit_text as _shared_clean_limit_text
 import pandas as pd
 import json
-import re
 
 ACCOUNT_TYPE_BY_POLICY = {
     "personal_auto": "Personal",

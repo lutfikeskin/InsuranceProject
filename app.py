@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 from core.database import init_db, get_session
-import core.history_model # Ensure model is registered
+import core.history_model  # noqa: F401  — side-effect import registers PolicyHistory with SQLAlchemy's metadata
 from core.services import UsageService
 from streamlit_option_menu import option_menu
 from core.constants import DEFAULT_DAILY_BUDGET, APP_DISPLAY_TAGLINE

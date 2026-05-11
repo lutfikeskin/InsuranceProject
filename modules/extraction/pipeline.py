@@ -11,7 +11,7 @@ from core.variant_tracker import VariantTracker
 
 from .knowledge_base import CarrierKnowledgeBase
 from .coverage_registry_minify import get_cached_registry_json
-from .cache_version import CACHE_VERSION, POLICY_TYPE_ENUM
+from .cache_version import CACHE_VERSION, POLICY_TYPE_ENUM  # noqa: F401  — CACHE_VERSION re-exported for the pre-commit cache-stamp print and external callers
 from .extraction_types import ExtractionContext, NON_EXTRACTABLE_MESSAGES
 from .extraction_local_cache import (
     ExtractionCache,
@@ -35,7 +35,6 @@ from .pdf_ops import PdfProcessor
 
 from .schemas import (
     CLASSIFICATION_SCHEMA,
-    COMPLETE_POLICY_SCHEMA,
     COI_SUMMARY_SCHEMA,
     ENDORSEMENT_SCHEMA,
     build_complete_policy_schema,

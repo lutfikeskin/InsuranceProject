@@ -1,4 +1,3 @@
-from sqlalchemy import or_
 import re
 
 from core.database import Customer, CustomerEntity

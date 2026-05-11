@@ -7,11 +7,10 @@ from core.constants import VEHICLE_TYPES, INTEREST_TYPES, VIN_REGEX
 import json
 from core.services import PolicyService
 from datetime import date
-from core.database import get_session, Policy, Vehicle, Driver, Coverage, AdditionalInterest, Customer
+from core.database import get_session, Customer
 from core.customer_resolver import CustomerResolver
 from modules.extraction import process_pdf
 from modules.extraction.pipeline import POLICY_TYPE_ENUM
-from utils.vehicle_utils import refine_vehicle_type
 from utils.naic_utils import get_naic_for_carrier
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from streamlit_pdf_viewer import pdf_viewer
