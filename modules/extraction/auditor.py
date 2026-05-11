@@ -37,12 +37,16 @@ class Auditor:
         eff = policy.get("effective_date")
         curr_year = datetime.now().year
         if eff:
+            # Sanity check only — full date parsing happens downstream. A non-
+            # ISO-prefixed value (e.g. "TBD", "12/01/2025") is a date-format
+            # problem the extraction layer owns, not an audit failure here.
             try:
-                year = int(eff.split("-")[0])
+                year = int(str(eff).split("-")[0])
+            except (ValueError, AttributeError, IndexError) as exc:
+                logger.debug(f"Auditor skipped effective-year sanity check on {eff!r}: {exc}")
+            else:
                 if year < 2000 or year > (curr_year + 5):
                     errors.append(f"Suspicious Effective Year: {year}")
-            except:
-                pass # Date parsing is handled elsewhere, we just sanity check here
         else:
              errors.append("Missing Effective Date")
 

@@ -31,11 +31,16 @@ if 'db_engine' not in st.session_state:
 api_key = st.session_state.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
 
 if not api_key:
+    # st.secrets raises FileNotFoundError (StreamlitSecretNotFoundError subclass)
+    # when no .streamlit/secrets.toml exists. That's the expected fallthrough on
+    # local dev — silently let api_key stay empty and the UI will prompt for it.
+    # Any other exception during secrets lookup is a real configuration error
+    # worth surfacing.
     try:
         if "GEMINI_API_KEY" in st.secrets:
             api_key = st.secrets["GEMINI_API_KEY"]
             st.session_state["GEMINI_API_KEY"] = api_key
-    except:
+    except FileNotFoundError:
         pass
 
 @st.dialog("⚙️ Application Settings")

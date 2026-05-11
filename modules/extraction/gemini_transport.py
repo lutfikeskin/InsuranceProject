@@ -80,14 +80,19 @@ class GeminiTransport:
             return None
 
         if expire_time_raw:
+            # Treat an unparseable expire_time as "unknown, assume expired" — we'd
+            # rather create a fresh cache than reuse one we can't reason about.
             try:
                 expire_time = datetime.fromisoformat(
-                    expire_time_raw.replace("Z", "+00:00")
+                    str(expire_time_raw).replace("Z", "+00:00")
                 )
-                if datetime.now(timezone.utc) >= expire_time:
-                    return None
-            except Exception:
-                pass
+            except (ValueError, TypeError, AttributeError) as exc:
+                logger.warning(
+                    f"Could not parse cached expire_time {expire_time_raw!r}: {exc}; treating as expired."
+                )
+                return None
+            if datetime.now(timezone.utc) >= expire_time:
+                return None
 
         try:
             cache = self.client.caches.get(name=cache_name)

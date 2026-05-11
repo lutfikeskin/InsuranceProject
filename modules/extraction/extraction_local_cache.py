@@ -36,35 +36,40 @@ class ExtractionCache:
 
     def get(self, file_hash: str, cache_scope: str = "auto") -> Optional[dict]:
         key = self._result_storage_key(file_hash, cache_scope)
+        cache_path = os.path.join(self.cache_dir, f"{key}.json")
+        if not os.path.exists(cache_path):
+            return None
         try:
-            cache_path = os.path.join(self.cache_dir, f"{key}.json")
-            if os.path.exists(cache_path):
-                with open(cache_path, "r") as f:
-                    logger.info(f"CACHE HIT: {key}")
-                    return json.load(f)
-        except Exception as e:
-            logger.error(f"Cache Read Error: {e}")
-        return None
+            with open(cache_path, "r") as f:
+                logger.info(f"CACHE HIT: {key}")
+                return json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            # Corrupt or unreadable cache entry — log and miss-through so the
+            # caller re-extracts. Anything else is a real bug worth raising.
+            logger.error(f"Cache Read Error for {key}: {exc}")
+            return None
 
     def save(self, file_hash: str, data: dict, cache_scope: str = "auto"):
         key = self._result_storage_key(file_hash, cache_scope)
+        cache_path = os.path.join(self.cache_dir, f"{key}.json")
         try:
-            cache_path = os.path.join(self.cache_dir, f"{key}.json")
             with open(cache_path, "w") as f:
                 json.dump(data, f, indent=2)
             logger.debug(f"CACHE SAVED: {key}")
-        except Exception as e:
-            logger.error(f"Cache Write Error: {e}")
+        except OSError as exc:
+            # Disk full / permission issues should not break extraction itself.
+            # TypeError (non-serializable payload) is a real bug — let it raise.
+            logger.error(f"Cache Write Error for {key}: {exc}")
 
     def get_gemini_cache_meta(self, file_hash: str) -> Optional[dict]:
         """Returns persisted Gemini cache metadata for this file hash, if any."""
         try:
             with open(self.index_file, "r") as f:
                 index = json.load(f)
-            return index.get(f"{CACHE_VERSION}_{file_hash}")
-        except Exception as e:
-            logger.debug(f"Gemini cache meta read error: {e}")
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.debug(f"Gemini cache meta read error: {exc}")
             return None
+        return index.get(f"{CACHE_VERSION}_{file_hash}")
 
     def save_gemini_cache_meta(
         self, file_hash: str, cache_name: str, expire_time: Optional[str], model: str
@@ -73,33 +78,42 @@ class ExtractionCache:
         try:
             with open(self.index_file, "r") as f:
                 index = json.load(f)
-            index[f"{CACHE_VERSION}_{file_hash}"] = {
-                "cache_name": cache_name,
-                "expire_time": expire_time,
-                "model": model,
-            }
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.debug(f"Gemini cache meta read failed before write: {exc}")
+            index = {}
+        index[f"{CACHE_VERSION}_{file_hash}"] = {
+            "cache_name": cache_name,
+            "expire_time": expire_time,
+            "model": model,
+        }
+        try:
             with open(self.index_file, "w") as f:
                 json.dump(index, f, indent=2)
-        except Exception as e:
-            logger.debug(f"Gemini cache meta write error: {e}")
+        except OSError as exc:
+            logger.debug(f"Gemini cache meta write error: {exc}")
 
     def mark_non_cacheable(self, file_hash: str, reason: str):
         """Remember that this hash should skip cache-create attempts."""
         try:
             with open(self.index_file, "r") as f:
                 index = json.load(f)
-            key = f"{CACHE_VERSION}_{file_hash}_cacheability"
-            index[key] = {"non_cacheable": True, "reason": reason}
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.debug(f"Non-cacheable marker read failed before write: {exc}")
+            index = {}
+        key = f"{CACHE_VERSION}_{file_hash}_cacheability"
+        index[key] = {"non_cacheable": True, "reason": reason}
+        try:
             with open(self.index_file, "w") as f:
                 json.dump(index, f, indent=2)
-        except Exception as e:
-            logger.debug(f"Non-cacheable marker write error: {e}")
+        except OSError as exc:
+            logger.debug(f"Non-cacheable marker write error: {exc}")
 
     def is_marked_non_cacheable(self, file_hash: str) -> bool:
         try:
             with open(self.index_file, "r") as f:
                 index = json.load(f)
-            key = f"{CACHE_VERSION}_{file_hash}_cacheability"
-            return bool(index.get(key, {}).get("non_cacheable"))
-        except Exception:
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.debug(f"Non-cacheable marker read error for {file_hash}: {exc}")
             return False
+        key = f"{CACHE_VERSION}_{file_hash}_cacheability"
+        return bool(index.get(key, {}).get("non_cacheable"))
