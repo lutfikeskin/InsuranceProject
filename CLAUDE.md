@@ -17,6 +17,8 @@ When changing any of the following, ALSO update the listed downstream files. Thi
 | Customer model fields                    | customer_resolver.py, ui display, services.py save flow          |
 | core/coverage_ontology.py                | coverage_normalization.py, schemas.py, services.py validation    |
 | core/history_model.py                    | history_service.py, services.py save flow, Alembic migration     |
+| utils/text_utils.py                      | services.py `_clean_text` / `_clean_limit_text` delegations, extraction_response.py `_clean_text` / `_parse_us_address` aliases — single source of truth for null coercion |
+| views/ui_utils.py                        | process_policies.py review screen badges; intended target for any future per-field confidence rendering in views/ |
 
 ## Cache Version Hash Dependencies
 
@@ -77,3 +79,9 @@ Before merging or closing a phase, run this checklist:
 - modules/extraction/knowledge_base.py
 - modules/extraction/auditor.py (premium sanity / QA)
 - modules/extraction/coverage_backfill.py (backfill safety net)
+- utils/text_utils.py (canonical `clean_text` / `clean_limit_text` / `parse_us_address`)
+- views/ui_utils.py (shared widget helpers: `build_confidence_map`, `confidence_label`)
+
+## Audit History
+
+- **2026-05 — comprehensive audit pass.** Branch `chore/audit-cleanup` from `feat/gemini-caching-optimization` @ `56bde85`. Findings and deferred roadmap: [`docs/AUDIT_2026-05.md`](docs/AUDIT_2026-05.md). Baseline: [`docs/AUDIT_BASELINE.md`](docs/AUDIT_BASELINE.md). Changes were low-risk: text-helper consolidation, narrowing five over-broad exception swallows, deleting dead `_classify_policy`, F401 import cleanup, four new test modules (`test_coi_generator`, `test_extraction_local_cache`, `test_variant_tracker`, `test_coverage_backfill` — 59 new tests), and six UI polish edits (confidence legend, sortable customer table, dialog discard control, API-key clear control, toast wording). Deferred to follow-up branches: `core/services.py` / `views/process_policies.py` / `modules/extraction/pipeline.py` splits, and `ProductRegistry` / per-product extraction modularity (skipped because no new product types are on the roadmap).
