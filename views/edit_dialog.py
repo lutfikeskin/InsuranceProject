@@ -24,8 +24,20 @@ def _coverage_limit_display(c) -> str:
 
 @st.dialog("✏️ Edit Policy Details", width="large")
 def edit_policy_dialog(policy, service: PolicyService):
-    st.write(f"Editing Policy: **{policy.policy_number}**")
-    
+    header_left, header_right = st.columns([4, 1])
+    header_left.write(f"Editing Policy: **{policy.policy_number}**")
+    # Explicit discard control. The dialog already supports OS-level close (X /
+    # click-outside), but users have no in-dialog signal that nothing they
+    # typed has been saved yet. This button reruns the script without
+    # re-invoking the dialog function, which closes the dialog and discards
+    # any unsubmitted form state.
+    if header_right.button(
+        "✖ Close without saving",
+        key=f"edit_dialog_discard_{policy.id}",
+        help="Closes this dialog without saving. Form fields you haven't submitted are discarded.",
+    ):
+        st.rerun()
+
     tab_details, tab_covs, tab_vehs, tab_drvs, tab_ais, tab_history = st.tabs(["📝 Details", "🛡️ Coverages", "🚙 Vehicles", "👤 Drivers", "🏢 Add'l Interests", "📜 History"])
     
     with tab_details:
