@@ -5,6 +5,7 @@ import re
 from typing import Optional
 
 from core.logger import logger
+from utils.text_utils import clean_text as _clean_text
 
 from .extraction_types import ExtractionContext
 
@@ -39,18 +40,6 @@ def parse_json_response(
 def normalize_coi_result(raw_data: dict, fallback_classification: dict) -> dict:
     policies = raw_data.get("policies") or []
     policy_rows = [p for p in policies if isinstance(p, dict)]
-
-    def _clean_text(value):
-        if value is None:
-            return None
-        if not isinstance(value, str):
-            return value
-        compact = " ".join(value.replace("\u200b", "").split()).strip()
-        if not compact:
-            return None
-        if compact.lower() in {"null", "none", "n/a", "-"}:
-            return None
-        return compact
 
     def _pick_first_nonempty(key: str):
         for row in policy_rows:

@@ -35,6 +35,7 @@ from .customer_resolver import CustomerResolver
 from .duplicate_detection import DuplicateDetectionService
 from core.logger import logger
 from utils.vehicle_utils import refine_vehicle_type
+from utils.text_utils import clean_text as _shared_clean_text, clean_limit_text as _shared_clean_limit_text
 import pandas as pd
 import json
 import re
@@ -245,28 +246,15 @@ class PolicyService:
             confidences[field] = conf
         return confidences or None
 
+    # Sanitization helpers are thin wrappers over the canonical implementations in
+    # utils.text_utils so service-layer and extraction-layer agree on null coercion.
     @staticmethod
     def _clean_text(value):
-        if value is None:
-            return None
-        if not isinstance(value, str):
-            return value
-        compact = " ".join(value.replace("\u200b", "").split()).strip()
-        if not compact:
-            return None
-        if compact.lower() in {"null", "none", "n/a", "-"}:
-            return None
-        return compact
+        return _shared_clean_text(value)
 
-    @classmethod
-    def _clean_limit_text(cls, value):
-        text = cls._clean_text(value)
-        if text is None:
-            return None
-        # Normalize common OCR split tokens for cargo lines.
-        normalized = text.replace("Cargo w/", "Cargo w /").replace("Deductible", "Deductible")
-        normalized = re.sub(r"\s+", " ", normalized).strip()
-        return normalized
+    @staticmethod
+    def _clean_limit_text(value):
+        return _shared_clean_limit_text(value)
 
     @classmethod
     def _merge_coi_policy_rows(cls, rows: list[dict]) -> dict:

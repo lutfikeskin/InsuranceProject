@@ -1,3 +1,45 @@
+import re
+
+
+# Sentinel strings that, after whitespace compaction, should be treated as "no value".
+# Kept in one place so extraction and services agree on the null-coercion rule.
+_NULL_SENTINELS = frozenset({"null", "none", "n/a", "-"})
+
+
+def clean_text(value):
+    """
+    Canonical text sanitizer used by extraction normalization and service-layer
+    save flows. Collapses internal whitespace, strips zero-width spaces, and
+    returns None for empty strings or common LLM null sentinels.
+
+    Non-string inputs pass through unchanged (so an int limit value, for
+    example, is not coerced to a string).
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return value
+    compact = " ".join(value.replace("​", "").split()).strip()
+    if not compact:
+        return None
+    if compact.lower() in _NULL_SENTINELS:
+        return None
+    return compact
+
+
+def clean_limit_text(value):
+    """
+    Same as clean_text, plus a small normalization pass for limit strings:
+    fixes a known OCR token split for combined cargo + deductible lines.
+    """
+    text = clean_text(value)
+    if text is None:
+        return None
+    normalized = text.replace("Cargo w/", "Cargo w /").replace("Deductible", "Deductible")
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
 def parse_currency(val):
     """
     Parses a currency string (e.g. '$1,200.00' or '1000') into a float.
