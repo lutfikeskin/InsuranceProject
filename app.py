@@ -47,16 +47,35 @@ if not api_key:
 def settings_modal():
     st.write("Configure your application settings below.")
     current_key = st.session_state.get("GEMINI_API_KEY", "")
-    new_key = st.text_input("Gemini API Key", value=current_key if current_key else "", type="password", help="Enter your Google Gemini API Key for policy extraction.")
-    
-    if st.button("Save & Refresh", width='stretch', type="primary"):
+    has_key = bool(current_key)
+    st.caption(
+        f"API key status: {'✅ configured' if has_key else '⚠️ not configured'}"
+    )
+    new_key = st.text_input(
+        "Gemini API Key",
+        value=current_key if current_key else "",
+        type="password",
+        help="Enter your Google Gemini API Key for policy extraction.",
+    )
+
+    save_col, clear_col = st.columns([3, 1])
+    if save_col.button("Save", width='stretch', type="primary"):
         if new_key:
             st.session_state["GEMINI_API_KEY"] = new_key
-            st.success("Settings saved successfully!")
+            st.success("Settings saved.")
             st.rerun()
         else:
             st.warning("Please enter a valid key.")
-    
+    if clear_col.button(
+        "Clear",
+        width='stretch',
+        disabled=not has_key,
+        help="Forget the API key in this session. Browser refresh will re-read from secrets if available.",
+    ):
+        st.session_state.pop("GEMINI_API_KEY", None)
+        st.success("API key cleared from this session.")
+        st.rerun()
+
     st.divider()
     st.markdown("##### 📊 Usage Management")
     if st.button("Reset Daily Usage Meter", width='stretch', type="secondary"):
