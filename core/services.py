@@ -832,6 +832,53 @@ class PolicyService:
             Policy.expiration_date <= cutoff
         ).order_by(Policy.expiration_date.asc()).all()
 
+    def get_renewal_buckets(self, overdue_lookback_days: int = 30) -> dict:
+        """
+        Group policies by urgency for the Renewals page.
+
+        Returns a dict with four keys, each mapping to a list of Policy ORM
+        rows sorted by expiration_date ascending:
+
+          overdue: expiration_date in [today - overdue_lookback_days, today)
+                   — already expired but recent enough that the broker might
+                   still chase a backdated renewal.
+          urgent:  0 <= days_left <= 14  (🔴 in the UI)
+          warning: 15 <= days_left <= 30 (🟡)
+          watch:   31 <= days_left <= 60 (🔵)
+
+        Bucket boundaries are inclusive on both sides. A single SQL query
+        pulls everything in the [overdue_start, watch_end] window; the
+        Python loop partitions by days-left.
+        """
+        from datetime import date
+        today = date.today()
+        overdue_start = today - timedelta(days=overdue_lookback_days)
+        watch_end = today + timedelta(days=60)
+
+        rows = self.session.query(Policy).filter(
+            Policy.expiration_date != None,
+            Policy.expiration_date >= overdue_start,
+            Policy.expiration_date <= watch_end,
+        ).order_by(Policy.expiration_date.asc()).all()
+
+        buckets: dict[str, list[Policy]] = {
+            "overdue": [],
+            "urgent": [],
+            "warning": [],
+            "watch": [],
+        }
+        for p in rows:
+            days_left = (p.expiration_date - today).days
+            if days_left < 0:
+                buckets["overdue"].append(p)
+            elif days_left <= 14:
+                buckets["urgent"].append(p)
+            elif days_left <= 30:
+                buckets["warning"].append(p)
+            else:  # 31..60
+                buckets["watch"].append(p)
+        return buckets
+
     def check_duplicate(self, policy_number):
         """Returns existing policy with the same number, or None."""
         if not policy_number:
