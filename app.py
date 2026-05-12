@@ -17,6 +17,7 @@ from views.process_policies import page_process_policies
 from views.database_page import page_database
 from views.create_coi import page_create_coi
 from views.renewals import page_renewals
+from views.compare_policies import page_compare_policies
 
 st.set_page_config(
     page_title="Insurance Doc Intelligence", 
@@ -133,7 +134,7 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
     
-    MENU_OPTIONS = ["Dashboard", "Process Policies", "Renewals", "Database", "Create COI"]
+    MENU_OPTIONS = ["Dashboard", "Process Policies", "Renewals", "Compare", "Database", "Create COI"]
     manual_nav = None
     if st.session_state.get("nav_request"):
         req = st.session_state.pop("nav_request", None)
@@ -143,7 +144,7 @@ with st.sidebar:
     selected = option_menu(
         menu_title=None,
         options=MENU_OPTIONS,
-        icons=["house-fill", "cloud-arrow-up-fill", "bell-fill", "database-fill", "file-earmark-pdf-fill"],
+        icons=["house-fill", "cloud-arrow-up-fill", "bell-fill", "arrow-left-right", "database-fill", "file-earmark-pdf-fill"],
         menu_icon="cast",
         default_index=0,
         manual_select=manual_nav,
@@ -226,6 +227,8 @@ elif selected == "Process Policies":
     page_process_policies(api_key)
 elif selected == "Renewals":
     page_renewals()
+elif selected == "Compare":
+    page_compare_policies()
 elif selected == "Database":
     page_database(api_key)
 elif selected == "Create COI":
