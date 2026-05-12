@@ -269,3 +269,9 @@ def get_session(engine):
 # before any session uses Policy.history relationship. Do not move.
 from core import history_model  # noqa: F401, E402
 PolicyHistory = history_model.PolicyHistory
+
+# Same pattern for NotificationLog — register the table with Base.metadata
+# so create_all() and Alembic both see it without callers having to remember
+# the side-effect import.
+from core import notification_model  # noqa: F401, E402
+NotificationLog = notification_model.NotificationLog
