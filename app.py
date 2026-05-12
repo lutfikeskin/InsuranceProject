@@ -4,7 +4,12 @@ from core.database import init_db, get_session
 import core.history_model  # noqa: F401  — side-effect import registers PolicyHistory with SQLAlchemy's metadata
 from core.services import UsageService
 from streamlit_option_menu import option_menu
-from core.constants import DEFAULT_DAILY_BUDGET, APP_DISPLAY_TAGLINE
+from core.constants import (
+    APP_DISPLAY_TAGLINE,
+    CONFIDENCE_GATE_DEFAULT,
+    CONFIDENCE_GATE_OPTIONS,
+    DEFAULT_DAILY_BUDGET,
+)
 
 from views.dashboard import page_dashboard
 from views.process_policies import page_process_policies
@@ -75,6 +80,33 @@ def settings_modal():
         st.session_state.pop("GEMINI_API_KEY", None)
         st.success("API key cleared from this session.")
         st.rerun()
+
+    st.divider()
+    st.markdown("##### 🎯 Extraction Quality Gate")
+    # Initialize session-state default once so the selectbox `index=` lookup
+    # is stable across reruns. After this, the `key=` binding owns the value.
+    if "confidence_gate_threshold" not in st.session_state:
+        st.session_state["confidence_gate_threshold"] = CONFIDENCE_GATE_DEFAULT
+    _gate_keys = list(CONFIDENCE_GATE_OPTIONS.keys())
+    _current_gate = st.session_state["confidence_gate_threshold"]
+    if _current_gate not in _gate_keys:
+        # Defensive: stale session-state value (e.g. left over from an older
+        # version with different threshold names) falls back to the default
+        # rather than crashing the selectbox.
+        _current_gate = CONFIDENCE_GATE_DEFAULT
+        st.session_state["confidence_gate_threshold"] = _current_gate
+    st.selectbox(
+        "Clear extracted fields below this confidence",
+        options=_gate_keys,
+        format_func=lambda v: CONFIDENCE_GATE_OPTIONS[v],
+        index=_gate_keys.index(_current_gate),
+        key="confidence_gate_threshold",
+        help=(
+            "Soft nudge applied on the review form: fields with confidence "
+            "below the chosen level are cleared, so you have to type them in "
+            "rather than skim-and-save. Save is never blocked."
+        ),
+    )
 
     st.divider()
     st.markdown("##### 📊 Usage Management")
