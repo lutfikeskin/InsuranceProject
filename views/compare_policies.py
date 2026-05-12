@@ -199,16 +199,32 @@ def _get(row, *attrs, default=None):
     return row if row is not None else default
 
 
+def _cell(row, *attrs, default: str = "—") -> str:
+    """`_get` + stringification with an em-dash for None.
+
+    Why this exists: pandas + pyarrow demands a uniform column type when
+    Streamlit renders a dataframe. If one row's "CSL" is an int (100000)
+    and another row's is the "—" placeholder for missing, Arrow refuses
+    to convert the column. Coercing every cell to `str` up front sidesteps
+    that. Numeric formatting is intentionally raw (no $/commas) because
+    these tables are reference views, not statements."""
+    value = _get(row, *attrs, default=None)
+    if value is None or value == "":
+        return default
+    return str(value)
+
+
 def _vehicles_dataframe(rows: list) -> pd.DataFrame:
+    # Every cell is a string — see _cell docstring for why.
     return pd.DataFrame(
         [
             {
-                "Year": _get(r, "year", default="—"),
-                "Make": _get(r, "make", default="—"),
-                "Model": _get(r, "model", default="—"),
-                "VIN": _get(r, "vin", default="—"),
-                "GVW": _get(r, "gvw", default="—"),
-                "Type": _get(r, "vehicle_type", default="—"),
+                "Year": _cell(r, "year"),
+                "Make": _cell(r, "make"),
+                "Model": _cell(r, "model"),
+                "VIN": _cell(r, "vin"),
+                "GVW": _cell(r, "gvw"),
+                "Type": _cell(r, "vehicle_type"),
             }
             for r in rows
         ]
@@ -219,8 +235,8 @@ def _drivers_dataframe(rows: list) -> pd.DataFrame:
     return pd.DataFrame(
         [
             {
-                "Name": _get(r, "full_name", default="—"),
-                "License": _get(r, "license_number", default="—"),
+                "Name": _cell(r, "full_name"),
+                "License": _cell(r, "license_number"),
                 "Excluded": "Yes" if _get(r, "is_excluded") else "No",
             }
             for r in rows
@@ -229,53 +245,53 @@ def _drivers_dataframe(rows: list) -> pd.DataFrame:
 
 
 def _coverages_dataframe(rows: list) -> pd.DataFrame:
-    out = []
-    for r in rows:
-        out.append(
+    # All limit columns are stringified so numeric carrier values don't
+    # collide with the "—" placeholder for missing fields when pyarrow
+    # tries to pick a uniform column type.
+    return pd.DataFrame(
+        [
             {
-                "Code": _get(r, "coverage_code", default="—"),
-                "Family": _get(r, "family", default="—"),
-                "Type": _get(r, "type", default="—"),
-                "Vehicle VIN": _get(r, "vehicle", "vin", default="—"),
-                "Per Person": _get(r, "per_person", default="—"),
-                "Per Accident": _get(r, "per_accident", default="—"),
-                "CSL": _get(r, "combined_single_limit", default="—"),
-                "Aggregate": _get(r, "aggregate", default="—"),
-                "Deductible": _get(r, "deductible", default="—"),
+                "Code": _cell(r, "coverage_code"),
+                "Family": _cell(r, "family"),
+                "Type": _cell(r, "type"),
+                "Vehicle VIN": _cell(r, "vehicle", "vin"),
+                "Per Person": _cell(r, "per_person"),
+                "Per Accident": _cell(r, "per_accident"),
+                "CSL": _cell(r, "combined_single_limit"),
+                "Aggregate": _cell(r, "aggregate"),
+                "Deductible": _cell(r, "deductible"),
             }
-        )
-    return pd.DataFrame(out)
+            for r in rows
+        ]
+    )
 
 
 def _coverages_limit_changed_dataframe(pairs: list) -> pd.DataFrame:
     """Side-by-side display for the limit_changed bucket. Each row pairs
     one A coverage with its matching B coverage so the broker can read
-    the deltas in place."""
+    the deltas in place. All cells are strings (limit columns interpolate
+    via f-strings, identity columns via _cell)."""
     out = []
     for cov_a, cov_b in pairs:
         out.append(
             {
-                "Code": _get(cov_a, "coverage_code", default="—"),
-                "Vehicle VIN": _get(cov_a, "vehicle", "vin", default="—"),
+                "Code": _cell(cov_a, "coverage_code"),
+                "Vehicle VIN": _cell(cov_a, "vehicle", "vin"),
                 "Per Person (A → B)": (
-                    f"{_get(cov_a, 'per_person', default='—')} → "
-                    f"{_get(cov_b, 'per_person', default='—')}"
+                    f"{_cell(cov_a, 'per_person')} → {_cell(cov_b, 'per_person')}"
                 ),
                 "Per Accident (A → B)": (
-                    f"{_get(cov_a, 'per_accident', default='—')} → "
-                    f"{_get(cov_b, 'per_accident', default='—')}"
+                    f"{_cell(cov_a, 'per_accident')} → {_cell(cov_b, 'per_accident')}"
                 ),
                 "CSL (A → B)": (
-                    f"{_get(cov_a, 'combined_single_limit', default='—')} → "
-                    f"{_get(cov_b, 'combined_single_limit', default='—')}"
+                    f"{_cell(cov_a, 'combined_single_limit')} → "
+                    f"{_cell(cov_b, 'combined_single_limit')}"
                 ),
                 "Aggregate (A → B)": (
-                    f"{_get(cov_a, 'aggregate', default='—')} → "
-                    f"{_get(cov_b, 'aggregate', default='—')}"
+                    f"{_cell(cov_a, 'aggregate')} → {_cell(cov_b, 'aggregate')}"
                 ),
                 "Deductible (A → B)": (
-                    f"{_get(cov_a, 'deductible', default='—')} → "
-                    f"{_get(cov_b, 'deductible', default='—')}"
+                    f"{_cell(cov_a, 'deductible')} → {_cell(cov_b, 'deductible')}"
                 ),
             }
         )
@@ -286,9 +302,9 @@ def _interests_dataframe(rows: list) -> pd.DataFrame:
     return pd.DataFrame(
         [
             {
-                "Name": _get(r, "name", default="—"),
-                "Address": _get(r, "address", default="—"),
-                "Type": _get(r, "interest_type", default="—"),
+                "Name": _cell(r, "name"),
+                "Address": _cell(r, "address"),
+                "Type": _cell(r, "interest_type"),
             }
             for r in rows
         ]
