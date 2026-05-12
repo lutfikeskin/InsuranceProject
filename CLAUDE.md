@@ -17,6 +17,8 @@ When changing any of the following, ALSO update the listed downstream files. Thi
 | Customer model fields                    | customer_resolver.py, ui display, services.py save flow          |
 | core/coverage_ontology.py                | coverage_normalization.py, schemas.py, services.py validation    |
 | core/history_model.py                    | history_service.py, services.py save flow, Alembic migration     |
+| core/notification_model.py               | notification_service.py, views/renewals.py, alembic migration `e7d8b9a0c1f2`; new methods need an entry in `KNOWN_METHODS` (notification_service.py) for spell-check warnings |
+| modules/notifications/                   | views/renewals.py email-preview dialog. The `draft_renewal_email()` signature is part of the future-email-integration contract — IT will hand its result to SMTP later, so keep `RenewalEmailDraft` field names stable |
 | utils/text_utils.py                      | services.py `_clean_text` / `_clean_limit_text` delegations, extraction_response.py `_clean_text` / `_parse_us_address` aliases — single source of truth for null coercion |
 | views/ui_utils.py                        | process_policies.py review screen badges + `_gv` gate closure; canonical home for `should_clear_field` / `gate_value` and any future per-field confidence rendering in views/ |
 | core/constants.py `CONFIDENCE_GATE_*`    | app.py settings_modal selectbox, views/process_policies.py review form gate threshold lookup; values are user-visible — keep keys stable, edit only the label strings |
@@ -68,11 +70,15 @@ Before merging or closing a phase, run this checklist:
 - Field confidence is per-field, not policy-level
 - Goldens organized by carrier/document_type with `_meta` routing
 - Confidence gate is a UI-only soft nudge: low-confidence values are cleared from the review form but Save is never blocked. Backend save flow does not know the gate exists.
+- Renewal reminders are draft-only today: `draft_renewal_email()` generates text the broker copies / downloads / logs. No SMTP, no scheduler, no auto-send. Actual outbound delivery is IT's integration; `RenewalEmailDraft` field names are the contract.
 
 ## Active Modules
 
 - Customer, CustomerEntity, PolicyRelationship, PolicyEndorsement (database.py models)
 - PolicyHistory (core/history_model.py + core/history_service.py)
+- NotificationLog (core/notification_model.py + core/notification_service.py) — renewal-contact audit trail
+- modules/notifications/ (`draft_renewal_email`, `RenewalEmailDraft`) — pure email-draft generator; no network/DB
+- views/renewals.py — sidebar page with KPI bar + urgency buckets + email-preview dialog + mark-contacted action
 - core/document_taxonomy.py
 - core/customer_resolver.py
 - core/coverage_ontology.py + core/coverage_normalization.py
@@ -93,3 +99,8 @@ Before merging or closing a phase, run this checklist:
 
 - **2026-05 — comprehensive audit pass.** Branch `chore/audit-cleanup` from `feat/gemini-caching-optimization` @ `56bde85`. Findings and deferred roadmap: [`docs/AUDIT_2026-05.md`](docs/AUDIT_2026-05.md). Baseline: [`docs/AUDIT_BASELINE.md`](docs/AUDIT_BASELINE.md). Changes were low-risk: text-helper consolidation, narrowing five over-broad exception swallows, deleting dead `_classify_policy`, F401 import cleanup, four new test modules (`test_coi_generator`, `test_extraction_local_cache`, `test_variant_tracker`, `test_coverage_backfill` — 59 new tests), and six UI polish edits (confidence legend, sortable customer table, dialog discard control, API-key clear control, toast wording). Deferred to follow-up branches: `core/services.py` / `views/process_policies.py` / `modules/extraction/pipeline.py` splits, and `ProductRegistry` / per-product extraction modularity (skipped because no new product types are on the roadmap).
 - **2026-05 — audit follow-up (organization + roadmap).** Continuation on the same branch. Verified the prior audit's "dead file" candidates — `modules/coi/utils.py` and `scripts/check_models.py` are both live (false positives). Real cleanup: removed two stray root-level PDFs, deleted stale `CHAT_HANDOFF.md`, untracked `test_filled_coi.pdf` (generator output) and `logs/app.log`, consolidated `.gitignore` duplicates, moved the standalone React `education-site/` under `tools/`. Wrote the two roadmap docs linked above. Zero behavior changes.
+
+## Feature History
+
+- **2026-05 — confidence gate.** Branch `feat/confidence-gate`. Soft UI nudge: extracted fields below a user-configurable confidence threshold render blank on the review form so the broker has to type them in. Save is never blocked. Settings selectbox in the ⚙️ dialog persists the threshold to `st.session_state`. Helpers `should_clear_field` and `gate_value` live in `views/ui_utils.py`; 29 new unit tests in `tests/test_ui_utils.py`.
+- **2026-05 — renewals MVP.** Branch `feat/renewals`. New sidebar page (`views/renewals.py`) with four urgency buckets (⚪ Overdue / 🔴 Urgent 0-14d / 🟡 Warning 15-30d / 🔵 Watch 31-60d) and per-row email-draft + mark-contacted actions. New `NotificationLog` table + Alembic migration `e7d8b9a0c1f2`. New `core/notification_service.py` (CRUD + queries) and `modules/notifications/renewal_email.py` (pure email-draft generator). Email sending is intentionally deferred to IT; `draft_renewal_email()` returns text the broker copies/downloads. Added 57 unit tests (notification service 20, email drafter 23, renewal buckets 14).
