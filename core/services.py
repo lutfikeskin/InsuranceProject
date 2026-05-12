@@ -832,6 +832,41 @@ class PolicyService:
             Policy.expiration_date <= cutoff
         ).order_by(Policy.expiration_date.asc()).all()
 
+    def find_related_policy(
+        self, policy_id: int, *, confirmed_only: bool = True
+    ):
+        """
+        Find a Policy that has a stored relationship with the given one
+        (renewal, replacement, etc.). Used by the Compare page's
+        "Auto-pair" button.
+
+        The relationship is conceptually bidirectional — when a save
+        flow detected that policy A is the renewal of policy B, it
+        recorded a single PolicyRelationship row with policy_id and
+        related_policy_id in *some* order. We search both columns and
+        return the *other* side. When multiple candidates qualify,
+        the most-recently-created relationship wins (the freshest signal).
+
+        When `confirmed_only` is True (default), suggested relationships
+        are excluded so we don't auto-pair on a low-confidence guess.
+        Returns None when no qualifying relationship exists.
+        """
+        q = self.session.query(PolicyRelationship).filter(
+            or_(
+                PolicyRelationship.policy_id == policy_id,
+                PolicyRelationship.related_policy_id == policy_id,
+            )
+        )
+        if confirmed_only:
+            q = q.filter(PolicyRelationship.confidence == "confirmed")
+        rel = q.order_by(PolicyRelationship.created_at.desc()).first()
+        if rel is None:
+            return None
+        other_id = (
+            rel.related_policy_id if rel.policy_id == policy_id else rel.policy_id
+        )
+        return self.session.query(Policy).filter(Policy.id == other_id).first()
+
     def get_renewal_buckets(self, overdue_lookback_days: int = 30) -> dict:
         """
         Group policies by urgency for the Renewals page.
