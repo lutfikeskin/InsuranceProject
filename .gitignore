@@ -3,16 +3,15 @@
 __pycache__/
 *.pyc
 *.db
-.cache/extraction_cache/v5_0d3a82865e6f522349091d47a8476d8ed62c0a42b6433ccb384d982192b3c8ce.json
-.cache/extraction_cache/v5_d648a7964d389d13e9f1707cd48c8d42d095de69849f1f2c375fefba7ab45cf7.json
-.cache/extraction_cache/v5_f4bafa8e9f8482a15caf489b21a59288b802be0351e86acaf5156d3b1e719845.json
-.cache/layout_variants.json
+.cache/
 .cursor/
 .claude/skills/
-education-site/
-.cache/extraction_cache/v5_0d3a82865e6f522349091d47a8476d8ed62c0a42b6433ccb384d982192b3c8ce.json
-.cache/extraction_cache/v5_d648a7964d389d13e9f1707cd48c8d42d095de69849f1f2c375fefba7ab45cf7.json
-.cache/extraction_cache/v5_f4bafa8e9f8482a15caf489b21a59288b802be0351e86acaf5156d3b1e719845.json
+tools/education-site/
+
+# Runtime artifacts
+logs/
+/test_filled_coi.pdf
+pytest-of-*/
 
 # Runtime-accumulated carrier profiles (rebuilds from real traffic)
 data/carrier_profiles.json
