@@ -176,33 +176,207 @@ def _render_scalar_table(result: ComparisonResult) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Collection-diff placeholders (real content lands in the next commit)
+# Collection-diff detail tables
 # ---------------------------------------------------------------------------
 
 
-def _render_collection_placeholders(result: ComparisonResult) -> None:
-    st.markdown("##### Collection differences")
-    st.caption(
-        "Detailed vehicle / driver / coverage / additional-interest "
-        "comparisons are coming in the next commit. The counts above the "
-        "table already use this data."
+def _get(row, *attrs, default=None):
+    """Attribute-or-key access. Mirrors the helper in the email drafter so
+    the same code works on ORM objects, dicts, and SimpleNamespace mocks."""
+    for attr in attrs:
+        if row is None:
+            return default
+        if isinstance(row, dict):
+            if attr in row:
+                row = row[attr]
+            else:
+                return default
+        else:
+            row = getattr(row, attr, None)
+            if row is None and attrs.index(attr) < len(attrs) - 1:
+                return default
+    return row if row is not None else default
+
+
+def _vehicles_dataframe(rows: list) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "Year": _get(r, "year", default="—"),
+                "Make": _get(r, "make", default="—"),
+                "Model": _get(r, "model", default="—"),
+                "VIN": _get(r, "vin", default="—"),
+                "GVW": _get(r, "gvw", default="—"),
+                "Type": _get(r, "vehicle_type", default="—"),
+            }
+            for r in rows
+        ]
     )
+
+
+def _drivers_dataframe(rows: list) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "Name": _get(r, "full_name", default="—"),
+                "License": _get(r, "license_number", default="—"),
+                "Excluded": "Yes" if _get(r, "is_excluded") else "No",
+            }
+            for r in rows
+        ]
+    )
+
+
+def _coverages_dataframe(rows: list) -> pd.DataFrame:
+    out = []
+    for r in rows:
+        out.append(
+            {
+                "Code": _get(r, "coverage_code", default="—"),
+                "Family": _get(r, "family", default="—"),
+                "Type": _get(r, "type", default="—"),
+                "Vehicle VIN": _get(r, "vehicle", "vin", default="—"),
+                "Per Person": _get(r, "per_person", default="—"),
+                "Per Accident": _get(r, "per_accident", default="—"),
+                "CSL": _get(r, "combined_single_limit", default="—"),
+                "Aggregate": _get(r, "aggregate", default="—"),
+                "Deductible": _get(r, "deductible", default="—"),
+            }
+        )
+    return pd.DataFrame(out)
+
+
+def _coverages_limit_changed_dataframe(pairs: list) -> pd.DataFrame:
+    """Side-by-side display for the limit_changed bucket. Each row pairs
+    one A coverage with its matching B coverage so the broker can read
+    the deltas in place."""
+    out = []
+    for cov_a, cov_b in pairs:
+        out.append(
+            {
+                "Code": _get(cov_a, "coverage_code", default="—"),
+                "Vehicle VIN": _get(cov_a, "vehicle", "vin", default="—"),
+                "Per Person (A → B)": (
+                    f"{_get(cov_a, 'per_person', default='—')} → "
+                    f"{_get(cov_b, 'per_person', default='—')}"
+                ),
+                "Per Accident (A → B)": (
+                    f"{_get(cov_a, 'per_accident', default='—')} → "
+                    f"{_get(cov_b, 'per_accident', default='—')}"
+                ),
+                "CSL (A → B)": (
+                    f"{_get(cov_a, 'combined_single_limit', default='—')} → "
+                    f"{_get(cov_b, 'combined_single_limit', default='—')}"
+                ),
+                "Aggregate (A → B)": (
+                    f"{_get(cov_a, 'aggregate', default='—')} → "
+                    f"{_get(cov_b, 'aggregate', default='—')}"
+                ),
+                "Deductible (A → B)": (
+                    f"{_get(cov_a, 'deductible', default='—')} → "
+                    f"{_get(cov_b, 'deductible', default='—')}"
+                ),
+            }
+        )
+    return pd.DataFrame(out)
+
+
+def _interests_dataframe(rows: list) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "Name": _get(r, "name", default="—"),
+                "Address": _get(r, "address", default="—"),
+                "Type": _get(r, "interest_type", default="—"),
+            }
+            for r in rows
+        ]
+    )
+
+
+def _render_sub_table(title: str, df: pd.DataFrame) -> None:
+    """One labeled sub-section inside a collection expander. Hides when
+    the dataframe is empty so unused sections don't clutter the page."""
+    if df is None or df.empty:
+        return
+    st.markdown(f"**{title}** ({len(df)})")
+    st.dataframe(df, width="stretch", hide_index=True)
+
+
+def _render_collection_details(result: ComparisonResult) -> None:
+    """Replace the placeholder expanders with real detail tables.
+
+    Empty buckets are simply omitted from each expander so the page
+    doesn't fill up with "0 rows" sections."""
+    st.markdown("##### Collection differences")
+
     s = result.summary
-    placeholders = [
-        ("🚗 Vehicles", s.n_vehicles_only_in_a, s.n_vehicles_only_in_b, len(result.vehicles.unchanged)),
-        ("🧑 Drivers", s.n_drivers_only_in_a, s.n_drivers_only_in_b, len(result.drivers.unchanged)),
-        ("🛡️ Coverages", s.n_coverages_only_in_a, s.n_coverages_only_in_b, len(result.coverages.unchanged)),
-        ("📎 Additional Interests",
-         len(result.additional_interests.only_in_a),
-         len(result.additional_interests.only_in_b),
-         len(result.additional_interests.unchanged)),
-    ]
-    for label, only_a, only_b, unchanged in placeholders:
-        with st.expander(
-            f"{label} — {only_a} only on A, {only_b} only on B, {unchanged} unchanged",
-            expanded=False,
+
+    # --- Vehicles ----------------------------------------------------------
+    with st.expander(
+        f"🚗 Vehicles — {s.n_vehicles_only_in_a} only on A, "
+        f"{s.n_vehicles_only_in_b} only on B, "
+        f"{len(result.vehicles.unchanged)} unchanged",
+        expanded=(s.n_vehicles_only_in_a + s.n_vehicles_only_in_b) > 0,
+    ):
+        _render_sub_table("Only on Policy A", _vehicles_dataframe(result.vehicles.only_in_a))
+        _render_sub_table("Only on Policy B", _vehicles_dataframe(result.vehicles.only_in_b))
+        _render_sub_table("Unchanged (on both)", _vehicles_dataframe(result.vehicles.unchanged))
+        if not (result.vehicles.only_in_a or result.vehicles.only_in_b or result.vehicles.unchanged):
+            st.caption("Neither policy has any vehicles on file.")
+
+    # --- Drivers -----------------------------------------------------------
+    with st.expander(
+        f"🧑 Drivers — {s.n_drivers_only_in_a} only on A, "
+        f"{s.n_drivers_only_in_b} only on B, "
+        f"{len(result.drivers.unchanged)} unchanged",
+        expanded=(s.n_drivers_only_in_a + s.n_drivers_only_in_b) > 0,
+    ):
+        _render_sub_table("Only on Policy A", _drivers_dataframe(result.drivers.only_in_a))
+        _render_sub_table("Only on Policy B", _drivers_dataframe(result.drivers.only_in_b))
+        _render_sub_table("Unchanged (on both)", _drivers_dataframe(result.drivers.unchanged))
+        if not (result.drivers.only_in_a or result.drivers.only_in_b or result.drivers.unchanged):
+            st.caption("Neither policy has any drivers on file.")
+
+    # --- Coverages ---------------------------------------------------------
+    cov_movement = (
+        s.n_coverages_only_in_a + s.n_coverages_only_in_b + s.n_coverages_limit_changed
+    )
+    with st.expander(
+        f"🛡️ Coverages — {s.n_coverages_only_in_a} only on A, "
+        f"{s.n_coverages_only_in_b} only on B, "
+        f"{s.n_coverages_limit_changed} with changed limits, "
+        f"{len(result.coverages.unchanged)} unchanged",
+        expanded=cov_movement > 0,
+    ):
+        _render_sub_table(
+            "Limit changed (same line, new numbers)",
+            _coverages_limit_changed_dataframe(result.coverages.limit_changed),
+        )
+        _render_sub_table("Only on Policy A", _coverages_dataframe(result.coverages.only_in_a))
+        _render_sub_table("Only on Policy B", _coverages_dataframe(result.coverages.only_in_b))
+        _render_sub_table("Unchanged (on both)", _coverages_dataframe(result.coverages.unchanged))
+        if not (
+            result.coverages.only_in_a
+            or result.coverages.only_in_b
+            or result.coverages.unchanged
+            or result.coverages.limit_changed
         ):
-            st.caption("Detail tables coming in the next commit.")
+            st.caption("Neither policy has any coverages on file.")
+
+    # --- Additional Interests ---------------------------------------------
+    ai = result.additional_interests
+    with st.expander(
+        f"📎 Additional Interests — {len(ai.only_in_a)} only on A, "
+        f"{len(ai.only_in_b)} only on B, "
+        f"{len(ai.unchanged)} unchanged",
+        expanded=(len(ai.only_in_a) + len(ai.only_in_b)) > 0,
+    ):
+        _render_sub_table("Only on Policy A", _interests_dataframe(ai.only_in_a))
+        _render_sub_table("Only on Policy B", _interests_dataframe(ai.only_in_b))
+        _render_sub_table("Unchanged (on both)", _interests_dataframe(ai.unchanged))
+        if not (ai.only_in_a or ai.only_in_b or ai.unchanged):
+            st.caption("Neither policy has any additional interests on file.")
 
 
 # ---------------------------------------------------------------------------
@@ -274,6 +448,6 @@ def page_compare_policies() -> None:
         st.divider()
         _render_scalar_table(result)
         st.divider()
-        _render_collection_placeholders(result)
+        _render_collection_details(result)
     finally:
         session.close()
