@@ -163,7 +163,7 @@ def draft_renewal_email(
     subject = f"Renewal Reminder: {carrier} policy {policy_number} expires {expiration}"
 
     body = (
-        f"Dear {insured_name},\n"
+        f"Good afternoon {insured_name},\n"
         f"\n"
         f"Your {carrier} insurance policy {policy_number} is scheduled to "
         f"expire on {expiration} ({days_phrase}).\n"
