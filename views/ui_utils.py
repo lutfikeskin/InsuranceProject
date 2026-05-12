@@ -71,3 +71,59 @@ CONFIDENCE_LEGEND_CAPTION = (
     "Field labels prefixed with **◐** are medium-confidence and **⚠️** are "
     "low-confidence extractions — verify these before saving."
 )
+
+
+def should_clear_field(
+    field_name: str,
+    confidence_map: dict[str, str],
+    threshold: str,
+) -> bool:
+    """
+    Soft confidence gate: decide whether an extracted value should be cleared
+    from the review form so the user has to type it in by hand.
+
+    `threshold` is the *minimum* confidence the user trusts:
+      "off"    — gate disabled; never clear
+      "medium" — clear only "low"-confidence fields (default)
+      "high"   — clear both "low" and "medium" (strictest)
+
+    Fields not present in `confidence_map` default to "high" (an LLM that
+    said nothing is assumed confident — don't wipe values that didn't even
+    get a confidence vote). Unknown threshold strings disable the gate to
+    avoid surprises from typos in session state.
+    """
+    if threshold not in ("medium", "high"):
+        return False  # "off" or anything unexpected
+    conf = confidence_map.get(field_name, "high")
+    if conf not in CONFIDENCE_LEVELS:
+        return False
+    if threshold == "high":
+        return conf in ("low", "medium")
+    # threshold == "medium"
+    return conf == "low"
+
+
+def gate_value(
+    raw_value,
+    field_name: str,
+    confidence_map: dict[str, str],
+    threshold: str,
+    *,
+    blank,
+):
+    """
+    Convenience wrapper around `should_clear_field`. Returns `blank` if the
+    field is below the threshold, otherwise returns `raw_value` unchanged.
+
+    Pass `blank` explicitly so each call site can supply the right empty
+    sentinel for its widget type:
+      st.text_input  → blank=""
+      st.date_input  → blank=None
+      st.number_input → blank=None (or 0.0 if min_value=0.0 is set)
+
+    Callers that need to count gated fields (e.g. for a banner) should call
+    `should_clear_field` directly and track the boolean themselves.
+    """
+    if should_clear_field(field_name, confidence_map, threshold):
+        return blank
+    return raw_value
