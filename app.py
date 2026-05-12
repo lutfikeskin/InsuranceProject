@@ -2,6 +2,7 @@ import streamlit as st
 import os
 from core.database import init_db, get_session
 import core.history_model  # noqa: F401  — side-effect import registers PolicyHistory with SQLAlchemy's metadata
+import core.notification_model  # noqa: F401  — side-effect import registers NotificationLog with SQLAlchemy's metadata
 from core.services import UsageService
 from streamlit_option_menu import option_menu
 from core.constants import (
