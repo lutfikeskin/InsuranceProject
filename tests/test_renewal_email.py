@@ -5,7 +5,7 @@ The function under test is pure (no DB, no Streamlit) so we feed it dicts and
 SimpleNamespace mocks instead of building real Policy ORM objects.
 """
 
-from datetime import date, datetime
+from datetime import date
 from types import SimpleNamespace
 
 import pytest

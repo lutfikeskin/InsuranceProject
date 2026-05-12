@@ -20,7 +20,6 @@ from core.comparison_service import (
     ComparisonService,
     CoverageDiff,
     CollectionDiff,
-    ScalarDiff,
     _humanize_label,
     _parse_premium,
 )
