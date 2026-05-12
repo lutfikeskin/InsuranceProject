@@ -1,6 +1,5 @@
 import pytest
 from modules.extraction.pipeline import GeminiExtractionPipeline
-from modules.extraction.schemas import UNIVERSAL_SCOUT_SCHEMA
 
 class TestExtractionLogic:
     @pytest.mark.skip(reason="GeminiExtractionPipeline no longer exposes _get_pages_for_section (scout refactor).")

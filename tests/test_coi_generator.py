@@ -18,7 +18,6 @@ These are smoke + branch-coverage tests, not pixel/output validation.
 
 import io
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 

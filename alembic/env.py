@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from core.database import Base
 # Import all models to register them with Base.metadata
-from core.history_model import PolicyHistory 
+from core.history_model import PolicyHistory  # noqa: F401  — side-effect import registers PolicyHistory with Base.metadata so Alembic autogenerate sees it
 
 target_metadata = Base.metadata
 

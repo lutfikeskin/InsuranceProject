@@ -1,5 +1,3 @@
-import pytest
-
 import core.history_model  # noqa: F401 — registers PolicyHistory for SQLAlchemy mappers
 
 from core.database import Policy

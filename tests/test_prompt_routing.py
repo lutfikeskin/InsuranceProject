@@ -1,5 +1,3 @@
-from types import SimpleNamespace
-
 from modules.extraction.pipeline import GeminiExtractionPipeline
 from modules.extraction.prompts import get_extract_all_prompt, get_extract_coi_prompt
 

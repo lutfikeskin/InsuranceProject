@@ -6,8 +6,6 @@ import argparse
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from modules.extraction import process_pdf
-from core.database import init_db # Just to ensure DB setup if needed
-from core.logger import logger
 
 def generate_golden(pdf_path, output_path=None, api_key=None):
     """
