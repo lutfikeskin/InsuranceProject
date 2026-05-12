@@ -33,6 +33,11 @@ from core.notification_service import NotificationService
 from core.services import PolicyService
 from modules.notifications import draft_renewal_email
 
+# Page-name constant — must match the MENU_OPTIONS entry in app.py. Kept
+# here as a module constant so the "navigate to Compare" call site is
+# decoupled from app.py's literal string.
+_COMPARE_PAGE_NAME = "Compare"
+
 
 # TODO: move to a settings field once the Settings dialog gains a Renewals
 # section. For now the agency name is a constant so the email signoff line
@@ -157,6 +162,22 @@ def _render_action_panel(
     else:
         st.caption("📞 No prior contact logged for this policy.")
 
+    # Look up a confirmed prior renewal once so the "Compare" button can
+    # decide whether to render. A separate short-lived session keeps the
+    # query scoped (the caller's session is for the bucket queries).
+    related_policy = None
+    related_label = None
+    cmp_sess = get_session(st.session_state.db_engine)
+    try:
+        related_policy = PolicyService(cmp_sess).find_related_policy(policy.id)
+        if related_policy is not None:
+            related_label = (
+                f"{related_policy.carrier_name or '—'} "
+                f"{related_policy.policy_number or '—'}"
+            )
+    finally:
+        cmp_sess.close()
+
     action_col, log_col = st.columns([1, 1])
 
     if action_col.button(
@@ -201,6 +222,21 @@ def _render_action_panel(
                 st.rerun()
             finally:
                 session.close()
+
+    # Cross-page jump: if a confirmed prior renewal exists, offer one-click
+    # navigation to the Compare page with both pickers pre-filled. Sets the
+    # picker session-state keys before flipping nav_request so the Compare
+    # page's selectboxes read the right initial values.
+    if related_policy is not None:
+        if st.button(
+            f"🔀 Compare to prior renewal ({related_label})",
+            key=f"cmp_{key_prefix}_{policy.id}",
+            width="stretch",
+        ):
+            st.session_state["compare_picker_a"] = policy.id
+            st.session_state["compare_picker_b"] = related_policy.id
+            st.session_state["nav_request"] = _COMPARE_PAGE_NAME
+            st.rerun()
 
 
 # ---------------------------------------------------------------------------

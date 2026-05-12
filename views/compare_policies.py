@@ -31,6 +31,7 @@ from core.comparison_service import (
     ScalarDiff,
 )
 from core.database import Policy, get_session
+from core.services import PolicyService
 
 
 # ---------------------------------------------------------------------------
@@ -419,6 +420,27 @@ def page_compare_policies() -> None:
                 key="compare_picker_b",
                 exclude_id=pid_a,
             )
+
+        # Auto-pair: when Policy A is set and a confirmed renewal/
+        # replacement relationship exists, offer a one-click button to fill
+        # in Policy B. Only fires on confirmed relationships so a low-
+        # confidence guess from the save flow can't surprise the broker.
+        if pid_a is not None and pid_b is None:
+            related = PolicyService(session).find_related_policy(pid_a)
+            if related is not None and related.id in options:
+                if st.button(
+                    f"🔗 Auto-pair with prior renewal "
+                    f"({options[related.id]})",
+                    type="secondary",
+                    width="stretch",
+                ):
+                    st.session_state["compare_picker_b"] = related.id
+                    st.rerun()
+            elif related is None:
+                st.caption(
+                    "_No confirmed prior renewal on file for Policy A — "
+                    "pick Policy B manually._"
+                )
 
         if pid_a is None or pid_b is None:
             st.info("Pick a policy on both sides to see the comparison.")
