@@ -28,6 +28,13 @@ from views.ui_utils import (
     gate_value,
     should_clear_field,
 )
+from views.upload_queue import (
+    failed_rows_csv_bytes,
+    queue_summary_kpis,
+    retry_hint,
+    retryable_filenames,
+    status_emoji,
+)
 
 MAX_PARALLEL_WORKERS = 3
 
@@ -314,6 +321,110 @@ def render_related_policy(match, current_item, service):
             st.rerun()
 
 
+def _render_batch_summary() -> None:
+    """Post-batch summary panel — KPI strip + enhanced table + CSV exports.
+
+    Reads from session_state so the panel survives reruns. Per-file retry
+    is added in the next commit; this commit just lays down the
+    summary + downloads.
+    """
+    rows = st.session_state.get("last_batch_rows") or []
+    if not rows:
+        return
+
+    st.subheader("Batch report")
+    kpis = queue_summary_kpis(rows)
+
+    # KPI strip — succeeded / failed / cached / retries. Friendly counts.
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric(
+        "Succeeded",
+        kpis["ok"],
+        help="Files that extracted cleanly. Cached hits are included.",
+    )
+    k2.metric(
+        "Failed",
+        kpis["error"],
+        help="Files that errored during extraction. Use the buttons below "
+        "to retry or download a CSV record.",
+    )
+    k3.metric(
+        "From cache",
+        kpis["from_cache"],
+        help="Files served from the local extraction cache "
+        "(no Gemini API charge).",
+    )
+    k4.metric(
+        "Total LLM retries",
+        kpis["total_retries"],
+        help="Internal LLM retries summed across all files. Rising numbers "
+        "here are an early warning that the API is degraded.",
+    )
+
+    # Error breakdown caption when there were failures.
+    if kpis["error_class_breakdown"]:
+        breakdown = ", ".join(
+            f"{label}: {count}"
+            for label, count in sorted(kpis["error_class_breakdown"].items())
+        )
+        st.caption(f"⚠️ Error breakdown — {breakdown}")
+
+    # Enhanced dataframe: leading emoji column + retry-hint column for
+    # error rows. Keeps the original columns the existing report had.
+    rep_rows = []
+    for r in rows:
+        rep_rows.append(
+            {
+                "": status_emoji(r),
+                "filename": r.get("filename", ""),
+                "status": r.get("status", ""),
+                "source": r.get("source", ""),
+                "retries": r.get("retries", 0),
+                "detail": r.get("detail", ""),
+                "next step": retry_hint(r),
+            }
+        )
+    rep = pd.DataFrame(rep_rows)
+    st.dataframe(rep, hide_index=True, width="stretch")
+
+    # Two CSV downloads side by side.
+    dl_col_full, dl_col_failed, clear_col = st.columns([1, 1, 1])
+    full_csv = pd.DataFrame(rows).to_csv(index=False).encode("utf-8")
+    dl_col_full.download_button(
+        "⬇️ All rows (CSV)",
+        data=full_csv,
+        file_name="extraction_batch_report.csv",
+        mime="text/csv",
+        key="batch_report_csv_all",
+        width="stretch",
+    )
+    failed_csv = failed_rows_csv_bytes(rows)
+    dl_col_failed.download_button(
+        "⬇️ Failed only (CSV)",
+        data=failed_csv,
+        file_name="extraction_failed_rows.csv",
+        mime="text/csv",
+        key="batch_report_csv_failed",
+        width="stretch",
+        disabled=(kpis["error"] == 0),
+        help=(
+            "No failed rows to export."
+            if kpis["error"] == 0
+            else "Download the failed rows for sharing with support."
+        ),
+    )
+    if clear_col.button(
+        "🧹 Clear summary",
+        key="batch_report_clear",
+        width="stretch",
+        help="Hide this panel until you start a new batch.",
+    ):
+        st.session_state.pop("last_batch_rows", None)
+        st.session_state.pop("last_batch_files_map", None)
+        st.session_state.pop("last_batch_settings", None)
+        st.rerun()
+
+
 def page_process_policies(api_key):
     st.title("📤 Process Policies")
     st.markdown("Upload policies, review the extraction, and save to your database.")
@@ -581,9 +692,9 @@ def page_process_policies(api_key):
                     status_text.text("Extraction complete! Choose an action below.")
 
                 if batch_rows:
+                    # Update daily telemetry counter (per-batch increment;
+                    # not persisted to disk, just survives across reruns).
                     rep = pd.DataFrame(batch_rows)
-                    st.subheader("Batch report")
-                    st.dataframe(rep, hide_index=True, use_container_width=True)
                     today_key = date.today().isoformat()
                     telem = st.session_state.get("batch_telemetry_today", {})
                     if telem.get("day") != today_key:
@@ -599,21 +710,23 @@ def page_process_policies(api_key):
                     telem["retries"] += int(rep["retries"].sum()) if "retries" in rep else 0
                     telem["errors"] += int((rep["status"] == "error").sum()) if "status" in rep else 0
                     st.session_state["batch_telemetry_today"] = telem
-                    if len(rep) > 1:
-                        cache_hits = int((rep["source"] == "cache").sum()) if "source" in rep else 0
-                        total_retries = int(rep["retries"].sum()) if "retries" in rep else 0
-                        error_total = int((rep["status"] == "error").sum()) if "status" in rep else 0
-                        st.caption(
-                            f"Batch telemetry: cache_hits={cache_hits}, total_retries={total_retries}, errors={error_total}"
-                        )
-                    if len(batch_rows) > 1:
-                        st.download_button(
-                            "Download batch report (CSV)",
-                            data=rep.to_csv(index=False).encode("utf-8"),
-                            file_name="extraction_batch_report.csv",
-                            mime="text/csv",
-                            key="batch_report_csv",
-                        )
+
+                    # Persist the batch so the post-batch summary panel
+                    # (rendered below, outside this click handler) survives
+                    # subsequent reruns and supports per-file retry.
+                    st.session_state["last_batch_rows"] = batch_rows
+                    st.session_state["last_batch_files_map"] = files_map
+                    st.session_state["last_batch_settings"] = {
+                        "force_refresh": force_refresh,
+                        "user_policy_type": user_policy_type,
+                    }
+
+        # Persistent batch summary panel. Renders whenever the previous
+        # upload-click left rows in session_state, so it survives the
+        # rerun-after-click pattern and (in the next commit) lets the
+        # broker retry failed files without re-uploading the whole batch.
+        if st.session_state.get("last_batch_rows"):
+            _render_batch_summary()
 
         if st.session_state["temp_extracted"]:
             st.divider()
