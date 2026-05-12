@@ -82,6 +82,12 @@ Before merging or closing a phase, run this checklist:
 - utils/text_utils.py (canonical `clean_text` / `clean_limit_text` / `parse_us_address`)
 - views/ui_utils.py (shared widget helpers: `build_confidence_map`, `confidence_label`)
 
+## Roadmaps
+
+- Near-term tactical features: [`docs/ROADMAP.md`](docs/ROADMAP.md) — renewal reminders, OCR fallback, bulk export, policy diff, etc.
+- Enterprise readiness (auth, multi-tenancy, SSO, compliance, observability, REST API, etc.): [`docs/ENTERPRISE_ROADMAP.md`](docs/ENTERPRISE_ROADMAP.md). **Not committed work** — decision document for the enterprise-investment vs. product-velocity tradeoff.
+
 ## Audit History
 
 - **2026-05 — comprehensive audit pass.** Branch `chore/audit-cleanup` from `feat/gemini-caching-optimization` @ `56bde85`. Findings and deferred roadmap: [`docs/AUDIT_2026-05.md`](docs/AUDIT_2026-05.md). Baseline: [`docs/AUDIT_BASELINE.md`](docs/AUDIT_BASELINE.md). Changes were low-risk: text-helper consolidation, narrowing five over-broad exception swallows, deleting dead `_classify_policy`, F401 import cleanup, four new test modules (`test_coi_generator`, `test_extraction_local_cache`, `test_variant_tracker`, `test_coverage_backfill` — 59 new tests), and six UI polish edits (confidence legend, sortable customer table, dialog discard control, API-key clear control, toast wording). Deferred to follow-up branches: `core/services.py` / `views/process_policies.py` / `modules/extraction/pipeline.py` splits, and `ProductRegistry` / per-product extraction modularity (skipped because no new product types are on the roadmap).
+- **2026-05 — audit follow-up (organization + roadmap).** Continuation on the same branch. Verified the prior audit's "dead file" candidates — `modules/coi/utils.py` and `scripts/check_models.py` are both live (false positives). Real cleanup: removed two stray root-level PDFs, deleted stale `CHAT_HANDOFF.md`, untracked `test_filled_coi.pdf` (generator output) and `logs/app.log`, consolidated `.gitignore` duplicates, moved the standalone React `education-site/` under `tools/`. Wrote the two roadmap docs linked above. Zero behavior changes.
