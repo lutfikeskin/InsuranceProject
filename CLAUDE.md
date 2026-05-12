@@ -18,7 +18,8 @@ When changing any of the following, ALSO update the listed downstream files. Thi
 | core/coverage_ontology.py                | coverage_normalization.py, schemas.py, services.py validation    |
 | core/history_model.py                    | history_service.py, services.py save flow, Alembic migration     |
 | utils/text_utils.py                      | services.py `_clean_text` / `_clean_limit_text` delegations, extraction_response.py `_clean_text` / `_parse_us_address` aliases — single source of truth for null coercion |
-| views/ui_utils.py                        | process_policies.py review screen badges; intended target for any future per-field confidence rendering in views/ |
+| views/ui_utils.py                        | process_policies.py review screen badges + `_gv` gate closure; canonical home for `should_clear_field` / `gate_value` and any future per-field confidence rendering in views/ |
+| core/constants.py `CONFIDENCE_GATE_*`    | app.py settings_modal selectbox, views/process_policies.py review form gate threshold lookup; values are user-visible — keep keys stable, edit only the label strings |
 
 ## Cache Version Hash Dependencies
 
@@ -66,6 +67,7 @@ Before merging or closing a phase, run this checklist:
 - COI/Memorandum extraction includes vehicles/drivers when present; absent fields must stay null/empty
 - Field confidence is per-field, not policy-level
 - Goldens organized by carrier/document_type with `_meta` routing
+- Confidence gate is a UI-only soft nudge: low-confidence values are cleared from the review form but Save is never blocked. Backend save flow does not know the gate exists.
 
 ## Active Modules
 
@@ -80,7 +82,7 @@ Before merging or closing a phase, run this checklist:
 - modules/extraction/auditor.py (premium sanity / QA)
 - modules/extraction/coverage_backfill.py (backfill safety net)
 - utils/text_utils.py (canonical `clean_text` / `clean_limit_text` / `parse_us_address`)
-- views/ui_utils.py (shared widget helpers: `build_confidence_map`, `confidence_label`)
+- views/ui_utils.py (shared widget helpers: `build_confidence_map`, `confidence_label`, `should_clear_field`, `gate_value` for the soft confidence gate)
 
 ## Roadmaps
 
