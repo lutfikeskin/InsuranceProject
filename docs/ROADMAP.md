@@ -26,7 +26,7 @@ Near-term feature ideas that strengthen the existing flow (PDF upload → extrac
 | # | Feature | Effort | Notes |
 |---|---------|--------|-------|
 | 4 | **Policy comparison / diff view** | M | Side-by-side renewal vs. prior view. Reuse PolicyHistory; add a `views/compare_policies.py` page. Field-level diff with confidence badges. |
-| 5 | **Bulk export (CSV / Excel)** | S | Reuse `assets/insurance_database.xlsx` generator pattern in `core/services.py`. Add a download button to `views/database_page.py` that respects the active search filter. |
+| ~~5~~ | ~~Bulk export (CSV / Excel)~~ | — | **Already shipped.** `views/database_page.py:591` has "📥 Export Current View" → `utils.exporter.create_excel_report`, plus a "💾 Backup Database" button beside it. Small follow-ups (CSV alternative, per-customer workbook) are nice-to-have but not roadmap-grade. |
 | 6 | **Policy notes + attachment linking** | M | New tables: `PolicyNote` (freeform text, author, timestamp), `PolicyAttachment` (file blob or path, type). UI: collapsible section in the policy detail expander. |
 | 7 | **COI custom template upload** | M | Today: hardcoded ACORD 25 template in `modules/coi/`. Add a `Template` table + an admin UI for uploading PDF + field-mapping JSON. The generator picks the active template by policy type. |
 | 8 | **Per-field confidence threshold gate** | S | Add a setting (default: skip fields where confidence < `medium`). In the review screen, flag skipped fields with a yellow badge and a "Fill manually" link. |
@@ -57,10 +57,10 @@ Build these only **after** at least Tier 1 of `ENTERPRISE_ROADMAP.md` ships.
 
 If staying in single-tenant mode for the next 1–2 quarters, ship in this order:
 
-1. **#5 Bulk export** (S, immediate value, no infrastructure).
+1. **GitHub Actions CI** (from `ENTERPRISE_ROADMAP.md` #10, S) — cheap safety net before anything else lands. Runs the same `pytest` and `ruff` the local pre-commit hook does, on every PR, on a server.
 2. **#8 Confidence threshold gate** (S, leans on existing extraction signal).
 3. **#9 Batch upload UX** (S, polish on the most-used flow).
-4. **#1 Renewal reminders** (M, retention-driving; requires scheduled job infrastructure — also a prerequisite for any later webhook work).
+4. **#1 Renewal reminders** (M, retention-driving; first feature that requires scheduled-job infrastructure — also a prerequisite for any later webhook work).
 5. **#3 OCR fallback** (M, removes a recurring failure class — fax/scanned PDFs).
 6. **#2 Email intake** (M, dependent on #1 having proven the broker-friction reduction model).
 
