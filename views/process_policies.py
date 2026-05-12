@@ -3,7 +3,13 @@ from __future__ import annotations
 import copy
 import streamlit as st
 import pandas as pd
-from core.constants import VEHICLE_TYPES, INTEREST_TYPES, VIN_REGEX
+from core.constants import (
+    CONFIDENCE_GATE_DEFAULT,
+    CONFIDENCE_GATE_OPTIONS,
+    INTEREST_TYPES,
+    VEHICLE_TYPES,
+    VIN_REGEX,
+)
 import json
 from core.services import PolicyService
 from datetime import date
@@ -19,6 +25,8 @@ from views.ui_utils import (
     CONFIDENCE_LEGEND_CAPTION,
     build_confidence_map,
     confidence_label as _confidence_label,
+    gate_value,
+    should_clear_field,
 )
 
 MAX_PARALLEL_WORKERS = 3
@@ -1007,7 +1015,47 @@ def page_process_policies(api_key):
             )
             low_fields = [k for k, v in confidence_map.items() if v == "low"]
             medium_fields = [k for k, v in confidence_map.items() if v == "medium"]
-            if low_fields:
+
+            # Soft confidence gate — pre-clear extracted values whose confidence
+            # falls below the user's chosen threshold so they have to look at
+            # the PDF and type the value rather than skim-and-save. The Save
+            # button is *not* blocked; this is a nudge, not a wall.
+            gate_threshold = st.session_state.get(
+                "confidence_gate_threshold", CONFIDENCE_GATE_DEFAULT
+            )
+            gated_fields = [
+                f
+                for f in confidence_map
+                if should_clear_field(f, confidence_map, gate_threshold)
+            ]
+
+            def _gv(field_name: str, default: str = "") -> str:
+                """Apply the soft confidence gate to one extracted value.
+
+                Local closure so the gate args (confidence_map + threshold)
+                don't have to be repeated at every widget call site.
+                """
+                return gate_value(
+                    p.get(field_name, default),
+                    field_name,
+                    confidence_map,
+                    gate_threshold,
+                    blank=default,
+                )
+
+            if gated_fields:
+                # Gate fired — explain why some fields look empty.
+                threshold_label = CONFIDENCE_GATE_OPTIONS.get(gate_threshold, gate_threshold)
+                st.info(
+                    f"ℹ️ **{len(gated_fields)} field(s) cleared** because their "
+                    f"extraction confidence is below your threshold "
+                    f"(*{threshold_label}*). Verify the value in the PDF and "
+                    f"type it in. Adjust the threshold in **Settings ⚙️**."
+                )
+            elif low_fields:
+                # Gate is off (or set to "medium" and only medium-confidence
+                # fields present) — keep the pre-feature warning so the user
+                # still gets a heads-up about unreliable extractions.
                 st.markdown(
                     "<div style='background-color:#fff7d6;padding:8px 10px;border-radius:6px;border:1px solid #f0d77a;'>"
                     "⚠️ <b>Low-confidence fields detected.</b> Please verify highlighted values before saving."
@@ -1029,9 +1077,9 @@ def page_process_policies(api_key):
             
             locs = p.get('field_locations', [])
             
-            r_carrier = c1.text_input(_confidence_label("Carrier (Brand)", "carrier_name", confidence_map), value=p.get('carrier_name', ''), help=get_source_help("carrier_name", locs))
+            r_carrier = c1.text_input(_confidence_label("Carrier (Brand)", "carrier_name", confidence_map), value=_gv('carrier_name'), help=get_source_help("carrier_name", locs))
             r_underwriter = c2.text_input("Underwriter (Legal Entity)", value=p.get("underwriter_name", ""))
-            r_pol_num = c2.text_input(_confidence_label("Policy Number", "policy_number", confidence_map), value=p.get('policy_number', ''), help=get_source_help("policy_number", locs))
+            r_pol_num = c2.text_input(_confidence_label("Policy Number", "policy_number", confidence_map), value=_gv('policy_number'), help=get_source_help("policy_number", locs))
             
             cc1, cc2 = st.columns(2)
             r_type = cc1.text_input("Policy Type", value=classification.get('policy_type', ''), disabled=True)
@@ -1060,7 +1108,7 @@ def page_process_policies(api_key):
             elif audit_flag in {"POSSIBLE_INSTALLMENT", "UNUSUALLY_HIGH"}:
                 prem_label += " ⚠️"
 
-            r_premium = c3.text_input(prem_label, value=p.get('premium', ''), help=prem_help)
+            r_premium = c3.text_input(prem_label, value=_gv('premium'), help=prem_help)
             
             if audit_flag == "PLAUSIBLE":
                 st.success(
@@ -1076,11 +1124,11 @@ def page_process_policies(api_key):
                     premium_audit.get("reason")
                     or f"Premium audit: {audit_flag}"
                 )
-            r_eff = c4.text_input(_confidence_label("Effective Date", "effective_date", confidence_map), value=p.get('effective_date', ''), help=get_source_help("effective_date", locs))
-            r_exp = c4.text_input(_confidence_label("Expiration Date", "expiration_date", confidence_map), value=p.get('expiration_date', ''), help=get_source_help("expiration_date", locs))
+            r_eff = c4.text_input(_confidence_label("Effective Date", "effective_date", confidence_map), value=_gv('effective_date'), help=get_source_help("effective_date", locs))
+            r_exp = c4.text_input(_confidence_label("Expiration Date", "expiration_date", confidence_map), value=_gv('expiration_date'), help=get_source_help("expiration_date", locs))
             
             st.divider()
-            r_ins_name = st.text_input(_confidence_label("Insured Name", "insured_name", confidence_map), value=p.get('insured_name', ''))
+            r_ins_name = st.text_input(_confidence_label("Insured Name", "insured_name", confidence_map), value=_gv('insured_name'))
             r_ins_addr = st.text_input("Insured Address", value=p.get('insured_address', ''))
             ic1, ic2, ic3 = st.columns(3)
             r_ins_city = ic1.text_input("City", value=p.get('insured_city', ''))
@@ -1088,9 +1136,9 @@ def page_process_policies(api_key):
             r_ins_zip = ic3.text_input("Zip", value=p.get('insured_zip', ''))
             
             st.divider()
-            r_liab = st.text_input(_confidence_label("Auto Liability Limit", "liability_limit", confidence_map), value=p.get('liability_limit', ''))
+            r_liab = st.text_input(_confidence_label("Auto Liability Limit", "liability_limit", confidence_map), value=_gv('liability_limit'))
             r_gl_limit = st.text_input("GL Limit", value=p.get('general_liability_limit', ''))
-            r_cargo = st.text_input(_confidence_label("Cargo Limit", "cargo_limit", confidence_map), value=p.get('cargo_limit', ''))
+            r_cargo = st.text_input(_confidence_label("Cargo Limit", "cargo_limit", confidence_map), value=_gv('cargo_limit'))
             r_cargo_ded = st.text_input("Cargo Ded", value=p.get('cargo_deductible', ''))
             
             st.markdown("##### Additional Coverages")
