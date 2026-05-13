@@ -206,6 +206,14 @@ def _policy_type_selectbox_options() -> tuple[list[str], dict[str, str | None]]:
     return labels, label_to_value
 
 
+def _stash_failed(fname: str, content: bytes, error_msg: str) -> None:
+    """Track failed extractions in session state so the user can retry them
+    with the non-extractable fallback path. Deduplicates by filename."""
+    bucket = st.session_state.setdefault("temp_failed", [])
+    bucket[:] = [b for b in bucket if b.get("filename") != fname]
+    bucket.append({"filename": fname, "pdf_bytes": content, "error": error_msg})
+
+
 def _process_one_pdf(
     fname: str,
     content: bytes,
@@ -434,6 +442,8 @@ def page_process_policies(api_key):
     
     if "temp_extracted" not in st.session_state:
         st.session_state["temp_extracted"] = []
+    if "temp_failed" not in st.session_state:
+        st.session_state["temp_failed"] = []
     if "batch_telemetry_today" not in st.session_state:
         st.session_state["batch_telemetry_today"] = {
             "day": date.today().isoformat(),
@@ -510,9 +520,15 @@ def page_process_policies(api_key):
 
                 progress_bar = st.progress(0)
                 status_text = st.empty()
-                
+
                 total_files = len(uploaded_files)
                 files_map = {f.name: f.getvalue() for f in uploaded_files}
+                uploaded_names = set(files_map.keys())
+                st.session_state["temp_failed"] = [
+                    item
+                    for item in st.session_state.get("temp_failed", [])
+                    if item.get("filename") not in uploaded_names
+                ]
                 batch_rows = []
 
                 def _record_batch(fname, ok, detail, source="", retries=0, error_class=""):
@@ -662,6 +678,7 @@ def page_process_policies(api_key):
                                     friendly = _friendly_extraction_error(error_msg)
                                     status.write(friendly)
                                     st.error(f"`{fname}`: {friendly}")
+                                    _stash_failed(fname, content, error_msg or "Extraction failed")
                                     _record_batch(
                                         fname,
                                         False,
@@ -679,6 +696,7 @@ def page_process_policies(api_key):
                                 friendly = _friendly_extraction_error(str(e))
                                 status.write(friendly)
                                 st.error(f"`{fname}`: {friendly}")
+                                _stash_failed(fname, content, str(e))
                                 _record_batch(
                                     fname,
                                     False,
@@ -728,11 +746,136 @@ def page_process_policies(api_key):
         if st.session_state.get("last_batch_rows"):
             _render_batch_summary()
 
+        if st.session_state.get("temp_failed"):
+            st.divider()
+            st.subheader(
+                f"⚠️ Extraction Failed ({len(st.session_state['temp_failed'])} files)"
+            )
+            st.caption(
+                "These files couldn't be parsed normally. You can attempt extraction anyway "
+                "using the fallback schema — useful for applications, quotes, or unusual layouts. "
+                "Verify values carefully; coverage limits may not represent bound coverage."
+            )
+            for f_idx, fail_item in enumerate(list(st.session_state["temp_failed"])):
+                fail_fname = fail_item["filename"]
+                with st.container(border=True):
+                    st.markdown(f"**`{fail_fname}`**")
+                    st.caption(fail_item.get("error", "Unknown error"))
+                    rb_try, rb_clear = st.columns([2, 1])
+                    if rb_try.button(
+                        "🔁 Try Extraction Anyway",
+                        key=f"retry_failed_{fail_fname}",
+                        type="primary",
+                        width="stretch",
+                    ):
+                        with st.spinner(
+                            f"Re-running extraction on `{fail_fname}` with fallback schema..."
+                        ):
+                            try:
+                                data, _usage, error_msg = process_pdf(
+                                    fail_item["pdf_bytes"],
+                                    api_key,
+                                    status_callback=None,
+                                    force_refresh=True,
+                                    user_policy_type=None,
+                                    allow_non_extractable=True,
+                                )
+                            except Exception as exc:
+                                data, error_msg = None, str(exc)
+                        if data:
+                            st.session_state["temp_extracted"].append(
+                                {
+                                    "filename": fail_fname,
+                                    "pdf_bytes": fail_item["pdf_bytes"],
+                                    "data": data,
+                                }
+                            )
+                            st.session_state["temp_failed"].pop(f_idx)
+                            st.toast(
+                                f"Extracted `{fail_fname}` via fallback. Review carefully.",
+                                icon="✅",
+                            )
+                            st.rerun()
+                        else:
+                            st.error(
+                                f"Fallback extraction still failed: {error_msg or 'unknown error'}"
+                            )
+                    if rb_clear.button(
+                        "Dismiss",
+                        key=f"dismiss_failed_{fail_fname}",
+                        width="stretch",
+                    ):
+                        st.session_state["temp_failed"].pop(f_idx)
+                        st.rerun()
+
         if st.session_state["temp_extracted"]:
             st.divider()
             st.subheader(f"Extraction Complete ({len(st.session_state['temp_extracted'])} files)")
+
+            non_extractable_items = [
+                (idx, item)
+                for idx, item in enumerate(st.session_state["temp_extracted"])
+                if item["data"].get("extractable") is False
+            ]
+            if non_extractable_items:
+                st.warning(
+                    f"⚠️ {len(non_extractable_items)} document(s) were classified as non-extractable "
+                    "(application/quote). They often contain the same data as a declarations page — "
+                    "you can attempt extraction anyway, but verify carefully since limits may not be bound coverage."
+                )
+                for idx, item in non_extractable_items:
+                    ne_fname = item["filename"]
+                    ne_doc_type = (
+                        item["data"].get("document_type")
+                        or item["data"].get("classification", {}).get("document_type")
+                        or "unknown"
+                    )
+                    ne_msg = item["data"].get("message", "Not extractable.")
+                    with st.container(border=True):
+                        st.markdown(f"**`{ne_fname}`** — detected as `{ne_doc_type}`")
+                        st.caption(ne_msg)
+                        b_try, b_remove = st.columns([2, 1])
+                        if b_try.button(
+                            "🔁 Try Extraction Anyway",
+                            key=f"try_extract_step1_{ne_fname}",
+                            type="primary",
+                            width="stretch",
+                        ):
+                            with st.spinner(f"Re-running extraction on `{ne_fname}`..."):
+                                try:
+                                    data, _usage, error_msg = process_pdf(
+                                        item["pdf_bytes"],
+                                        api_key,
+                                        status_callback=None,
+                                        force_refresh=True,
+                                        user_policy_type=None,
+                                        allow_non_extractable=True,
+                                    )
+                                except Exception as exc:
+                                    data, error_msg = None, str(exc)
+                            if data:
+                                st.session_state["temp_extracted"][idx]["data"] = data
+                                st.toast(
+                                    f"Extracted `{ne_fname}` as fallback. Review carefully.",
+                                    icon="✅",
+                                )
+                                st.rerun()
+                            else:
+                                st.error(
+                                    f"Fallback extraction failed for `{ne_fname}`: "
+                                    f"{error_msg or 'unknown error'}"
+                                )
+                        if b_remove.button(
+                            "Remove",
+                            key=f"remove_non_extractable_step1_{ne_fname}",
+                            width="stretch",
+                        ):
+                            st.session_state["temp_extracted"].pop(idx)
+                            st.rerun()
+                st.divider()
+
             st.info("What would you like to do with these policies?")
-            
+
             d_col1, d_col2 = st.columns(2)
             
             if d_col1.button("🔍 Review Individually (Side-by-Side)", width='stretch'):
@@ -750,9 +893,10 @@ def page_process_policies(api_key):
                 try:
                     for item in st.session_state["temp_extracted"]:
                         if item["data"].get("extractable") is False:
+                            st.session_state["review_queue"].append(item)
                             skipped_count += 1
                             st.toast(
-                                f"Skipped {item['filename']}: {item['data'].get('message', 'document not extractable')}",
+                                f"Sent {item['filename']} to review: not extractable, choose Try-Anyway or Skip",
                                 icon="⚠️",
                             )
                             continue
@@ -943,10 +1087,52 @@ def page_process_policies(api_key):
             if not is_extractable:
                 st.error(current_item['data'].get('message', "This document type is not extractable yet."))
                 st.info(f"Document type detected: `{document_type}`")
-                if st.button("Skip This Document", key=f"skip_non_extractable_{fname}", type="primary"):
+                st.caption(
+                    "Applications and quotes often contain the same data as a declarations page. "
+                    "You can attempt extraction, but verify carefully — limits may not be bound coverage."
+                )
+                btn_try, btn_skip = st.columns(2)
+                if btn_try.button(
+                    "🔁 Try Extraction Anyway",
+                    key=f"try_extract_anyway_{fname}",
+                    type="primary",
+                    width="stretch",
+                ):
+                    with st.spinner("Re-running extraction with fallback schema..."):
+                        try:
+                            data, _usage, error_msg = process_pdf(
+                                current_item["pdf_bytes"],
+                                api_key,
+                                status_callback=None,
+                                force_refresh=True,
+                                user_policy_type=None,
+                                allow_non_extractable=True,
+                            )
+                        except Exception as exc:
+                            data, error_msg = None, str(exc)
+                    if data:
+                        current_item["data"] = data
+                        st.rerun()
+                    else:
+                        st.error(f"Fallback extraction failed: {error_msg or 'unknown error'}")
+                        st.stop()
+                if btn_skip.button(
+                    "Skip This Document",
+                    key=f"skip_non_extractable_{fname}",
+                    width="stretch",
+                ):
                     st.session_state["review_queue"].pop(0)
                     st.rerun()
                 st.stop()
+
+            if current_item['data'].get('forced_extraction'):
+                source_doc = current_item['data'].get(
+                    'source_document_type', 'non-policy document'
+                )
+                st.warning(
+                    f"⚠️ Extracted from a **{source_doc}** (not a bound policy). "
+                    "Verify all values carefully before saving — coverage limits may not represent bound coverage."
+                )
 
             if document_type == "renewal_declarations":
                 st.info("Renewal declarations detected. Review effective/expiration dates carefully before saving.")

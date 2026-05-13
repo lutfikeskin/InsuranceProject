@@ -25,15 +25,15 @@ DOCUMENT_TYPES = {
     },
     "quote": {
         "display": "Quote / Proposal",
-        "extractable": False,
-        "extraction_goal": None,
-        "description": "Not a bound policy, limits may change"
+        "extractable": True,
+        "extraction_goal": "full_policy",
+        "description": "Not a bound policy; extracted via full_policy prompt — limits may change"
     },
     "application": {
         "display": "Application",
-        "extractable": False,
-        "extraction_goal": None,
-        "description": "Pre-bind application, not actual coverage"
+        "extractable": True,
+        "extraction_goal": "full_policy",
+        "description": "Pre-bind application; extracted via full_policy prompt — coverage may not be bound"
     },
     "endorsement": {
         "display": "Endorsement",
@@ -50,8 +50,8 @@ DOCUMENT_TYPES = {
 }
 
 EXTRACTION_GOAL_GROUPS = {
-    "full_policy": ["declarations_page", "renewal_declarations", "unknown"],
+    "full_policy": ["declarations_page", "renewal_declarations", "application", "quote", "unknown"],
     "coi_summary": ["certificate_of_insurance", "memorandum"],
     "endorsement_summary": ["endorsement"],
-    "skip": ["quote", "application"]
+    "skip": []
 }
