@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import hmac
 from core.database import init_db, get_session
 import core.history_model # Ensure model is registered
 from core.services import UsageService
@@ -24,6 +25,37 @@ def load_css(file_name):
             st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
 load_css("assets/style.css")
+
+
+def ensure_app_password():
+    configured = ""
+    try:
+        configured = (st.secrets.get("APP_PASSWORD") or "").strip()
+    except Exception:
+        pass
+    if not configured:
+        configured = (os.getenv("APP_PASSWORD") or "").strip()
+    if not configured:
+        return
+    if st.session_state.get("_app_auth_ok"):
+        return
+
+    st.title("Sign in")
+    with st.form("app_password_form", clear_on_submit=False):
+        entered = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Continue")
+    if submitted:
+        if hmac.compare_digest(
+            entered.encode("utf-8"), configured.encode("utf-8")
+        ):
+            st.session_state["_app_auth_ok"] = True
+            st.rerun()
+        else:
+            st.error("Invalid password.")
+    st.stop()
+
+
+ensure_app_password()
 
 if 'db_engine' not in st.session_state:
     st.session_state.db_engine = init_db()
