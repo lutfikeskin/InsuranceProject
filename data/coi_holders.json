@@ -595,11 +595,11 @@
     },
     {
         "name": "S'ONE EXPRESS",
-        "full_address": "5160 MAY AVE                                                    FAIRFIELD, OH 45014",
-        "address": "5160 MAY AVE                                                    FAIRFIELD, OH 45014",
-        "city": "",
-        "state": "",
-        "zip": "",
+        "full_address": "5160 MAY AVE \nFAIRFIELD, OH 45014",
+        "address": "5160 MAY AVE",
+        "city": "FAIRFIELD",
+        "state": "OH",
+        "zip": "45014",
         "email": ""
     },
     {
@@ -847,20 +847,20 @@
     },
     {
         "name": "AGAMIR",
-        "full_address": "331 PACKANACK DR                                                                   GOULDSBORO, PA 18424",
-        "address": "331 PACKANACK DR                                                                   GOULDSBORO, PA 18424",
-        "city": "",
-        "state": "",
-        "zip": "",
+        "full_address": "331 PACKANACK DR\nGOULDSBORO, PA 18424",
+        "address": "331 PACKANACK DR",
+        "city": "GOULDSBORO",
+        "state": "PA",
+        "zip": "18424",
         "email": ""
     },
     {
         "name": "NATIONAL CAPITAL LOGISTICS LLC",
-        "full_address": "2601 Jackson Ave #1221                                                                   Ann Arbor, MI 48103",
-        "address": "2601 Jackson Ave #1221                                                                   Ann Arbor, MI 48103",
-        "city": "",
-        "state": "",
-        "zip": "",
+        "full_address": "2601 Jackson Ave #1221\nAnn Arbor, MI 48103",
+        "address": "2601 Jackson Ave #1221",
+        "city": "Ann Arbor",
+        "state": "MI",
+        "zip": "48103",
         "email": ""
     },
     {
@@ -874,29 +874,29 @@
     },
     {
         "name": "ENK LOGISTIC GROUP",
-        "full_address": "4134 COVE LN UNIT F                                GLENVIEW, IL 60025",
-        "address": "4134 COVE LN UNIT F                                GLENVIEW, IL 60025",
-        "city": "",
-        "state": "",
-        "zip": "",
+        "full_address": "4134 COVE LN UNIT F\nGLENVIEW, IL 60025",
+        "address": "4134 COVE LN UNIT F",
+        "city": "GLENVIEW",
+        "state": "IL",
+        "zip": "60025",
         "email": ""
     },
     {
         "name": "US-SERVICE INC",
-        "full_address": "2222 PONCE DE LEON BLVD 3RD FLOOR                                MIAMI, FL 33134",
-        "address": "2222 PONCE DE LEON BLVD 3RD FLOOR                                MIAMI, FL 33134",
-        "city": "",
-        "state": "",
-        "zip": "",
+        "full_address": "2222 PONCE DE LEON BLVD 3RD FLOOR\nMIAMI, FL 33134",
+        "address": "2222 PONCE DE LEON BLVD 3RD FLOOR",
+        "city": "MIAMI",
+        "state": "FL",
+        "zip": "33134",
         "email": ""
     },
     {
         "name": "Creekside Cargo",
-        "full_address": "15416 Industrial Pkwy                                                         Cleveland, OH 44135",
-        "address": "15416 Industrial Pkwy                                                         Cleveland, OH 44135",
-        "city": "",
-        "state": "",
-        "zip": "",
+        "full_address": "15416 Industrial Pkwy\nCleveland, OH 44135",
+        "address": "15416 Industrial Pkwy",
+        "city": "Cleveland",
+        "state": "OH",
+        "zip": "44135",
         "email": ""
     },
     {
