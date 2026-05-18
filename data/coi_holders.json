@@ -1351,8 +1351,8 @@
     },
     {
         "name": "TransChain Solutions Inc",
-        "full_address": "250 E 5th st, 15th Floor\nCincinnati, OH 45202",
-        "address": "250 E 5th st, 15th Floor",
+        "full_address": "250 E 5th St, 15th Floor\nCincinnati, OH 45202",
+        "address": "250 E 5th St, 15th Floor",
         "city": "Cincinnati",
         "state": "OH",
         "zip": "45202",
@@ -1383,6 +1383,42 @@
         "city": "Bessemer",
         "state": "AL",
         "zip": "35022",
+        "email": ""
+    },
+    {
+        "name": "Redmax LLC",
+        "full_address": "10 Reene Cir\nChalfont, PA 18914",
+        "address": "10 Reene Cir",
+        "city": "Chalfont",
+        "state": "PA",
+        "zip": "18914",
+        "email": ""
+    },
+    {
+        "name": "Descartes MyCarrierPortal",
+        "full_address": "543 Country Club Dr, Unit B338\nSimi Valley, CA 93065",
+        "address": "543 Country Club Dr, Unit B338",
+        "city": "Simi Valley",
+        "state": "CA",
+        "zip": "93065",
+        "email": ""
+    },
+    {
+        "name": "Target Logistics Solutions LLC",
+        "full_address": "780 E Street Rd\nWarminster, PA 18974",
+        "address": "780 E Street Rd",
+        "city": "Warminster",
+        "state": "PA",
+        "zip": "18974",
+        "email": ""
+    },
+    {
+        "name": "Shift Line Transit",
+        "full_address": "5383 Southern Blvd. Ste 464\nDallas, TX 75240",
+        "address": "5383 Southern Blvd. Ste 464",
+        "city": "Dallas",
+        "state": "TX",
+        "zip": "75240",
         "email": ""
     }
 ]
