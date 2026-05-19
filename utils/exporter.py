@@ -7,7 +7,6 @@ def create_excel_report(policies_data):
     into a multi-tab Excel file.
     
     Args:
-    Args:
         policies_data: List of policy dictionaries containing 'policy', 'vehicles', 'coverages', and 'drivers'.
     """
     
@@ -17,18 +16,6 @@ def create_excel_report(policies_data):
     drivers_list = []
     
     for entry in policies_data:
-        # Entry structure depends on how we pass it. 
-        # Ideally, we pass the raw extracted JSONs or DB Objects converted to dicts.
-        # Let's assume input is a list of the structure returned by the extractor 
-        # BUT with an added 'id' or consistent link if possible. 
-        # If input is form DB objects, we need to convert.
-        # Let's assume the input is the list of DB objects for robustness, 
-        # or we make this robust to handle the JSON structure with an arbitrary ID if needed.
-        
-        # To make it simple and decoupled from DB session state, let's assume input is dictionaries
-        # matching the schema, where children have a 'policy_number' to link back 
-        # (or we add it during flattening).
-        
         p = entry.get('policy', {})
         policy_num = p.get('policy_number', 'UNKNOWN')
         
@@ -49,7 +36,6 @@ def create_excel_report(policies_data):
             d_copy['policy_number'] = policy_num
             drivers_list.append(d_copy)
             
-    # Define standard column sets
     POLICY_COLUMNS = [
         "carrier_name", "naic_number", "policy_number", "effective_date", "expiration_date",
         "account_type", "policy_type", "classification_confidence", "classification_signals", 
@@ -66,13 +52,11 @@ def create_excel_report(policies_data):
     ]
     DRIVER_COLUMNS = ["full_name", "license_number", "is_excluded", "policy_number"]
 
-    # Create DataFrames and ensure column consistency
     df_policy = pd.DataFrame(policies_list).reindex(columns=POLICY_COLUMNS)
     df_vehicles = pd.DataFrame(vehicles_list).reindex(columns=VEHICLE_COLUMNS)
     df_coverages = pd.DataFrame(coverages_list).reindex(columns=COVERAGE_COLUMNS)
     df_drivers = pd.DataFrame(drivers_list).reindex(columns=DRIVER_COLUMNS)
     
-    # Write to Excel in memory
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df_policy.to_excel(writer, sheet_name='Summary', index=False)

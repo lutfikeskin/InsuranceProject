@@ -1,0 +1,66 @@
+name: CI
+
+# Run on every push and pull request to any branch. Cheap insurance.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+# Cancel an in-flight run when a new commit is pushed to the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: pytest + import smoke + ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # ruff is not in requirements.txt — install it on top for the lint step.
+          pip install ruff
+
+      - name: Compile-check all Python sources
+        # Mirrors the pre-commit hook's py_compile step but applied to the
+        # whole tree (CI sees the merged state, not just staged files).
+        run: |
+          python -m compileall -q app.py core modules utils views scripts tests
+
+      - name: Import smoke — database models
+        run: |
+          python -c "from core.database import Policy, Customer, CustomerEntity, PolicyHistory, PolicyRelationship, PolicyEndorsement; print('All models import')"
+
+      - name: Import smoke — extraction pipeline
+        run: |
+          python -c "from modules.extraction.pipeline import process_pdf, CACHE_VERSION; print(f'Cache version: {CACHE_VERSION}')"
+
+      - name: Import smoke — Streamlit views
+        run: |
+          python -c "import views.process_policies; import views.database_page; import views.create_coi; import views.dashboard; print('All views import')"
+
+      - name: Ruff (F401 unused imports)
+        # The 2026-05 audit established F401 cleanliness as a baseline.
+        # Keep it tight; widen the ruleset later if desired.
+        run: ruff check --select F401 .
+
+      - name: Pytest (no-API suite)
+        # Skip tests/test_accuracy.py — it needs GEMINI_API_KEY and a live
+        # Gemini quota. Run that locally before tagging a release, not on
+        # every PR.
+        run: pytest tests/ -v --ignore=tests/test_accuracy.py

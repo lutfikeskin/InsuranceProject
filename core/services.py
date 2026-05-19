@@ -1,12 +1,40 @@
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
-from .database import get_session, Policy, Vehicle, Driver, Coverage, ApiUsage
+from .database import (
+    Policy,
+    Vehicle,
+    Driver,
+    Coverage,
+    ApiUsage,
+    PolicyRelationship,
+    PolicyEndorsement,
+    Customer,
+    CustomerEntity,
+)
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from sqlalchemy import func, or_
+from sqlalchemy.exc import SQLAlchemyError
+
+EASTERN = ZoneInfo("America/New_York")
+
+
+def _today_start_utc_naive() -> datetime:
+    """Returns the UTC equivalent (naive) of midnight today in US Eastern time.
+
+    Stored ApiUsage timestamps are UTC-naive (datetime.utcnow), so we strip tzinfo
+    after converting back to UTC for direct comparison.
+    """
+    now_et = datetime.now(EASTERN)
+    midnight_et = now_et.replace(hour=0, minute=0, second=0, microsecond=0)
+    return midnight_et.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
 from utils.naic_utils import get_naic_for_carrier
-from .coverage_ontology import summarize_auto_liability, format_liability_limit
+from .customer_resolver import CustomerResolver
+from .duplicate_detection import DuplicateDetectionService
+from core.logger import logger
 from utils.vehicle_utils import refine_vehicle_type
+from utils.text_utils import clean_text as _shared_clean_text, clean_limit_text as _shared_clean_limit_text
 import pandas as pd
 import json
 
@@ -21,7 +49,634 @@ ACCOUNT_TYPE_BY_POLICY = {
     "unknown": "Commercial" # Default to Commercial for unknown if we somehow get here
 }
 
+
+def build_extraction_extras_json(extraction_result: dict) -> str | None:
+    """
+    JSON blob for compliance, statutory/UM policy annotations, and per-row vehicle/coverage
+    fields that are not stored in relational columns.
+    """
+    comp = dict(extraction_result.get("compliance") or {})
+    policy_data_source = extraction_result.get("policy_data_source")
+    pol = extraction_result.get("policy") or {}
+    coverages = extraction_result.get("coverages") or []
+    vehicles = extraction_result.get("vehicles") or []
+    audits = extraction_result.get("audits") or {}
+    # Slim view of extraction_audit — only fields we want persisted (the
+    # full dict has rejected_coverages, errors, classification_warnings, etc.
+    # which can be noisy; we save the items most useful for downstream review).
+    raw_audit = extraction_result.get("extraction_audit") or {}
+    extraction_audit = {
+        k: raw_audit[k]
+        for k in ("backfilled_coverages", "rejected_coverages", "liability_normalization")
+        if raw_audit.get(k)
+    }
+    pol_ont = {k: pol.get(k) for k in (
+        "um_stacked_effective_limit",
+        "statutory_auto_liability_display",
+        "statutory_auto_liability_resolved",
+    ) if pol.get(k) is not None}
+    veh_ont = [
+        {
+            "vin": v.get("vin"),
+            "covered_auto_symbols": v.get("covered_auto_symbols"),
+            "radius_of_operation": v.get("radius_of_operation"),
+            "business_use_class": v.get("business_use_class"),
+        }
+        for v in vehicles
+    ]
+    cov_ont = [
+        {
+            "coverage_code": c.get("coverage_code"),
+            "vehicle_vin": c.get("vehicle_vin"),
+            "hnoa_basis": c.get("hnoa_basis"),
+            "hnoa_attached_to": c.get("hnoa_attached_to"),
+        }
+        for c in coverages
+    ]
+
+    def _row_has_values(d: dict) -> bool:
+        return any(v not in (None, "", [], {}) for v in d.values())
+
+    has_content = (
+        bool(comp)
+        or bool(pol_ont)
+        or bool(policy_data_source)
+        or bool(audits)
+        or bool(extraction_audit)
+        or any(_row_has_values(d) for d in veh_ont)
+        or any(_row_has_values(d) for d in cov_ont)
+    )
+    if not has_content:
+        return None
+    payload = {
+        "policy_data_source": policy_data_source,
+        "compliance": comp,
+        "audits": audits,
+        "extraction_audit": extraction_audit,
+        "policy_ontology": pol_ont,
+        "vehicles_ontology": veh_ont,
+        "coverages_ontology": cov_ont,
+    }
+    return json.dumps(payload, sort_keys=True, default=str)
+
+SQL_SCHEMA_CONTEXT = """
+You are a SQLite expert. Convert the user question into a valid SQL query.
+
+Database Schema:
+Table 'policies':
+  - id (int)
+  - carrier_name (text)
+  - policy_number (text)
+  - effective_date (date YYYY-MM-DD)
+  - expiration_date (date YYYY-MM-DD)
+  - liability_limit (text, e.g. '$1,000,000')
+  - general_liability_limit (text, e.g. '$1,000,000 Occ')
+  - insured_name (text)
+  - premium (text)
+  - has_full_collision (bool)
+  - policy_type (text, e.g. 'personal_auto', 'commercial_auto', 'general_liability')
+  - account_type (text, e.g. 'Personal', 'Commercial')
+  - has_auto_liability (bool)
+  - has_general_liability (bool)
+
+Table 'vehicles':
+  - policy_id (fk to policies.id)
+  - year (int)
+  - make (text)
+  - model (text)
+  - vin (text)
+  - gvw (int)
+  - vehicle_type (text, e.g. 'Straight Truck', 'Tractor', 'Cargo Van')
+  - chassis (text, e.g. 'Cab Chassis', 'Pickup')
+  - body (text, e.g. 'Box', 'Dump')
+
+Table 'drivers':
+  - policy_id (fk to policies.id)
+  - full_name (text)
+  - license_number (text)
+  - is_excluded (bool)
+
+Table 'coverages':
+  - policy_id (fk to policies.id)
+  - coverage_code (text, e.g. 'AUTO_LIAB_BI', 'GL_OCCURRENCE')
+  - family (text, e.g. 'auto_liability', 'general_liability')
+  - per_person (int)
+  - per_accident (int)
+  - per_occurrence (int)
+  - combined_single_limit (int)
+  - aggregate (int)
+  - deductible (int)
+  - type (text, display name)
+
+Rules:
+1. Return ONLY the raw SQL query. No markdown, no explanations.
+2. DO NOT include semicolons (;) at the end of the query.
+3. Use LIKE for text searching (case insensitive).
+4. Handle currency strings in 'liability_limit' or 'premium' by stripping '$' and ',' if mathematical comparison is needed (e.g. CAST(REPLACE(REPLACE(premium, '$', ''), ',', '') AS FLOAT)).
+5. If asking for specific coverages like "Comp/Coll", check 'has_full_collision' or join with coverages table if needed (but currently simplified to boolean flags on policy).
+""".strip()
+
 class PolicyService:
+    CRITICAL_CONFIDENCE_FIELDS = (
+        "carrier_name",
+        "policy_number",
+        "effective_date",
+        "expiration_date",
+        "liability_limit",
+        "cargo_limit",
+        "premium",
+        "insured_name",
+    )
+
+    REQUIRED_FOR_COI = (
+        "carrier_name",
+        "policy_number",
+        "effective_date",
+        "expiration_date",
+        "insured_name",
+        "liability_limit",
+    )
+    RECOMMENDED_FOR_COI = ("naic_number", "insured_address", "cargo_limit")
+    RELATIONSHIP_SCORE_THRESHOLD = 0.5
+    RELATIONSHIP_CANDIDATE_LIMIT = 3
+
+    @staticmethod
+    def _field_confidences_from_extraction(extraction_result: dict) -> dict[str, str]:
+        policy_payload = extraction_result.get("policy", {}) if isinstance(extraction_result, dict) else {}
+        if not isinstance(policy_payload, dict):
+            return {}
+        return {
+            key.replace("_confidence", ""): value
+            for key, value in policy_payload.items()
+            if isinstance(key, str) and key.endswith("_confidence")
+        }
+
+    def _record_carrier_profile_if_high_confidence(self, extraction_result: dict, policy: Policy):
+        try:
+            from modules.extraction.knowledge_base import CarrierKnowledgeBase
+
+            field_confs = self._field_confidences_from_extraction(extraction_result)
+            if not field_confs:
+                return
+            overall_high = sum(1 for v in field_confs.values() if v == "high")
+            if overall_high < len(field_confs) * CarrierKnowledgeBase.HIGH_OVERALL_THRESHOLD:
+                return
+            kb = CarrierKnowledgeBase()
+            kb.record_successful_extraction(
+                carrier_name=policy.carrier_name,
+                document_type=policy.document_type,
+                policy_type=policy.policy_type,
+                field_confidences=field_confs,
+            )
+        except Exception as exc:
+            logger.warning(f"Carrier profile update skipped: {exc}")
+
+    @classmethod
+    def _extract_field_confidences(cls, policy_data: dict) -> dict | None:
+        if not isinstance(policy_data, dict):
+            return None
+        confidences: dict[str, str] = {}
+        for field in cls.CRITICAL_CONFIDENCE_FIELDS:
+            raw_conf = policy_data.get(f"{field}_confidence")
+            conf = cls._clean_text(raw_conf)
+            if conf not in {"high", "medium", "low"}:
+                continue
+            confidences[field] = conf
+        return confidences or None
+
+    # Sanitization helpers are thin wrappers over the canonical implementations in
+    # utils.text_utils so service-layer and extraction-layer agree on null coercion.
+    @staticmethod
+    def _clean_text(value):
+        return _shared_clean_text(value)
+
+    @staticmethod
+    def _clean_limit_text(value):
+        return _shared_clean_limit_text(value)
+
+    @classmethod
+    def _merge_coi_policy_rows(cls, rows: list[dict]) -> dict:
+        merged: dict = {}
+        merged_limits: dict = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            for key in (
+                "policy_type",
+                "carrier_name",
+                "carrier_name_confidence",
+                "naic_number",
+                "policy_number",
+                "policy_number_confidence",
+                "effective_date",
+                "effective_date_confidence",
+                "expiration_date",
+                "expiration_date_confidence",
+                "insured_name",
+                "insured_name_confidence",
+                "premium",
+                "premium_confidence",
+            ):
+                val = cls._clean_text(row.get(key))
+                if val is not None and merged.get(key) in (None, ""):
+                    merged[key] = val
+            limits = row.get("limits") if isinstance(row.get("limits"), dict) else {}
+            for limit_key, limit_val in limits.items():
+                clean_limit = cls._clean_limit_text(limit_val)
+                if clean_limit is not None and merged_limits.get(limit_key) in (None, ""):
+                    merged_limits[limit_key] = clean_limit
+        merged["limits"] = merged_limits
+        return merged
+
+    def _save_single_extraction_payload(self, extraction_result):
+        new_policy = self._create_policy_instance(extraction_result)
+        duplicate_result = self.detect_duplicate_for_extraction(extraction_result, include_policy=True)
+        existing = (
+            duplicate_result.get("_policy_object")
+            if duplicate_result.get("status") in {"exact_policy_match", "exact_number_carrier_conflict"}
+            else None
+        )
+        duplicate_action = extraction_result.get("_duplicate_action") or "update_existing"
+
+        if existing:
+            if duplicate_action == "create_new":
+                return (
+                    False,
+                    "Cannot create a new policy with the same policy number. Edit the policy number or update the existing policy.",
+                )
+            return self._handle_policy_update(existing, new_policy, extraction_result)
+
+        resolver = CustomerResolver(self.session)
+        self.session.add(new_policy)
+        self.session.flush()
+        override_customer_id = extraction_result.get("_review_confirm_customer_id")
+        owner_name_override = (extraction_result.get("_review_commercial_owner_name") or "").strip()
+
+        if override_customer_id:
+            customer = self.session.query(Customer).get(int(override_customer_id))
+            if customer:
+                new_policy.customer_id = customer.id
+                insured_name = (new_policy.insured_name or "").strip()
+                if insured_name:
+                    entity_type = (
+                        "business"
+                        if any(t in insured_name.lower() for t in ["llc", "inc", "corp", "ltd"])
+                        else "personal"
+                    )
+                    resolver.add_entity(customer, insured_name, entity_type, source="manual")
+                self.session.commit()
+                self._record_carrier_profile_if_high_confidence(extraction_result, new_policy)
+                return True, "Saved successfully"
+
+        resolution = resolver.resolve(extraction_result)
+        if resolution["confidence"] == "confirmed":
+            customer = resolution["customer"]
+            new_policy.customer_id = customer.id
+            insured_name = (new_policy.insured_name or "").strip()
+            if insured_name:
+                entity_type = (
+                    "business"
+                    if any(t in insured_name.lower() for t in ["llc", "inc", "corp", "ltd"])
+                    else "personal"
+                )
+                resolver.add_entity(customer, insured_name, entity_type, source="extraction")
+        elif resolution["confidence"] == "suggested":
+            extraction_result["_customer_suggestion"] = {
+                "customer_id": resolution["customer"].id,
+                "reason": resolution["match_reason"],
+            }
+        else:
+            insured_name = (new_policy.insured_name or "").strip()
+            policy_type = (new_policy.policy_type or "").strip()
+            if insured_name:
+                if policy_type == "personal_auto":
+                    customer = resolver.create_customer(
+                        full_name=insured_name,
+                        entity_name=insured_name,
+                        entity_type="personal",
+                    )
+                    new_policy.customer_id = customer.id
+                else:
+                    if owner_name_override:
+                        customer = resolver.create_customer(
+                            full_name=owner_name_override,
+                            entity_name=insured_name,
+                            entity_type="business",
+                        )
+                        customer.needs_real_name_entry = False
+                        for ent in customer.entities:
+                            if ent.is_primary:
+                                ent.source = "manual"
+                                break
+                        new_policy.customer_id = customer.id
+                    else:
+                        embedded_owner = resolver.extract_embedded_owner_name(insured_name)
+                        if embedded_owner:
+                            customer = resolver.create_customer(
+                                full_name=embedded_owner["owner_name"],
+                                entity_name=embedded_owner["full_insured_name"],
+                                entity_type="business",
+                            )
+                            customer.needs_real_name_entry = False
+                        else:
+                            customer = resolver.create_customer(
+                                full_name=insured_name,
+                                entity_name=insured_name,
+                                entity_type="business",
+                            )
+                            customer.needs_real_name_entry = True
+                        new_policy.customer_id = customer.id
+
+        self.session.commit()
+        self._record_carrier_profile_if_high_confidence(extraction_result, new_policy)
+        return True, "Saved successfully"
+
+    def _classify_update(self, existing, new_policy) -> str:
+        """For same-policy-number cases."""
+        old_eff = existing.effective_date
+        old_exp = existing.expiration_date
+        new_eff = new_policy.effective_date
+
+        if not new_eff or not old_eff:
+            return "mid_term_change"
+
+        if old_exp and abs((new_eff - old_exp).days) <= 1:
+            return "renewal"
+
+        if new_eff == old_eff:
+            return "mid_term_change"
+
+        if old_eff <= new_eff <= (old_exp or new_eff):
+            return "mid_term_change"
+
+        return "mid_term_change"
+
+    def _score_policy_relationship(self, existing, extraction_result):
+        p = extraction_result.get("policy", {})
+        score = 0.0
+        relationship_type = "same_customer_new_policy"
+
+        new_name = (p.get("insured_name") or "").lower().strip()
+        old_name = (existing.insured_name or "").lower().strip()
+        if new_name and old_name and new_name == old_name:
+            score += 0.4
+        elif new_name and old_name and (new_name in old_name or old_name in new_name):
+            score += 0.2
+
+        try:
+            new_eff_str = p.get("effective_date")
+            if new_eff_str and existing.expiration_date:
+                new_eff = datetime.strptime(str(new_eff_str), "%Y-%m-%d").date()
+                days_gap = (new_eff - existing.expiration_date).days
+                if 0 <= days_gap <= 1:
+                    score += 0.4
+                    relationship_type = "renewal"
+                elif 1 < days_gap <= 90:
+                    score += 0.2
+                    relationship_type = "canceled_replaced"
+                elif days_gap < 0:
+                    score += 0.1
+                    relationship_type = "rewrite"
+        except (ValueError, TypeError):
+            pass
+
+        new_type = extraction_result.get("classification", {}).get("policy_type")
+        if new_type and new_type == existing.policy_type:
+            score += 0.1
+        else:
+            relationship_type = "same_customer_new_policy"
+
+        return min(score, 1.0), relationship_type
+
+    def find_related_policies(self, extraction_result: dict) -> list:
+        p = extraction_result.get("policy", {})
+        insured_name = p.get("insured_name", "")
+        new_policy_number = p.get("policy_number", "")
+        if not insured_name:
+            return []
+
+        candidates = []
+        direct = self.session.query(Policy).filter(
+            Policy.insured_name.ilike(f"%{insured_name}%"),
+            Policy.policy_number != new_policy_number,
+        ).all()
+        candidates.extend(direct)
+
+        entity_policies = (
+            self.session.query(Policy)
+            .join(Customer)
+            .join(CustomerEntity)
+            .filter(
+                CustomerEntity.entity_name.ilike(f"%{insured_name}%"),
+                Policy.policy_number != new_policy_number,
+            )
+            .all()
+        )
+        candidates.extend(entity_policies)
+
+        seen_ids = set()
+        unique = []
+        for candidate in candidates:
+            if candidate.id in seen_ids:
+                continue
+            seen_ids.add(candidate.id)
+            unique.append(candidate)
+
+        scored = []
+        for candidate in unique:
+            score, rel_type = self._score_policy_relationship(candidate, extraction_result)
+            if score >= self.RELATIONSHIP_SCORE_THRESHOLD:
+                scored.append(
+                    {
+                        "policy": {
+                            "id": candidate.id,
+                            "policy_number": candidate.policy_number,
+                            "insured_name": candidate.insured_name,
+                            "policy_type": candidate.policy_type,
+                            "effective_date": str(candidate.effective_date) if candidate.effective_date else None,
+                            "expiration_date": str(candidate.expiration_date) if candidate.expiration_date else None,
+                            "policy_status": candidate.policy_status,
+                            "carrier_name": candidate.carrier_name,
+                            "underwriter_name": candidate.underwriter_name,
+                        },
+                        "score": round(score, 2),
+                        "relationship_type": rel_type,
+                    }
+                )
+
+        return sorted(scored, key=lambda item: item["score"], reverse=True)[
+            : self.RELATIONSHIP_CANDIDATE_LIMIT
+        ]
+
+    def _handle_policy_update(self, existing, new_policy, extraction_result):
+        from .history_service import HistoryService
+
+        history_svc = HistoryService(self.session)
+        normalized = self.normalize_policy_data(extraction_result)
+        is_changed, changes, collection_changes = history_svc.compare_and_record(
+            existing, normalized, source="AI_Re-Extraction", event_type="AI_EXTRACTION"
+        )
+        if not is_changed:
+            return False, "No changes detected."
+
+        if collection_changes["vehicles"]:
+            existing.vehicles.clear()
+            for vehicle in new_policy.vehicles:
+                existing.vehicles.append(
+                    Vehicle(
+                        year=vehicle.year,
+                        make=vehicle.make,
+                        model=vehicle.model,
+                        vin=vehicle.vin,
+                        gvw=vehicle.gvw,
+                        vehicle_type=vehicle.vehicle_type,
+                        chassis=vehicle.chassis,
+                        body=vehicle.body,
+                    )
+                )
+
+        if collection_changes["coverages"]:
+            existing.coverages.clear()
+            vin_map_existing = {
+                str(vehicle.vin).strip().upper(): vehicle
+                for vehicle in existing.vehicles
+                if getattr(vehicle, "vin", None)
+            }
+            for coverage in new_policy.coverages:
+                matched_vehicle = None
+                if coverage.vehicle is not None and getattr(coverage.vehicle, "vin", None):
+                    matched_vehicle = vin_map_existing.get(str(coverage.vehicle.vin).strip().upper())
+                existing.coverages.append(
+                    Coverage(
+                        type=coverage.type,
+                        coverage_code=coverage.coverage_code,
+                        family=coverage.family,
+                        per_person=coverage.per_person,
+                        per_accident=coverage.per_accident,
+                        per_occurrence=coverage.per_occurrence,
+                        combined_single_limit=coverage.combined_single_limit,
+                        aggregate=coverage.aggregate,
+                        limit_per_person=coverage.limit_per_person,
+                        limit_per_accident=coverage.limit_per_accident,
+                        limit_property_damage=coverage.limit_property_damage,
+                        deductible=coverage.deductible,
+                        vehicle=matched_vehicle,
+                    )
+                )
+
+        if collection_changes["drivers"]:
+            existing.drivers.clear()
+            for driver in new_policy.drivers:
+                existing.drivers.append(
+                    Driver(
+                        full_name=driver.full_name,
+                        license_number=driver.license_number,
+                        is_excluded=driver.is_excluded,
+                    )
+                )
+
+        if collection_changes["additional_interests"]:
+            existing.additional_interests.clear()
+            from .database import AdditionalInterest
+
+            for interest in new_policy.additional_interests:
+                existing.additional_interests.append(
+                    AdditionalInterest(
+                        name=interest.name,
+                        address=interest.address,
+                        interest_type=interest.interest_type,
+                    )
+                )
+
+        resolver = CustomerResolver(self.session)
+        override_customer_id = extraction_result.get("_review_confirm_customer_id")
+        owner_name_override = (extraction_result.get("_review_commercial_owner_name") or "").strip()
+        if override_customer_id:
+            customer = self.session.query(Customer).get(int(override_customer_id))
+            if customer:
+                existing.customer_id = customer.id
+                insured_name = (existing.insured_name or "").strip()
+                if insured_name:
+                    entity_type = (
+                        "business"
+                        if any(t in insured_name.lower() for t in ["llc", "inc", "corp", "ltd"])
+                        else "personal"
+                    )
+                    resolver.add_entity(customer, insured_name, entity_type, source="manual")
+        else:
+            resolution = resolver.resolve(extraction_result)
+            if resolution["confidence"] == "confirmed":
+                customer = resolution["customer"]
+                existing.customer_id = customer.id
+                insured_name = (existing.insured_name or "").strip()
+                if insured_name:
+                    entity_type = (
+                        "business"
+                        if any(t in insured_name.lower() for t in ["llc", "inc", "corp", "ltd"])
+                        else "personal"
+                    )
+                    resolver.add_entity(customer, insured_name, entity_type, source="extraction")
+            elif resolution["confidence"] == "suggested":
+                extraction_result["_customer_suggestion"] = {
+                    "customer_id": resolution["customer"].id,
+                    "reason": resolution["match_reason"],
+                }
+            else:
+                insured_name = (existing.insured_name or "").strip()
+                policy_type = (existing.policy_type or "").strip()
+                if insured_name:
+                    if policy_type == "personal_auto":
+                        customer = resolver.create_customer(
+                            full_name=insured_name,
+                            entity_name=insured_name,
+                            entity_type="personal",
+                        )
+                        existing.customer_id = customer.id
+                    else:
+                        if owner_name_override:
+                            customer = resolver.create_customer(
+                                full_name=owner_name_override,
+                                entity_name=insured_name,
+                                entity_type="business",
+                            )
+                            customer.needs_real_name_entry = False
+                            for ent in customer.entities:
+                                if ent.is_primary:
+                                    ent.source = "manual"
+                                    break
+                            existing.customer_id = customer.id
+                        else:
+                            embedded_owner = resolver.extract_embedded_owner_name(insured_name)
+                            if embedded_owner:
+                                customer = resolver.create_customer(
+                                    full_name=embedded_owner["owner_name"],
+                                    entity_name=embedded_owner["full_insured_name"],
+                                    entity_type="business",
+                                )
+                                customer.needs_real_name_entry = False
+                            else:
+                                customer = resolver.create_customer(
+                                    full_name=insured_name,
+                                    entity_name=insured_name,
+                                    entity_type="business",
+                                )
+                                customer.needs_real_name_entry = True
+                            existing.customer_id = customer.id
+
+        update_type = self._classify_update(existing, new_policy)
+        self.session.add(
+            PolicyRelationship(
+                policy_id=existing.id,
+                related_policy_id=existing.id,
+                relationship_type=update_type,
+                confidence="confirmed",
+            )
+        )
+
+        self.session.commit()
+        self._record_carrier_profile_if_high_confidence(extraction_result, existing)
+        return True, f"Updated existing policy. {len(changes)} changes logged (Version updated)."
+
     def __init__(self, session: Session):
         self.session = session
 
@@ -29,14 +684,12 @@ class PolicyService:
         total_policies = self.session.query(Policy).count()
         total_vehicles = self.session.query(Vehicle).count()
         
-        # Calculate Total Premium
         # Note: premiums are stored as strings (e.g. "$1,200.00")
         all_premiums = self.session.query(Policy.premium).all()
         total_premium = 0.0
         for (p_str,) in all_premiums:
             if p_str:
                 try:
-                    # Remove $, commas and other non-numeric chars except dot
                     import re
                     clean_val = re.sub(r'[^\d.]', '', p_str)
                     if clean_val:
@@ -78,19 +731,95 @@ class PolicyService:
             )
         return q.count()
 
+    def _customer_query(self, term: str | None = None, *, orphan_filter: str = "active"):
+        """
+        Return a Customer query with optional server-side search and orphan filtering.
+
+        orphan_filter:
+        - active: customers with at least one policy
+        - all: all customers
+        - orphans: customers with no policies
+        """
+        q = self.session.query(Customer)
+        if term and str(term).strip():
+            t = f"%{str(term).strip()}%"
+            q = q.filter(
+                or_(
+                    Customer.full_name.ilike(t),
+                    Customer.entities.any(CustomerEntity.entity_name.ilike(t)),
+                )
+            )
+        if orphan_filter == "active":
+            q = q.filter(Customer.policies.any())
+        elif orphan_filter == "orphans":
+            q = q.filter(~Customer.policies.any())
+        return q
+
+    def search_customers(
+        self,
+        term: str | None = None,
+        *,
+        orphan_filter: str = "active",
+        limit: int = 25,
+        offset: int = 0,
+    ):
+        """Search customers by personal/business name without loading the full table."""
+        return (
+            self._customer_query(term, orphan_filter=orphan_filter)
+            .order_by(Customer.full_name)
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+    def count_customers(self, term: str | None = None, *, orphan_filter: str = "active") -> int:
+        """Count customers using the same filters as search_customers."""
+        return self._customer_query(term, orphan_filter=orphan_filter).count()
+
     def get_all_policies(self):
         """Backward-compatible: capped list of recent policies (newest first)."""
         return self.search_policies(None, limit=10000, offset=0)
 
     def get_policy_by_number(self, policy_number):
-        return self.session.query(Policy).filter_by(policy_number=policy_number).first()
+        return DuplicateDetectionService(self.session).find_policy_by_normalized_number(policy_number)
 
     def get_policy_by_id(self, policy_id):
         return self.session.query(Policy).get(policy_id)
 
+    def _customer_has_manual_value(self, customer: Customer) -> bool:
+        if customer.primary_email or customer.primary_phone:
+            return True
+        for entity in customer.entities or []:
+            if (entity.source or "").lower() == "manual":
+                return True
+        return False
+
+    def _delete_orphan_customer_if_safe(self, customer_id: int | None) -> dict:
+        if not customer_id:
+            return {"deleted": False, "reason": "no_customer"}
+        customer = self.session.get(Customer, customer_id)
+        if not customer:
+            return {"deleted": False, "reason": "missing_customer"}
+        remaining = self.session.query(Policy).filter(Policy.customer_id == customer_id).count()
+        if remaining:
+            return {"deleted": False, "reason": "has_policies", "customer_name": customer.full_name}
+        if self._customer_has_manual_value(customer):
+            return {"deleted": False, "reason": "manual_or_contact_data", "customer_name": customer.full_name}
+        customer_name = customer.full_name
+        self.session.delete(customer)
+        return {"deleted": True, "reason": "orphan_extraction_profile", "customer_name": customer_name}
+
     def delete_policy(self, policy: Policy):
+        customer_id = policy.customer_id
+        policy_number = policy.policy_number
         self.session.delete(policy)
+        self.session.flush()
+        customer_cleanup = self._delete_orphan_customer_if_safe(customer_id)
         self.session.commit()
+        return {
+            "deleted_policy_number": policy_number,
+            "customer_cleanup": customer_cleanup,
+        }
 
     def get_expiring_policies(self, days=30):
         """Returns policies expiring within the given number of days."""
@@ -103,11 +832,114 @@ class PolicyService:
             Policy.expiration_date <= cutoff
         ).order_by(Policy.expiration_date.asc()).all()
 
+    def find_related_policy(
+        self, policy_id: int, *, confirmed_only: bool = True
+    ):
+        """
+        Find a Policy that has a stored relationship with the given one
+        (renewal, replacement, etc.). Used by the Compare page's
+        "Auto-pair" button.
+
+        The relationship is conceptually bidirectional — when a save
+        flow detected that policy A is the renewal of policy B, it
+        recorded a single PolicyRelationship row with policy_id and
+        related_policy_id in *some* order. We search both columns and
+        return the *other* side. When multiple candidates qualify,
+        the most-recently-created relationship wins (the freshest signal).
+
+        When `confirmed_only` is True (default), suggested relationships
+        are excluded so we don't auto-pair on a low-confidence guess.
+        Returns None when no qualifying relationship exists.
+        """
+        q = self.session.query(PolicyRelationship).filter(
+            or_(
+                PolicyRelationship.policy_id == policy_id,
+                PolicyRelationship.related_policy_id == policy_id,
+            )
+        )
+        if confirmed_only:
+            q = q.filter(PolicyRelationship.confidence == "confirmed")
+        rel = q.order_by(PolicyRelationship.created_at.desc()).first()
+        if rel is None:
+            return None
+        other_id = (
+            rel.related_policy_id if rel.policy_id == policy_id else rel.policy_id
+        )
+        return self.session.query(Policy).filter(Policy.id == other_id).first()
+
+    def get_renewal_buckets(self, overdue_lookback_days: int = 30) -> dict:
+        """
+        Group policies by urgency for the Renewals page.
+
+        Returns a dict with four keys, each mapping to a list of Policy ORM
+        rows sorted by expiration_date ascending:
+
+          overdue: expiration_date in [today - overdue_lookback_days, today)
+                   — already expired but recent enough that the broker might
+                   still chase a backdated renewal.
+          urgent:  0 <= days_left <= 14  (🔴 in the UI)
+          warning: 15 <= days_left <= 30 (🟡)
+          watch:   31 <= days_left <= 60 (🔵)
+
+        Bucket boundaries are inclusive on both sides. A single SQL query
+        pulls everything in the [overdue_start, watch_end] window; the
+        Python loop partitions by days-left.
+        """
+        from datetime import date
+        today = date.today()
+        overdue_start = today - timedelta(days=overdue_lookback_days)
+        watch_end = today + timedelta(days=60)
+
+        rows = self.session.query(Policy).filter(
+            Policy.expiration_date != None,
+            Policy.expiration_date >= overdue_start,
+            Policy.expiration_date <= watch_end,
+        ).order_by(Policy.expiration_date.asc()).all()
+
+        buckets: dict[str, list[Policy]] = {
+            "overdue": [],
+            "urgent": [],
+            "warning": [],
+            "watch": [],
+        }
+        for p in rows:
+            days_left = (p.expiration_date - today).days
+            if days_left < 0:
+                buckets["overdue"].append(p)
+            elif days_left <= 14:
+                buckets["urgent"].append(p)
+            elif days_left <= 30:
+                buckets["warning"].append(p)
+            else:  # 31..60
+                buckets["watch"].append(p)
+        return buckets
+
     def check_duplicate(self, policy_number):
         """Returns existing policy with the same number, or None."""
         if not policy_number:
             return None
-        return self.session.query(Policy).filter_by(policy_number=policy_number).first()
+        return self.get_policy_by_number(policy_number)
+
+    def detect_duplicate_for_extraction(self, extraction_result: dict, include_policy: bool = False) -> dict:
+        """Returns structured duplicate status for UI previews and save decisions."""
+        return DuplicateDetectionService(self.session).analyze_payload(extraction_result).to_dict(
+            include_policy=include_policy
+        )
+
+    def preview_update_from_extraction(self, existing_policy: Policy, extraction_result: dict) -> dict:
+        """Builds a non-mutating diff preview for an incoming extraction payload."""
+        from .history_service import HistoryService
+
+        normalized = self.normalize_policy_data(extraction_result)
+        is_changed, changes, collection_changes = HistoryService(self.session).preview_changes(
+            existing_policy,
+            normalized,
+        )
+        return {
+            "is_changed": is_changed,
+            "changes": changes,
+            "collection_changes": collection_changes,
+        }
 
     def get_carrier_distribution(self):
         """Returns dict of {carrier_name: count} for all policies."""
@@ -129,7 +961,6 @@ class PolicyService:
             Policy.expiration_date <= cutoff
         ).all()
         
-        # Group by month
         monthly = {}
         for i in range(months):
             future = today + timedelta(days=i * 30)
@@ -152,125 +983,216 @@ class PolicyService:
         classification = extraction_result.get('classification', {})
         policy_type = classification.get('policy_type', 'unknown')
         
-        # Determine account type based on classification
         account_type = ACCOUNT_TYPE_BY_POLICY.get(policy_type, "Commercial")
         policy_data['account_type'] = account_type
         
-        # Add classification metadata
         policy_data['policy_type'] = policy_type
+        policy_data['document_type'] = classification.get('document_type')
         policy_data['classification_confidence'] = classification.get('confidence')
         policy_data['classification_signals'] = json.dumps(classification.get('signals', []))
+        policy_data['field_confidences'] = self._extract_field_confidences(policy_data)
+        policy_data['premium_audit_flag'] = (
+            (extraction_result.get("audits") or {}).get("premium", {}).get("flag")
+        )
         
         return {
             "policy": policy_data,
             "vehicles": extraction_result.get('vehicles', []),
             "coverages": extraction_result.get('coverages', []),
             "drivers": extraction_result.get('drivers', []),
-            "additional_interests": extraction_result.get('additional_interests', [])
+            "additional_interests": extraction_result.get('additional_interests', []),
+            "policy_data_source": extraction_result.get('policy_data_source'),
+            "extraction_extras": build_extraction_extras_json(extraction_result),
         }
 
     def _create_policy_instance(self, extraction_result):
         """Helper to create a transient Policy object from data."""
         normalized = self.normalize_policy_data(extraction_result)
         
-        # Flatten the normalized structure for the factory method
-        # normalized['policy'] contains scalar fields
-        # other keys are lists
-        
         flat_data = normalized['policy'].copy()
         flat_data['vehicles'] = normalized['vehicles']
         flat_data['coverages'] = normalized['coverages']
         flat_data['drivers'] = normalized['drivers']
         flat_data['additional_interests'] = normalized['additional_interests']
+        if normalized.get("policy_data_source"):
+            flat_data["policy_data_source"] = normalized["policy_data_source"]
+        if normalized.get("extraction_extras"):
+            flat_data["extraction_extras"] = normalized["extraction_extras"]
         
         return self.create_policy_from_dict(flat_data)
 
     def save_policy_from_extraction(self, extraction_result):
-        # 1. Create Transient Policy Object
-        new_policy = self._create_policy_instance(extraction_result)
-        
-        # 2. Check for Existing
-        existing = self.get_policy_by_number(new_policy.policy_number)
-        
-        if existing:
-            # UPDATE LOGIC WITH HISTORY
-            from .history_service import HistoryService
-            history_svc = HistoryService(self.session)
-            
-            # Use strict diff
-            # I will USE THE HELPERS I WROTE: compare_and_record(existing, normalized_dict)
-            
-            normalized = self.normalize_policy_data(extraction_result)
-            is_changed, changes, collection_changes = history_svc.compare_and_record(existing, normalized, source="AI_Re-Extraction", event_type="AI_EXTRACTION")
-            
-            if is_changed:
-                # IMPORTANT: scalar fields were updated by compare_and_record.
-                
-                # Update Collections Atomically if needed
-                if collection_changes["vehicles"]:
-                    existing.vehicles.clear()
-                    for v in new_policy.vehicles:
-                         # Append Copy (Re-creating objects to ensure no session conflict)
-                         existing.vehicles.append(Vehicle(
-                                year=v.year, make=v.make, model=v.model, vin=v.vin,
-                                gvw=v.gvw, vehicle_type=v.vehicle_type, chassis=v.chassis, body=v.body
-                         ))
+        if extraction_result.get("policy_data_source") == "endorsement_summary":
+            return self.save_endorsement_from_extraction(extraction_result)
+        extraction_result["_related_policy_candidates"] = self.find_related_policies(extraction_result)
+        if extraction_result.get("policy_data_source") == "coi_summary" and extraction_result.get("coi_summary", {}).get("policies"):
+            return self._save_policies_from_coi_summary(extraction_result)
+        return self._save_single_extraction_payload(extraction_result)
 
-                if collection_changes["coverages"]:
-                    existing.coverages.clear()
-                    vin_map_existing = {
-                        str(v.vin).strip().upper(): v
-                        for v in existing.vehicles
-                        if getattr(v, "vin", None)
-                    }
-                    for c in new_policy.coverages:
-                        matched_ev = None
-                        if c.vehicle is not None and getattr(c.vehicle, "vin", None):
-                            matched_ev = vin_map_existing.get(str(c.vehicle.vin).strip().upper())
-                        existing.coverages.append(
-                            Coverage(
-                                type=c.type,
-                                coverage_code=c.coverage_code,
-                                family=c.family,
-                                per_person=c.per_person,
-                                per_accident=c.per_accident,
-                                per_occurrence=c.per_occurrence,
-                                combined_single_limit=c.combined_single_limit,
-                                aggregate=c.aggregate,
-                                limit_per_person=c.limit_per_person,
-                                limit_per_accident=c.limit_per_accident,
-                                limit_property_damage=c.limit_property_damage,
-                                deductible=c.deductible,
-                                vehicle=matched_ev,
-                            )
-                        )
+    def save_endorsement_from_extraction(self, extraction_result):
+        endorsement = extraction_result.get("endorsement") or {}
+        parent_policy_number = self._clean_text(endorsement.get("parent_policy_number"))
+        if not parent_policy_number:
+            return False, "Endorsement missing parent policy number."
 
-                if collection_changes["drivers"]:
-                    existing.drivers.clear()
-                    for d in new_policy.drivers:
-                        existing.drivers.append(Driver(full_name=d.full_name, license_number=d.license_number, is_excluded=d.is_excluded))
-                
-                if collection_changes["additional_interests"]:
-                    existing.additional_interests.clear()
-                    for a in new_policy.additional_interests:
-                        from .database import AdditionalInterest
-                        existing.additional_interests.append(AdditionalInterest(
-                            name=a.name, address=a.address, interest_type=a.interest_type
-                        ))
-                
-                self.session.commit()
-                return True, f"Updated existing policy. {len(changes)} changes logged (Version updated)."
+        parent = self.get_policy_by_number(parent_policy_number)
+        effective_raw = endorsement.get("effective_date")
+        effective_dt = pd.to_datetime(effective_raw, errors="coerce")
+        endorsement_row = PolicyEndorsement(
+            parent_policy_id=parent.id if parent else None,
+            parent_policy_number=parent_policy_number,
+            endorsement_type=self._clean_text(endorsement.get("endorsement_type")),
+            endorsement_form_number=self._clean_text(endorsement.get("endorsement_form_number")),
+            effective_date=effective_dt.date() if pd.notnull(effective_dt) else None,
+            changes_summary=self._clean_text(endorsement.get("changes_summary")),
+            file_hash=self._clean_text(endorsement.get("file_hash")),
+        )
+        self.session.add(endorsement_row)
+        self.session.commit()
+        if parent:
+            return True, f"Saved endorsement linked to {parent.policy_number}."
+        return True, "Saved endorsement without parent match (manual reconciliation needed)."
+
+    @classmethod
+    def compute_completeness_score(cls, policy_data, document_type):
+        payload = policy_data if isinstance(policy_data, dict) else {}
+
+        def _is_missing(field_name: str) -> bool:
+            value = payload.get(field_name)
+            clean = cls._clean_text(value)
+            return clean in (None, "")
+
+        missing_required = [field for field in cls.REQUIRED_FOR_COI if _is_missing(field)]
+        missing_recommended = [field for field in cls.RECOMMENDED_FOR_COI if _is_missing(field)]
+        raw_score = 100 - (20 * len(missing_required)) - (5 * len(missing_recommended))
+        score = max(0, raw_score)
+        return {
+            "score": score,
+            "coi_ready": len(missing_required) == 0,
+            "missing_required": missing_required,
+            "missing_recommended": missing_recommended,
+            "document_type": document_type,
+        }
+
+    def _save_policies_from_coi_summary(self, extraction_result):
+        summary = extraction_result.get("coi_summary") or {}
+        policies = summary.get("policies") or []
+        saved_count = 0
+        updated_count = 0
+        skipped_count = 0
+
+        grouped: dict[str, list[dict]] = {}
+        for row in policies:
+            if not isinstance(row, dict):
+                continue
+            policy_number = self._clean_text(row.get("policy_number"))
+            if not policy_number:
+                skipped_count += 1
+                continue
+            grouped.setdefault(policy_number, []).append(row)
+
+        for policy_number, rows in grouped.items():
+            merged_row = self._merge_coi_policy_rows(rows)
+            limits = merged_row.get("limits") if isinstance(merged_row.get("limits"), dict) else {}
+            insured_summary = summary.get("insured") if isinstance(summary.get("insured"), dict) else {}
+
+            policy_payload = {
+                "policy": {
+                    "carrier_name": merged_row.get("carrier_name"),
+                    "underwriter_name": merged_row.get("underwriter_name"),
+                    "carrier_name_confidence": merged_row.get("carrier_name_confidence"),
+                    "naic_number": merged_row.get("naic_number"),
+                    "policy_number": policy_number,
+                    "policy_number_confidence": merged_row.get("policy_number_confidence"),
+                    "effective_date": merged_row.get("effective_date"),
+                    "effective_date_confidence": merged_row.get("effective_date_confidence"),
+                    "expiration_date": merged_row.get("expiration_date"),
+                    "expiration_date_confidence": merged_row.get("expiration_date_confidence"),
+                    "insured_name": self._clean_text(merged_row.get("insured_name")) or self._clean_text(insured_summary.get("name")),
+                    "insured_name_confidence": merged_row.get("insured_name_confidence"),
+                    "insured_address": self._clean_text(insured_summary.get("address")),
+                    "insured_city": self._clean_text(insured_summary.get("city")),
+                    "insured_state_code": self._clean_text(insured_summary.get("state_code") or insured_summary.get("state")),
+                    "insured_zip": self._clean_text(insured_summary.get("zip")),
+                    "premium": self._clean_text(merged_row.get("premium")),
+                    "premium_confidence": merged_row.get("premium_confidence"),
+                    "financial_responsibility_name": self._clean_text((summary.get("producer") or {}).get("name")),
+                    "liability_limit": self._clean_limit_text(limits.get("liability_limit")),
+                    "liability_limit_confidence": self._clean_text(limits.get("liability_limit_confidence")),
+                    "general_liability_limit": self._clean_limit_text(limits.get("general_liability_limit")),
+                    "cargo_limit": self._clean_limit_text(limits.get("cargo_limit")),
+                    "cargo_limit_confidence": self._clean_text(limits.get("cargo_limit_confidence")),
+                    "cargo_deductible": self._clean_limit_text(limits.get("cargo_deductible")),
+                    "um_uim_limit": self._clean_limit_text(limits.get("um_uim_limit")),
+                    "med_pay_limit": self._clean_limit_text(limits.get("med_pay_limit")),
+                    "pip_limit": self._clean_limit_text(limits.get("pip_limit")),
+                    "comp_deductible": self._clean_limit_text(limits.get("comp_deductible")),
+                    "coll_deductible": self._clean_limit_text(limits.get("coll_deductible")),
+                    "policy_type": merged_row.get("policy_type") or extraction_result.get("classification", {}).get("policy_type") or "unknown",
+                    "has_general_liability": bool(
+                        self._clean_limit_text(limits.get("general_liability_limit"))
+                        or "general" in str(merged_row.get("policy_type") or "").lower()
+                    ),
+                    "has_auto_liability": bool(
+                        self._clean_limit_text(limits.get("liability_limit"))
+                        or "auto" in str(merged_row.get("policy_type") or "").lower()
+                    ),
+                    "document_type": extraction_result.get("classification", {}).get("document_type"),
+                    "classification_confidence": extraction_result.get("classification", {}).get("confidence"),
+                    "classification_signals": extraction_result.get("classification", {}).get("signals", []),
+                },
+                "vehicles": extraction_result.get("vehicles", []),
+                "drivers": extraction_result.get("drivers", []),
+                "coverages": extraction_result.get("coverages", []),
+                "additional_interests": extraction_result.get("additional_interests", []),
+                "policy_data_source": "coi_summary",
+                "compliance": extraction_result.get("compliance") or {},
+                "coi_summary": {**summary, "merged_row_count": len(rows)},
+            }
+
+            # Per-policy backfill: COI summaries share one top-level coverages[]
+            # array across all policies, but each policy_payload has its own flat
+            # limits. Synthesize per-policy Coverage rows from those flat fields.
+            # Local import avoids circular load (modules.extraction.__init__ pulls
+            # pipeline which pulls services).
+            from modules.extraction.coverage_backfill import (
+                backfill_coverages_from_flat_limits,
+            )
+            synth = backfill_coverages_from_flat_limits(
+                existing=policy_payload.get("coverages", []) or [],
+                flat=policy_payload["policy"],
+                policy_type=policy_payload["policy"].get("policy_type"),
+            )
+            if synth:
+                covs_list = list(policy_payload.get("coverages") or [])
+                audit_entries = []
+                for entry in synth:
+                    src = entry.pop("_backfill_source", None)
+                    covs_list.append(entry)
+                    audit_entries.append({
+                        "coverage_code": entry.get("coverage_code"),
+                        "source": src,
+                    })
+                policy_payload["coverages"] = covs_list
+                policy_payload["extraction_audit"] = {
+                    "backfilled_coverages": audit_entries
+                }
+
+            success, msg = self._save_single_extraction_payload(policy_payload)
+            if success and msg.startswith("Updated"):
+                updated_count += 1
+            elif success:
+                saved_count += 1
             else:
-                 return False, "No changes detected."
+                skipped_count += 1
 
-        else:
-            self.session.add(new_policy)
-            self.session.commit()
-            return True, "Saved successfully"
+        if saved_count == 0 and updated_count == 0:
+            return False, f"COI summary save skipped. {skipped_count} entries skipped."
+        return True, (
+            f"COI summary processed: {saved_count} new, {updated_count} updated, {skipped_count} skipped."
+        )
 
     def save_policy_object(self, policy: Policy):
-        # Used when constructing object manually in review
-        # Check duplicate
         existing = self.get_policy_by_number(policy.policy_number)
         if existing:
             return False, "Skipped duplicate policy number."
@@ -278,6 +1200,50 @@ class PolicyService:
         self.session.add(policy)
         self.session.commit()
         return True, "Saved policy manually."
+
+    def confirm_customer_match(self, policy_id, customer_id):
+        """Called when user confirms a 'suggested' match in the UI."""
+        from .database import Customer
+
+        policy = self.session.query(Policy).get(policy_id)
+        if not policy:
+            return
+        policy.customer_id = customer_id
+        resolver = CustomerResolver(self.session)
+        customer = self.session.query(Customer).get(customer_id)
+        if not customer:
+            return
+        insured_name = policy.insured_name or ""
+        resolver.add_entity(
+            customer,
+            insured_name,
+            "business"
+            if any(t in insured_name.lower() for t in ["llc", "inc", "corp", "ltd"])
+            else "personal",
+        )
+        self.session.commit()
+
+    def save_with_relationship(self, extraction_result, related_policy_id, relationship_type):
+        """Save new policy and record explicit relationship to existing one."""
+        saved_result = self.save_policy_from_extraction(extraction_result)
+        new_policy = self.get_policy_by_number(extraction_result["policy"]["policy_number"])
+        if not new_policy:
+            return saved_result
+        relationship = PolicyRelationship(
+            policy_id=new_policy.id,
+            related_policy_id=related_policy_id,
+            relationship_type=relationship_type,
+            confidence="confirmed",
+        )
+        self.session.add(relationship)
+
+        if relationship_type in ("canceled_replaced", "rewrite"):
+            old_policy = self.session.query(Policy).get(related_policy_id)
+            old_policy.policy_status = "replaced"
+            old_policy.replaced_by_policy_id = new_policy.id
+
+        self.session.commit()
+        return saved_result
 
     def update_policy(self, policy: Policy, updated_data: dict):
         """
@@ -288,24 +1254,18 @@ class PolicyService:
         from .history_service import HistoryService
         history_svc = HistoryService(self.session)
         
-        # Determine payload structure
-        if "policy" in updated_data or "vehicles" in updated_data or "drivers" in updated_data:
-             # It is already a structured payload
+        if any(k in updated_data for k in ("policy", "vehicles", "drivers", "coverages", "additional_interests")):
              final_payload = updated_data
         else:
-             # Legacy: Wrap scalar fields
              final_payload = {"policy": updated_data}
         
         is_changed, changes, collection_changes = history_svc.compare_and_record(policy, final_payload, source="Manual_Edit", event_type="MANUAL_EDIT")
         
         if is_changed:
-            # Apply Collection Updates if flagged
             if collection_changes.get("vehicles"):
                 new_vehs = final_payload.get('vehicles', [])
                 policy.vehicles.clear()
                 for v in new_vehs:
-                    # Reconstruct Vehicle objects
-                    # v is a dict here
                     policy.vehicles.append(Vehicle(
                         year=v.get('year'), make=v.get('make'), model=v.get('model'), 
                         vin=v.get('vin'), gvw=v.get('gvw'), vehicle_type=v.get('type') or v.get('vehicle_type'),
@@ -341,11 +1301,9 @@ class PolicyService:
         Handles creating nested objects (Vehicles, Drivers, Coverages, AIs).
         Centralizes data parsing logic.
         """
-        # 1. Parse Dates safely
         effective_dt = pd.to_datetime(data.get('effective_date'), errors='coerce')
         expiration_dt = pd.to_datetime(data.get('expiration_date'), errors='coerce')
         
-        # 2. Create Base Policy
         # Ensure 'status' defaults to Active if missing
         status_val = data.get('status', 'Active')
 
@@ -358,6 +1316,7 @@ class PolicyService:
             
         policy = Policy(
             carrier_name=data.get('carrier_name'),
+            underwriter_name=data.get('underwriter_name'),
             naic_number=data.get('naic_number'),
             policy_number=data.get('policy_number'),
             effective_date=effective_dt.date() if pd.notnull(effective_dt) else None,
@@ -374,14 +1333,16 @@ class PolicyService:
             state=data.get('state'),
             financial_responsibility_name=data.get('financial_responsibility_name'),
             
-            # Account / Type
             account_type=data.get('account_type'),
+            document_type=data.get('document_type'),
+            policy_data_source=data.get('policy_data_source'),
+            field_confidences=data.get('field_confidences'),
+            premium_audit_flag=data.get('premium_audit_flag'),
             policy_type=data.get('policy_type'),
             classification_confidence=data.get('classification_confidence'),
             classification_signals=signals_json,
             status=status_val,
             
-            # Limits (Scalar)
             liability_limit=data.get('liability_limit'),
             general_liability_limit=data.get('general_liability_limit'),
             cargo_limit=data.get('cargo_limit'),
@@ -392,28 +1353,22 @@ class PolicyService:
             comp_deductible=data.get('comp_deductible'),
             coll_deductible=data.get('coll_deductible'),
             
-            # Flags
             has_full_collision=data.get('has_full_collision'),
             has_general_liability=data.get('has_general_liability', False),
-            has_auto_liability=data.get('has_auto_liability', False)
+            has_auto_liability=data.get('has_auto_liability', False),
+            extraction_extras=data.get('extraction_extras'),
         )
         
-        # 3. Add Nested Collections
-        
-        # Vehicles
         vehs = data.get('vehicles', [])
-        # Support both list of dicts or list of objects (if reusing internal logic)
+        # Support both list of dicts and list of model objects.
         for v in vehs:
             if isinstance(v, dict):
-                # Check for required Minimums to avoid empty rows
                 if not v.get('vin') and not v.get('make'): continue # Skip empty
                 
-                # Apply Refinement if not already present
                 ref_type = v.get('vehicle_type')
                 if not ref_type:
                      refinement = refine_vehicle_type(v.get('year'), v.get('make'), v.get('model'), v.get('vin'), v.get('type'), gvw=v.get('gvw'))
                      ref_type = refinement.get('final_type')
-                     # Could also refine chassis/body if missing
                 
                 policy.vehicles.append(Vehicle(
                     year=v.get('year'),
@@ -428,7 +1383,6 @@ class PolicyService:
             elif isinstance(v, Vehicle):
                 policy.vehicles.append(v) # Allow passing objects directly
 
-        # Drivers
         drvs = data.get('drivers', [])
         for d in drvs:
             if isinstance(d, dict):
@@ -452,13 +1406,26 @@ class PolicyService:
             if nv:
                 vin_to_vehicle[nv] = veh
 
-        # Coverages
+        # Belt-and-braces: if the upstream paths produced an empty coverages
+        # list but flat policy fields are populated, synthesize the rows here
+        # as a last resort. Local import avoids the circular load that
+        # modules.extraction.__init__ -> pipeline -> core.services would create.
+        if not data.get('coverages'):
+            from modules.extraction.coverage_backfill import (
+                backfill_coverages_from_flat_limits,
+            )
+            synth = backfill_coverages_from_flat_limits(
+                existing=[], flat=data, policy_type=data.get('policy_type'),
+            )
+            if synth:
+                for entry in synth:
+                    entry.pop('_backfill_source', None)
+                data['coverages'] = synth
+
         covs = data.get('coverages', [])
         for c in covs:
             if isinstance(c, dict):
-                # Handle flattened structure (from Editor) or nested limits (from Extraction)
-
-                # Try flattened first (Editor style)
+                # Handle flattened editor payloads or nested extraction payloads.
                 per_person = c.get('per_person') or c.get('limits', {}).get('per_person')
                 per_accident = c.get('per_accident') or c.get('limits', {}).get('per_accident')
                 per_occ = c.get('per_occurrence') or c.get('limits', {}).get('per_occurrence')
@@ -490,7 +1457,6 @@ class PolicyService:
             elif isinstance(c, Coverage):
                 policy.coverages.append(c)
 
-        # Additional Interests
         ais = data.get('additional_interests', [])
         for a in ais:
               if isinstance(a, dict):
@@ -519,110 +1485,64 @@ class PolicyService:
             
         client = genai.Client(api_key=api_key)
         
-        # 1. Define Schema Context
-        # We simplify the schema description for the AI to minimize token usage
-        schema_context = """
-        You are a SQLite expert. Convert the user question into a valid SQL query.
-        
-        Database Schema:
-        Table 'policies':
-          - id (int)
-          - carrier_name (text)
-          - policy_number (text)
-          - effective_date (date YYYY-MM-DD)
-          - expiration_date (date YYYY-MM-DD)
-          - liability_limit (text, e.g. '$1,000,000')
-          - general_liability_limit (text, e.g. '$1,000,000 Occ')
-          - insured_name (text)
-          - premium (text)
-          - has_full_collision (bool)
-          - policy_type (text, e.g. 'personal_auto', 'commercial_auto', 'general_liability')
-          - account_type (text, e.g. 'Personal', 'Commercial')
-          - has_auto_liability (bool)
-          - has_general_liability (bool)
-          
-        Table 'vehicles':
-          - policy_id (fk to policies.id)
-          - year (int)
-          - make (text)
-          - model (text)
-          - vin (text)
-          - gvw (int)
-          - vehicle_type (text, e.g. 'Straight Truck', 'Tractor', 'Cargo Van')
-          - chassis (text, e.g. 'Cab Chassis', 'Pickup')
-          - body (text, e.g. 'Box', 'Dump')
-
-        Table 'drivers':
-          - policy_id (fk to policies.id)
-          - full_name (text)
-          - license_number (text)
-          - is_excluded (bool)
-
-        Table 'coverages':
-          - policy_id (fk to policies.id)
-          - coverage_code (text, e.g. 'AUTO_LIAB_BI', 'GL_OCCURRENCE')
-          - family (text, e.g. 'auto_liability', 'general_liability')
-          - per_person (int)
-          - per_accident (int)
-          - per_occurrence (int)
-          - combined_single_limit (int)
-          - aggregate (int)
-          - deductible (int)
-          - type (text, display name)
-          
-        Rules:
-        1. Return ONLY the raw SQL query. No markdown, no explanations.
-        2. DO NOT include semicolons (;) at the end of the query.
-        3. Use LIKE for text searching (case insensitive).
-        3. Handle currency strings in 'liability_limit' or 'premium' by stripping '$' and ',' if mathematical comparison is needed (e.g. CAST(REPLACE(REPLACE(premium, '$', ''), ',', '') AS FLOAT)).
-        4. If asking for specific coverages like "Comp/Coll", check 'has_full_collision' or join with coverages table if needed (but currently simplified to boolean flags on policy).
-        """
-        
         try:
-            # 2. Generate SQL
             response = client.models.generate_content(
-                model='gemini-2.5-flash', 
-                contents=f"{schema_context}\n\nUser Question: {user_query}\nSQL:",
+                model="gemini-3.1-flash-lite",
+                # Keep prefix stable to maximize implicit cache hits.
+                contents=[
+                    SQL_SCHEMA_CONTEXT,
+                    f"User Question: {user_query}\nSQL:",
+                ],
                 config=types.GenerateContentConfig(
                     thinking_config=types.ThinkingConfig(thinking_budget=0)
                 )
             )
+            usage_md = getattr(response, "usage_metadata", None)
+            if usage_md:
+                UsageService(self.session).log_usage(
+                    model_name="gemini-3.1-flash-lite",
+                    input_tokens=usage_md.prompt_token_count or 0,
+                    output_tokens=usage_md.candidates_token_count or 0,
+                    request_type="query_sql",
+                )
             generated_sql = response.text.strip()
             
-            # Clean up markdown and trailing semicolon
             generated_sql = generated_sql.replace("```sql", "").replace("```", "").strip()
             if generated_sql.endswith(";"):
                 generated_sql = generated_sql[:-1].strip()
             
-            # Safety: Basic check to prevent destructive queries
             if not generated_sql.lower().startswith("select"):
                 return None, f"Safety Error: Only SELECT queries are allowed. Generated: {generated_sql}"
             if ";" in generated_sql:
                 return None, f"Safety Error: Multiple statements (;) are not allowed. Generated: {generated_sql}"
             
-            # 3. Execute
-            # Use session.execute to keep the connection alive for the rest of the request
             result = self.session.execute(text(generated_sql))
-            # Convert to list of dicts
             columns = result.keys()
             rows = [dict(zip(columns, row)) for row in result.fetchall()]
-            
+
             return rows, generated_sql
-            
-        except Exception as e:
-            return None, f"Error: {e}"
+
+        except SQLAlchemyError as e:
+            # SQL execution failure on LLM-generated SQL is the expected user-
+            # facing error here. Log with full traceback so the underlying cause
+            # is debuggable, then surface a clean message to the UI.
+            logger.exception(f"query_sql: SQL execution failed for {generated_sql!r}")
+            return None, f"SQL Error: {e}"
 class COIService:
     @staticmethod
     def prepare_coi_data(p: Policy):
+        from reporting.acord_view import build_acord_view_from_orm_policy
+
         cargo_ded_val = p.cargo_deductible if p.cargo_deductible else "1000"
         
-        has_gl = p.has_general_liability if p.has_general_liability is not None else True
-        has_auto = p.has_auto_liability if p.has_auto_liability is not None else True
+        has_gl = bool(p.has_general_liability)
+        has_auto = bool(p.has_auto_liability)
         
         current_naic = p.naic_number if p.naic_number else get_naic_for_carrier(p.carrier_name)
         
         p_data = {
             "carrier_name": p.carrier_name, 
+            "underwriter_name": p.underwriter_name,
             "naic_number": current_naic,
             "policy_number": p.policy_number, 
             "effective_date": p.effective_date, 
@@ -641,34 +1561,141 @@ class COIService:
             "driver_list_str": ""
         }
         
-        # Descriptions logic
         desc_lines = []
         if p.vehicles:
             v_str = " ".join([f"[{v.year} {v.make} {v.vin}]" for v in p.vehicles])
             desc_lines.append(f"Vehicle List: {v_str}")
+            p_data["vehicle_list_str"] = v_str
         if p.drivers:
             d_str = ", ".join([d.full_name for d in p.drivers])
             desc_lines.append(f"Driver List: {d_str}")
+            p_data["driver_list_str"] = d_str
+
+        av = build_acord_view_from_orm_policy(p)
+        comp = av.get("compliance") or {}
+        if comp.get("mcs90"):
+            desc_lines.append(f"MCS-90: {comp.get('mcs90')}")
+        if comp.get("motor_carrier_id"):
+            desc_lines.append(f"MC # / motor carrier: {comp.get('motor_carrier_id')}")
+        if comp.get("dot"):
+            desc_lines.append(f"USDOT: {comp.get('dot')}")
+        for de in (comp.get("doc_endorsements") or []):
+            if not isinstance(de, dict):
+                continue
+            fid = (de.get("form_id") or "").strip()
+            nms = de.get("named_individuals") or []
+            nms_s = ", ".join(str(x) for x in nms) if nms else ""
+            if fid or nms_s:
+                desc_lines.append(
+                    f"Drive Other Car / DOC: {fid or '—'}"
+                    + (f" — named: {nms_s}" if nms_s else "")
+                )
+        st_disp = (av.get("policy_ontology") or {}).get("statutory_auto_liability_display")
+        if st_disp:
+            desc_lines.append(f"State minimum (reference): {st_disp}")
+        for vrow in av.get("acord_127_vehicles") or []:
+            sym = vrow.get("covered_auto_symbols")
+            # Extraction stores absent values as the literal string "null"; treat both
+            # None and "null" (case-insensitive) as missing so the COI description
+            # doesn't render lines like 'BAP symbols (VIN): null'.
+            if sym and str(sym).strip().lower() not in ("null", "none", ""):
+                vlabel = vrow.get("vin") or "vehicle"
+                desc_lines.append(f"BAP symbols ({vlabel}): {sym}")
+        auto25 = av.get("acord_25_automobile_liability") or {}
+        if auto25.get("um_stacked_effective"):
+            desc_lines.append(f"UM stacked (effective): {auto25.get('um_stacked_effective')}")
+        cbf = av.get("coverages_by_family") or {}
+        hnoa_seen: set[str] = set()
+        for rows in cbf.values():
+            for r in rows or []:
+                hb = r.get("hnoa_basis")
+                ha = r.get("hnoa_attached_to")
+                if not (hb or ha):
+                    continue
+                cc = r.get("coverage_code") or "coverage"
+                sig = f"{cc}|{hb}|{ha}"
+                if sig in hnoa_seen:
+                    continue
+                hnoa_seen.add(sig)
+                msg = f"Hired/Non-Owned ({cc}): {hb or '—'}"
+                if ha:
+                    msg += f" (attached: {ha})"
+                desc_lines.append(msg)
             
         return p_data, desc_lines
 
 
 class UsageService:
     PRICING = {
-        "gemini-2.5-flash": {"input": 0.10 / 1_000_000, "output": 0.40 / 1_000_000},
-        "gemini-2.0-flash": {"input": 0.10 / 1_000_000, "output": 0.40 / 1_000_000},
-        "gemini-1.5-flash": {"input": 0.075 / 1_000_000, "output": 0.30 / 1_000_000},
-        "default": {"input": 0.10 / 1_000_000, "output": 0.40 / 1_000_000}
+        # Gemini 3.1 Flash-Lite — Agent Platform standard tier, global endpoint,
+        # <=200K input context; text/image/video input (see GCP pricing tables).
+        "gemini-3.1-flash-lite": {
+            "input": 0.25 / 1_000_000,
+            "output": 1.50 / 1_000_000,
+            "cached_input": 0.025 / 1_000_000,
+        },
+        "gemini-2.5-flash": {
+            "input": 0.30 / 1_000_000,
+            "output": 2.50 / 1_000_000,
+            "cached_input": 0.03 / 1_000_000,
+        },
+        "gemini-2.5-flash-lite": {
+            "input": 0.10 / 1_000_000,
+            "output": 0.40 / 1_000_000,
+            "cached_input": 0.01 / 1_000_000,
+        },
+        "gemini-2.0-flash": {
+            "input": 0.10 / 1_000_000,
+            "output": 0.40 / 1_000_000,
+            "cached_input": 0.01 / 1_000_000,
+        },
+        "gemini-1.5-flash": {
+            "input": 0.075 / 1_000_000,
+            "output": 0.30 / 1_000_000,
+            "cached_input": 0.00937 / 1_000_000,  # 12.5% of input price
+        },
+        "default": {
+            "input": 0.25 / 1_000_000,
+            "output": 1.50 / 1_000_000,
+            "cached_input": 0.025 / 1_000_000,
+        },
     }
 
     def __init__(self, session: Session):
         self.session = session
 
-    def log_usage(self, model_name: str, input_tokens: int, output_tokens: int, request_type: str = "extraction"):
-        """Logs a single API request's token usage and estimated cost."""
+    def log_usage(
+        self,
+        model_name: str,
+        input_tokens: int,
+        output_tokens: int,
+        request_type: str = "extraction",
+        cached_input_tokens: int = 0,
+    ):
+        """Logs a single API request's token usage and estimated cost.
+
+        Args:
+            model_name: Model identifier (e.g. 'gemini-3.1-flash-lite').
+            input_tokens: Total prompt tokens (includes cached tokens).
+            output_tokens: Generated tokens.
+            request_type: Tag for the request (e.g. 'extraction', 'classification').
+            cached_input_tokens: Number of input tokens from cached context.
+                Cost = (input_tokens - cached_input_tokens) * input_rate
+                      + cached_input_tokens * cached_input_rate
+                      + output_tokens * output_rate
+        """
         pricing = self.PRICING.get(model_name, self.PRICING["default"])
-        cost = (input_tokens * pricing["input"]) + (output_tokens * pricing["output"])
-        
+
+        # Separate cached and fresh input tokens
+        fresh_input = max(0, input_tokens - cached_input_tokens)
+        cached_input = min(input_tokens, cached_input_tokens)
+
+        cost = (
+            fresh_input * pricing["input"]
+            + cached_input * pricing.get("cached_input", pricing["input"])
+            + output_tokens * pricing["output"]
+        )
+
         usage = ApiUsage(
             model_name=model_name,
             input_tokens=input_tokens,
@@ -676,19 +1703,26 @@ class UsageService:
             cost=cost,
             status="success",
             request_type=request_type,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.utcnow(),
         )
         self.session.add(usage)
         self.session.commit()
         return usage
 
     def get_daily_usage(self):
-        """Returns the total cost for the current day."""
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        """Returns the total cost for today (US Eastern time window)."""
+        today_start = _today_start_utc_naive()
         total_cost = self.session.query(func.sum(ApiUsage.cost)).filter(
             ApiUsage.timestamp >= today_start
         ).scalar() or 0.0
         return total_cost
+
+    def get_todays_call_count(self) -> int:
+        """Returns the number of API calls today (US Eastern time window)."""
+        today_start = _today_start_utc_naive()
+        return self.session.query(func.count(ApiUsage.id)).filter(
+            ApiUsage.timestamp >= today_start
+        ).scalar() or 0
 
     def is_over_budget(self, daily_limit: float = 1.0):
         """Checks if the daily spend has exceeded the limit."""
@@ -700,7 +1734,11 @@ class UsageService:
             self.session.query(ApiUsage).delete()
             self.session.commit()
             return True, "Usage logs cleared."
-        except Exception as e:
+        except SQLAlchemyError as e:
+            # DB-level delete/commit can fail (locked, constraint, disk). Rolled
+            # back state must remain visible — log the traceback then surface a
+            # clean message via the (success, msg) return shape callers expect.
+            logger.exception("clear_usage: failed to delete ApiUsage rows")
             self.session.rollback()
             return False, str(e)
 
@@ -709,14 +1747,14 @@ class UsageService:
         return self.session.query(ApiUsage).order_by(ApiUsage.timestamp.desc()).limit(limit).all()
 
     def get_todays_token_stats(self):
-        """Returns tuple (total_input, total_output) for today."""
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        
+        """Returns tuple (total_input, total_output) for today (US Eastern window)."""
+        today_start = _today_start_utc_naive()
+
         result = self.session.query(
             func.sum(ApiUsage.input_tokens),
             func.sum(ApiUsage.output_tokens)
         ).filter(ApiUsage.timestamp >= today_start).first()
-        
+
         return (result[0] or 0, result[1] or 0)
 
 

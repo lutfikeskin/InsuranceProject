@@ -24,12 +24,22 @@ def _coverage_limit_display(c) -> str:
 
 @st.dialog("✏️ Edit Policy Details", width="large")
 def edit_policy_dialog(policy, service: PolicyService):
-    st.write(f"Editing Policy: **{policy.policy_number}**")
-    
-    # Define Tabs
+    header_left, header_right = st.columns([4, 1])
+    header_left.write(f"Editing Policy: **{policy.policy_number}**")
+    # Explicit discard control. The dialog already supports OS-level close (X /
+    # click-outside), but users have no in-dialog signal that nothing they
+    # typed has been saved yet. This button reruns the script without
+    # re-invoking the dialog function, which closes the dialog and discards
+    # any unsubmitted form state.
+    if header_right.button(
+        "✖ Close without saving",
+        key=f"edit_dialog_discard_{policy.id}",
+        help="Closes this dialog without saving. Form fields you haven't submitted are discarded.",
+    ):
+        st.rerun()
+
     tab_details, tab_covs, tab_vehs, tab_drvs, tab_ais, tab_history = st.tabs(["📝 Details", "🛡️ Coverages", "🚙 Vehicles", "👤 Drivers", "🏢 Add'l Interests", "📜 History"])
     
-    # --- Tab 1: Details (Scalar Fields) ---
     with tab_details:
         with st.form("edit_details_form"):
             col1, col2 = st.columns(2)
@@ -50,7 +60,6 @@ def edit_policy_dialog(policy, service: PolicyService):
                 curr_conf = policy.classification_confidence if policy.classification_confidence in CONFIDENCE_OPTIONS else "low"
                 new_conf = st.selectbox("Confidence", options=CONFIDENCE_OPTIONS, index=CONFIDENCE_OPTIONS.index(curr_conf))
                 
-                # Status Field
                 curr_status = policy.status if policy.status in STATUS_OPTIONS else "Active"
                 new_status = st.selectbox("Status", options=STATUS_OPTIONS, index=STATUS_OPTIONS.index(curr_status))
 
@@ -108,9 +117,6 @@ def edit_policy_dialog(policy, service: PolicyService):
                     "status": new_status
                 }
                 
-                # Pass directly (wrapped implicitly by logic or explicit wrap check in logic)
-                # Logic: if 'vehicles' not in dict, history_svc ignores collection change. Correct.
-                
                 result = service.update_policy(policy, updated_data)
                 
                 if isinstance(result, tuple): success, msg = result
@@ -124,58 +130,46 @@ def edit_policy_dialog(policy, service: PolicyService):
                     
                     st.error(msg)
                     
-    # --- Tab 2: Coverages (New) ---
     with tab_covs:
         st.subheader("🛡️ Policy Coverages")
-        
-        # Split coverages
-        global_covs = [c for c in policy.coverages if not c.vehicle_id]
-        
-        st.markdown(f"**Global / Policy-Level ({len(global_covs)})**")
-        if global_covs:
-            c_data = []
-            for c in global_covs:
-                 lim_disp = _coverage_limit_display(c)
-                 c_data.append({
-                     "Code": c.coverage_code,
-                     "Family": c.family,
-                     "Limit": lim_disp,
-                     "Deductible": c.deductible if c.deductible else "-"
-                 })
-            st.dataframe(pd.DataFrame(c_data), hide_index=True, use_container_width=True)
-        else:
-            st.caption("No global coverages found.")
 
-        st.divider()
-        st.subheader("🚙 Vehicle-Specific Coverages")
-        
-        # vehicle-level
-        has_veh_covs = False
-        for v in policy.vehicles:
-            if v.coverages:
-                has_veh_covs = True
-                with st.expander(f"{v.year} {v.make} {v.model} ({v.vin[-6:] if v.vin else 'NO VIN'})"):
-                    vc_data = []
-                    for c in v.coverages:
-                         lim_disp = "Included"
-                         if c.deductible:
-                             lim_disp = f"Ded: ${c.deductible}"
-                         else:
-                             alt = _coverage_limit_display(c)
-                             if alt != "N/A":
-                                 lim_disp = alt
-                         
-                         vc_data.append({
-                             "Coverage": c.coverage_code or c.type,
-                             "Details": lim_disp
-                         })
-                    st.dataframe(pd.DataFrame(vc_data), hide_index=True, use_container_width=True)
-        
-        if not has_veh_covs:
-             st.info("No vehicle-specific coverages found (e.g. Comp/Coll might be global or missing).")
+        all_covs = list(policy.coverages or [])
+        global_count = sum(1 for c in all_covs if not c.vehicle_id)
+        veh_count = len(all_covs) - global_count
+
+        if not all_covs:
+            st.info("No coverages recorded for this policy.")
+        else:
+            st.caption(
+                f"**{len(all_covs)}** total — {global_count} policy-level, "
+                f"{veh_count} vehicle-specific"
+            )
+
+            # Build a vehicle-id → label map once, so every row renders fast.
+            veh_label = {
+                v.id: (
+                    f"{v.year or ''} {v.make or ''} {v.model or ''}".strip()
+                    + (f" ({v.vin[-6:]})" if v.vin else "")
+                )
+                for v in policy.vehicles
+            }
+
+            rows = []
+            for c in all_covs:
+                rows.append({
+                    "Vehicle": veh_label.get(c.vehicle_id, "GLOBAL"),
+                    "Code": c.coverage_code or c.type or "—",
+                    "Family": c.family or "—",
+                    "Limit": _coverage_limit_display(c),
+                    "Deductible": f"${c.deductible}" if c.deductible else "—",
+                })
+
+            df = pd.DataFrame(rows).sort_values(
+                by=["Vehicle", "Family", "Code"], kind="stable"
+            )
+            st.dataframe(df, hide_index=True, use_container_width=True)
     with tab_vehs:
         st.subheader("Manage Vehicles")
-        # Prepare Data
         v_data = [{"year": v.year, "make": v.make, "model": v.model, "vin": v.vin, "type": v.vehicle_type, "gvw": v.gvw, "chassis": v.chassis, "body": v.body} for v in policy.vehicles]
         v_df = pd.DataFrame(v_data)
         if v_df.empty: v_df = pd.DataFrame(columns=["year", "make", "model", "vin", "type", "gvw", "chassis", "body"])
@@ -211,7 +205,6 @@ def edit_policy_dialog(policy, service: PolicyService):
                          "chassis": row.get('chassis'), "body": row.get('body')
                      })
                  
-                 # Send Payload
                  payload = {"vehicles": new_vehs_list}
                  result = service.update_policy(policy, payload)
                  if isinstance(result, tuple): success, msg = result
@@ -221,7 +214,6 @@ def edit_policy_dialog(policy, service: PolicyService):
                      st.rerun()
                  else: st.error(msg)
 
-    # --- Tab 3: Drivers ---
     with tab_drvs:
         st.subheader("Manage Drivers")
         d_data = [{"full_name": d.full_name, "license_number": d.license_number, "is_excluded": d.is_excluded} for d in policy.drivers]
@@ -260,7 +252,6 @@ def edit_policy_dialog(policy, service: PolicyService):
                      st.rerun()
                   else: st.error(msg)
 
-    # --- Tab 4: Additional Interests ---
     with tab_ais:
         st.subheader("Manage Additional Interests")
         ai_data = [{"name": a.name, "address": a.address, "interest_type": a.interest_type} for a in policy.additional_interests]
@@ -302,7 +293,6 @@ def edit_policy_dialog(policy, service: PolicyService):
                      st.rerun()
                  else: st.error(msg)
 
-    # --- Tab 5: History ---
     with tab_history:
         st.subheader("Changes Timeline")
         if not policy.history:

@@ -15,6 +15,7 @@ This folder documents the current implemented system in this repository.
 - Coverage ontology and mapping rules: [`ONTOLOGY.md`](ONTOLOGY.md)
 - State extraction hints: [`STATE_RULES.md`](STATE_RULES.md)
 - Prompt and extraction prompt design: [`PROMPTS.md`](PROMPTS.md)
+- Carrier hints and runtime profiles: [`CARRIER_KNOWLEDGE.md`](CARRIER_KNOWLEDGE.md)
 
 ## Deep Dives
 

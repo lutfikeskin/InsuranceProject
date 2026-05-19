@@ -1,0 +1,86 @@
+{
+  "policy": {
+    "carrier_name": "GEICO",
+    "underwriter_name": "GEICO Marine Insurance Company",
+    "naic_number": null,
+    "policy_number": "9300154763",
+    "effective_date": "05/16/2026",
+    "expiration_date": "05/16/2027",
+    "insured_name": "Noreldin Younis DBA Noreldin Younis",
+    "insured_address": "2270 W LAKE RD 204",
+    "insured_city": "NORTH LIBERTY",
+    "insured_state_code": "IA",
+    "insured_zip": "52317",
+    "financial_responsibility_name": null,
+    "liability_limit": "$1,000,000",
+    "general_liability_limit": null,
+    "cargo_limit": "$100,000",
+    "cargo_deductible": "$1000",
+    "um_uim_limit": null,
+    "med_pay_limit": "Included",
+    "pip_limit": null,
+    "comp_deductible": null,
+    "coll_deductible": null,
+    "has_general_liability": false,
+    "has_auto_liability": true,
+    "has_full_collision": false
+  },
+  "compliance": {},
+  "coverages": [],
+  "vehicles": [
+    {
+      "year": 2019,
+      "make": "MERCEDES-BENZ",
+      "model": "SPRINTER",
+      "vin": "WD4PF1CD5KP037479",
+      "gvw": null,
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": null,
+      "covered_auto_symbols": null,
+      "radius_of_operation": null,
+      "business_use_class": null,
+      "valuation_basis": null
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "Noreldin Younis",
+      "license_number": null,
+      "is_excluded": null
+    }
+  ],
+  "audits": {
+    "premium": {
+      "flag": "MISSING_DATA",
+      "confidence": "low",
+      "reason": "missing premium or vehicle count"
+    }
+  },
+  "classification": {
+    "document_type": "memorandum",
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "user_selected",
+      "text_hint:memorandum"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ],
+  "extraction_audit": {
+    "errors": [],
+    "rejected_coverages": [],
+    "classification_warnings": [],
+    "user_selected_policy_type": "commercial_auto",
+    "commercial_flags": {
+      "symbol1_any_auto_suggested": false
+    }
+  },
+  "policy_data_source": "coi_summary",
+  "variant_status": "new_carrier"
+}

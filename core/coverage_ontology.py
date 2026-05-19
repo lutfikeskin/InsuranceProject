@@ -443,6 +443,19 @@ def summarize_med_pay(coverages):
     val = best.get("limits", {}).get("per_person")
     if val:
         return f"{val:,}"
+    descriptor = " ".join(
+        str(x)
+        for x in (
+            best.get("limit_descriptor"),
+            best.get("display_limit"),
+            best.get("type"),
+            best.get("display_name"),
+            *(best.get("limits") or {}).values(),
+        )
+        if x
+    ).lower()
+    if "incl" in descriptor or "included" in descriptor:
+        return "Included"
     return None
 
 def summarize_pip(coverages):

@@ -1,0 +1,71 @@
+{
+  "classification": {
+    "policy_type": "personal_auto",
+    "confidence": "high",
+    "signals": []
+  },
+  "policy": {
+    "insured_state_code": "MI",
+    "um_stacked_effective_limit": 300000,
+    "liability_limit": "100/300/100"
+  },
+  "compliance": {
+    "mcs90_noted": "Endorsement on file",
+    "doc_endorsements": [
+      {
+        "form_id": "CA 99 10",
+        "named_individuals": [
+          "Jane Q. Public",
+          "John Doe"
+        ]
+      }
+    ]
+  },
+  "vehicles": [
+    {
+      "vin": "1C4RJFAG0LC123456",
+      "covered_auto_symbols": "1,7",
+      "year": 2020,
+      "make": "FREIGHT",
+      "model": "UNIT"
+    }
+  ],
+  "drivers": [],
+  "coverages": [
+    {
+      "coverage_code": "MI_PPI",
+      "family": "other",
+      "display_name": "PPI",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 1000000
+      }
+    },
+    {
+      "coverage_code": "TRAILER_INTERCHANGE",
+      "family": "physical_damage",
+      "display_name": "Trailer Interchange",
+      "limit_structure": "per_occurrence",
+      "limits": {
+        "per_occurrence": 20000
+      }
+    },
+    {
+      "coverage_code": "UM_BI",
+      "family": "uninsured_motorist",
+      "display_name": "UM",
+      "limit_structure": "split",
+      "is_stacked": true,
+      "stacked_vehicle_count": 3,
+      "limits": {
+        "per_person": 100000,
+        "per_accident": 300000
+      }
+    }
+  ],
+  "extraction_audit": {
+    "commercial_flags": {
+      "symbol1_any_auto_suggested": true
+    }
+  }
+}

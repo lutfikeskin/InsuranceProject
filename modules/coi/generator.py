@@ -1,7 +1,12 @@
 import io
-import textwrap
+import json
+import os
+
 import pypdf
 from datetime import datetime, date
+
+from core.logger import logger
+
 
 class COIGenerator:
     def __init__(self, template_path="data/COI Example.pdf"):
@@ -11,207 +16,218 @@ class COIGenerator:
         """
         Fills the COI PDF template with policy and certificate holder data.
         """
-        import json
-        
+        # Missing mapping.json is a tolerated dev-time condition (degrades to an
+        # empty field map). A corrupt mapping.json is a real bug and JSONDecodeError
+        # should propagate so it gets fixed.
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        mapping_path = os.path.join(base_dir, "mapping.json")
         try:
-            # Load Mappings
-            try:
-                import os
-                base_dir = os.path.dirname(os.path.abspath(__file__))
-                mapping_path = os.path.join(base_dir, "mapping.json")
-                
-                with open(mapping_path, "r") as f:
-                    mapping_config = json.load(f)
-                    field_map = mapping_config.get("mappings", {})
-            except FileNotFoundError:
-                print("Warning: mapping.json not found in module, using empty map.")
-                field_map = {}
+            with open(mapping_path, "r") as f:
+                field_map = json.load(f).get("mappings", {})
+        except FileNotFoundError:
+            logger.warning(f"mapping.json not found at {mapping_path}; using empty map.")
+            field_map = {}
 
-            reader = pypdf.PdfReader(self.template_path)
-            writer = pypdf.PdfWriter()
+        reader = pypdf.PdfReader(self.template_path)
+        writer = pypdf.PdfWriter()
 
-            page = reader.pages[0]
-            writer.add_page(page)
-            
-            # Fix: Copy /AcroForm from reader to writer to ensure form fields are recognized
-            if "/AcroForm" in reader.trailer["/Root"]:
-                writer.root_object.update({
-                    pypdf.generic.NameObject("/AcroForm"): reader.trailer["/Root"]["/AcroForm"]
-                })
+        page = reader.pages[0]
+        writer.add_page(page)
 
-            # Helper to format dates
-            def fmt_date(d):
-                if not d: return ""
-                if isinstance(d, (datetime, date)):
-                    return d.strftime("%m/%d/%Y")
-                return "" # Return empty string for None/Text to let explicit strings pass if needed, or handle elsewhere
-            
-            # Helper to clean limits (remove text)
-            def clean_limit(val):
-                if not val: return ""
-                # Keep only digits, commas, dots
-                import re
-                cleaned = re.sub(r'[^\d,.]', '', str(val))
-                return f"${cleaned}" if cleaned else ""
+        # Preserve AcroForm so PDF fields remain writable.
+        if "/AcroForm" in reader.trailer["/Root"]:
+            writer.root_object.update({
+                pypdf.generic.NameObject("/AcroForm"): reader.trailer["/Root"]["/AcroForm"]
+            })
 
-            # Logic Flags
-            has_gl = policy_data.get('has_general_liability', True) # Default to True if missing to be safe
-            has_auto = policy_data.get('has_auto_liability', True)
-            gl_occ = clean_limit(policy_data.get('liability_limit', '')) if has_gl else ""
-            gl_agg = (
-                clean_limit(policy_data.get('gl_general_aggregate') or policy_data.get('liability_limit', ''))
-                if has_gl
-                else ""
+        def fmt_date(d):
+            if not d: return ""
+            if isinstance(d, (datetime, date)):
+                return d.strftime("%m/%d/%Y")
+            return ""  # null / non-date → empty cell; explicit strings pass through elsewhere
+
+        def clean_limit(val):
+            """Normalize limit text for PDF fields; preserves K/M/B (e.g. $100K, not $100)."""
+            if not val:
+                return ""
+            import re
+
+            s = str(val).strip()
+            # Embedded prose (e.g. "$100K Cargo w/ …") — take first monetary token with optional suffix.
+            m = re.search(
+                r"(?i)\$?\s*([\d,]+(?:\.\d+)?)\s*([kmb])?\b",
+                s,
             )
-            
-            # Cargo Handling
-            cargo_limit = clean_limit(policy_data.get('cargo_limit', ''))
-            cargo_ded = clean_limit(policy_data.get('cargo_deductible', ''))
+            if m:
+                num, suffix = m.group(1), (m.group(2) or "")
+                if suffix:
+                    return f"${num}{suffix.upper()}"
+                return f"${num}"
+            cleaned = re.sub(r"[^\d,.]", "", s)
+            return f"${cleaned}" if cleaned else ""
+
+        has_gl = bool(policy_data.get('has_general_liability'))
+        has_auto = bool(policy_data.get('has_auto_liability'))
+        gl_occ = clean_limit(policy_data.get('liability_limit', '')) if has_gl else ""
+        gl_agg = (
+            clean_limit(policy_data.get('gl_general_aggregate') or policy_data.get('liability_limit', ''))
+            if has_gl
+            else ""
+        )
+
+        cargo_limit = clean_limit(policy_data.get('cargo_limit', ''))
+        cargo_ded = clean_limit(policy_data.get('cargo_deductible', ''))
+        want_cargo = policy_data.get("has_cargo")
+        if want_cargo is None:
             has_cargo = bool(cargo_limit)
-            
-            # Description Construction
-            # Vehicle List: [Year Model VIN]
-            # Driver List: [Each driver names]
-            # Radius of Operation: Unlimited
-            # Certificate Holder is also listed as an additional insured
-            
-            desc_lines = []
-            
-            # Vehicles
-            if policy_data.get('vehicle_list_str'):
-                desc_lines.append(f"Vehicle List: {policy_data.get('vehicle_list_str')}")
-            
-            # Drivers
-            if policy_data.get('driver_list_str'):
-                desc_lines.append(f"Driver List: {policy_data.get('driver_list_str')}")
-                
-            # Note: Radius and Holder clause are now handled by the UI pre-fill in app.py
-            # and passed via holder_data['description']
-            
-            if holder_data.get('description'):
-                desc_lines.append(holder_data.get('description'))
+        else:
+            has_cargo = bool(want_cargo) and bool(cargo_limit)
 
-            # Preserve natural section breaks only; let the PDF field auto-wrap within its bounds
-            wrapped_lines = []
-            for line in desc_lines:
-                wrapped_lines.extend(line.splitlines() or [line])
-            full_description = "\n".join(wrapped_lines)
+        # COI type drives ADDL INSD column + Cargo/Comp-Coll swap.
+        coi_type = policy_data.get("coi_type", "Additional Insured")
+        is_lienholder = coi_type == "Lienholder"
+        # "Y" for Additional Insured and Lienholder, "N" for Certificate Holder.
+        if coi_type == "Additional Insured":
+            addl_y = "Y"
+        elif coi_type == "Certificate Holder":
+            addl_y = "N"
+        else:
+            addl_y = "Y"  # Lienholder also gets "Y"
 
-            # Prepare the data dictionary
-            # We construct the fields dict by looking up the PDF field name in our map
-            
-            # 1. Static/Hardcoded & Conditional "A"s
-            fields = {
-                # Document Date -> Current Date
-                "F[0].P1[0].Form_CompletionDate_A[0]": datetime.now().strftime("%m/%d/%Y")
-            }
-            
-            # Add "A" only if coverage exists, otherwise set to empty string to ensure it's cleared
-            fields["F[0].P1[0].GeneralLiability_InsurerLetterCode_A[0]"] = "A" if has_gl else ""
-            fields["F[0].P1[0].Vehicle_InsurerLetterCode_A[0]"] = "A" if has_auto else ""
-            
-            # Cargo usually falls under "Other"
-            fields["F[0].P1[0].OtherPolicy_InsurerLetterCode_A[0]"] = "A" if has_cargo else ""
-            
-            # 2. Dynamic Mapping
-            # (Key in JSON) -> (Value from Data)
-            # 2. Dynamic Mapping
-            # (Key in JSON) -> (Value from Data)
-            
-            # NAIC & Carrier
-            # Assuming Mapping "Insurer_Name_A" -> "Insurer_FullName_A[0]"
-            
-            data_map = {
-                "Insurer_Name_A": policy_data.get('carrier_name', ''),
-                "Insurer_NAIC_A": policy_data.get('naic_number', ''),
-                
-                "PolicyNumber_GL": policy_data.get('policy_number', '') if has_gl else "",
-                "EffectiveDate_GL": fmt_date(policy_data.get('effective_date')) if has_gl else "",
-                "ExpirationDate_GL": fmt_date(policy_data.get('expiration_date')) if has_gl else "",
-                "Limit_GL_Occurrence": gl_occ,
-                "Limit_GL_FireDamage": "$100,000" if has_gl else "",
-                "Limit_GL_MedExp": "$5,000" if has_gl else "",
-                "Limit_GL_PersonalAdv": gl_occ,
-                "Limit_GL_GeneralAggregate": gl_agg,
-                "Limit_GL_ProductsAgg": gl_agg,
-                
-                "PolicyNumber_Auto": policy_data.get('policy_number', '') if has_auto else "",
-                "EffectiveDate_Auto": fmt_date(policy_data.get('effective_date')) if has_auto else "",
-                "ExpirationDate_Auto": fmt_date(policy_data.get('expiration_date')) if has_auto else "",
-                "Limit_Auto_Combined": clean_limit(policy_data.get('liability_limit', '')) if has_auto else "",
-                
-                "Insured_Name": policy_data.get('insured_name', ''),
-                "Insured_Address": policy_data.get('insured_address', ''),
-                "Insured_City": policy_data.get('insured_city', ''),
-                "Insured_State": policy_data.get('insured_state_code', ''),
-                "Insured_Zip": policy_data.get('insured_zip', ''),
-                
-                "Holder_Name": holder_data.get('name', ''),
-                "Holder_Address": holder_data.get('address', ''),
-                "Holder_City": holder_data.get('city', ''),
-                "Holder_State": holder_data.get('state', ''),
-                "Holder_Zip": holder_data.get('zip', ''),
-                "Holder_Description": full_description,
-                
-                # Cargo Section
-                "Cargo_Box": "Motor Truck Cargo" if has_cargo else "",
-                "Cargo_Limit": f"{cargo_limit} Cargo\n{cargo_ded} Ded" if has_cargo else "",
-                "Cargo_Effective": fmt_date(policy_data.get('effective_date')) if has_cargo else "",
-                "Cargo_Expires": fmt_date(policy_data.get('expiration_date')) if has_cargo else "",
-                "Cargo_PolicyNumber": policy_data.get('policy_number', '') if has_cargo else ""
-            }
-            
-            # Apply mappings
-            for key, val in data_map.items():
-                pdf_field_name = field_map.get(key)
-                if pdf_field_name:
-                    fields[pdf_field_name] = val
-            
-            writer.update_page_form_field_values(writer.pages[0], fields)
+        if is_lienholder:
+            # Lienholder COI repurposes the OtherPolicy box for Comp/Coll deductibles.
+            has_cargo = False
+            has_comp_coll = True
+            comp_ded = clean_limit(policy_data.get('comp_deductible', ''))
+            coll_ded = clean_limit(policy_data.get('coll_deductible', ''))
+        else:
+            has_comp_coll = False
+            comp_ded = ""
+            coll_ded = ""
 
-            output_buffer = io.BytesIO()
-            writer.write(output_buffer)
-            filled_pdf_bytes = output_buffer.getvalue()
-            
-            # 3. Flatten (Bake) the PDF using PyMuPDF (fitz)
-            try:
-                import fitz
-                doc = fitz.open("pdf", filled_pdf_bytes)
+        desc_lines = []
 
-                # Set font size on the description widget before baking
-                desc_field_key = field_map.get("Holder_Description", "")
-                for page in doc:
-                    for widget in page.widgets():
-                        wname = widget.field_name or ""
-                        # PyMuPDF may return full path or just terminal segment
-                        if wname == desc_field_key or desc_field_key.endswith(wname) or wname.endswith(desc_field_key):
-                            widget.text_fontsize = desc_font_size
-                            widget.update()
-                            break
+        if policy_data.get('vehicle_list_str'):
+            desc_lines.append(f"Vehicle List: {policy_data.get('vehicle_list_str')}")
 
-                # doc.bake() flattens all form fields and annotations across the document
-                doc.bake()
-                
-                # Save to a new buffer
-                flattened_buffer = io.BytesIO()
-                doc.save(flattened_buffer)
-                doc.close()
-                return flattened_buffer.getvalue()
-            except ImportError:
-                print("Warning: PyMuPDF (fitz) not found. PDF will not be flattened/baked.")
-                return filled_pdf_bytes
-            except Exception as e:
-                print(f"Error flattening PDF: {e}")
-                # Fallback to filled but not flattened PDF if flattening fails
-                return filled_pdf_bytes
+        if policy_data.get('driver_list_str'):
+            desc_lines.append(f"Driver List: {policy_data.get('driver_list_str')}")
 
-        except Exception as e:
-            # Re-raise to let the UI handle it or log it
-            print(f"Error generating COI: {e}")
-            raise e
+        # Note: Radius and Holder clause are now handled by the UI pre-fill in app.py
+        # and passed via holder_data['description']
+
+        if holder_data.get('description'):
+            desc_lines.append(holder_data.get('description'))
+
+        # Preserve natural section breaks only; let the PDF field auto-wrap within its bounds
+        wrapped_lines = []
+        for line in desc_lines:
+            wrapped_lines.extend(line.splitlines() or [line])
+        full_description = "\n".join(wrapped_lines)
+
+        fields = {
+            "F[0].P1[0].Form_CompletionDate_A[0]": datetime.now().strftime("%m/%d/%Y")
+        }
+
+        fields["F[0].P1[0].GeneralLiability_InsurerLetterCode_A[0]"] = "A" if has_gl else ""
+        fields["F[0].P1[0].Vehicle_InsurerLetterCode_A[0]"] = "A" if has_auto else ""
+
+        fields["F[0].P1[0].OtherPolicy_InsurerLetterCode_A[0]"] = "A" if (has_cargo or has_comp_coll) else ""
+
+        data_map = {
+            "Insurer_Name_A": policy_data.get('carrier_name', ''),
+            "Insurer_NAIC_A": policy_data.get('naic_number', ''),
+
+            "PolicyNumber_GL": policy_data.get('policy_number', '') if has_gl else "",
+            "EffectiveDate_GL": fmt_date(policy_data.get('effective_date')) if has_gl else "",
+            "ExpirationDate_GL": fmt_date(policy_data.get('expiration_date')) if has_gl else "",
+            "Limit_GL_Occurrence": gl_occ,
+            "Limit_GL_FireDamage": "$100,000" if has_gl else "",
+            "Limit_GL_MedExp": "$5,000" if has_gl else "",
+            "Limit_GL_PersonalAdv": gl_occ,
+            "Limit_GL_GeneralAggregate": gl_agg,
+            "Limit_GL_ProductsAgg": gl_agg,
+
+            "PolicyNumber_Auto": policy_data.get('policy_number', '') if has_auto else "",
+            "EffectiveDate_Auto": fmt_date(policy_data.get('effective_date')) if has_auto else "",
+            "ExpirationDate_Auto": fmt_date(policy_data.get('expiration_date')) if has_auto else "",
+            "Limit_Auto_Combined": clean_limit(policy_data.get('liability_limit', '')) if has_auto else "",
+
+            "Insured_Name": policy_data.get('insured_name', ''),
+            "Insured_Address": policy_data.get('insured_address', ''),
+            "Insured_City": policy_data.get('insured_city', ''),
+            "Insured_State": policy_data.get('insured_state_code', ''),
+            "Insured_Zip": policy_data.get('insured_zip', ''),
+
+            "Holder_Name": holder_data.get('name', ''),
+            "Holder_Address": holder_data.get('address', ''),
+            "Holder_City": holder_data.get('city', ''),
+            "Holder_State": holder_data.get('state', ''),
+            "Holder_Zip": holder_data.get('zip', ''),
+            "Holder_Description": full_description,
+
+            "Cargo_Box": (
+                "Motor Truck Cargo" if has_cargo
+                else ("Comprehensive / Collision" if has_comp_coll else "")
+            ),
+            "Cargo_Limit": (
+                f"{cargo_limit} Cargo\n{cargo_ded} Ded" if has_cargo
+                else (f"Comp Ded: {comp_ded}\nColl Ded: {coll_ded}" if has_comp_coll else "")
+            ),
+            "Cargo_Effective": fmt_date(policy_data.get('effective_date')) if (has_cargo or has_comp_coll) else "",
+            "Cargo_Expires": fmt_date(policy_data.get('expiration_date')) if (has_cargo or has_comp_coll) else "",
+            "Cargo_PolicyNumber": policy_data.get('policy_number', '') if (has_cargo or has_comp_coll) else "",
+
+            # ADDL INSD column codes — "Y" only for Additional Insured COI type.
+            "AddlInsd_GL": addl_y if has_gl else "",
+            "AddlInsd_Auto": addl_y if has_auto else "",
+            "AddlInsd_Other": addl_y if (has_cargo or has_comp_coll) else "",
+            "AddlInsd_Excess": ""
+        }
+
+        for key, val in data_map.items():
+            pdf_field_name = field_map.get(key)
+            if pdf_field_name:
+                fields[pdf_field_name] = val
+
+        writer.update_page_form_field_values(writer.pages[0], fields)
+
+        output_buffer = io.BytesIO()
+        writer.write(output_buffer)
+        filled_pdf_bytes = output_buffer.getvalue()
+
+        # Best-effort flatten with PyMuPDF. If fitz is unavailable or the bake
+        # fails for any reason, fall back to the unflattened PDF — a working
+        # document is better than no document. fitz raises a range of error
+        # types (ImportError, RuntimeError, fitz-specific exceptions) that
+        # justify a broad except here.
+        try:
+            import fitz
+            doc = fitz.open("pdf", filled_pdf_bytes)
+
+            desc_field_key = field_map.get("Holder_Description", "")
+            for page in doc:
+                for widget in page.widgets():
+                    wname = widget.field_name or ""
+                    if wname == desc_field_key or desc_field_key.endswith(wname) or wname.endswith(desc_field_key):
+                        widget.text_fontsize = desc_font_size
+                        widget.update()
+                        break
+
+            doc.bake()
+
+            flattened_buffer = io.BytesIO()
+            doc.save(flattened_buffer)
+            doc.close()
+            return flattened_buffer.getvalue()
+        except ImportError:
+            logger.info("PyMuPDF (fitz) not installed; returning unflattened PDF.")
+            return filled_pdf_bytes
+        except Exception as exc:  # noqa: BLE001 — best-effort post-processing
+            logger.warning(f"Could not flatten COI PDF, returning unflattened bytes: {exc}")
+            return filled_pdf_bytes
 
 if __name__ == "__main__":
-    # Test
     gen = COIGenerator()
     dummy_policy = {
         "policy_number": "TEST-12345", 

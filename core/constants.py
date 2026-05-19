@@ -1,6 +1,3 @@
-# core/constants.py
-
-# Policy Constants
 POLICY_TYPES = [
     "personal_auto", 
     "commercial_auto", 
@@ -16,10 +13,8 @@ STATUS_OPTIONS = ["Active", "Pending", "Quote", "Expired", "Cancelled"]
 
 CONFIDENCE_OPTIONS = ["high", "medium", "low"]
 
-# Vehicle Constants
 VEHICLE_TYPES = ["Private Passenger", "Truck", "Trailer", "Tractor", "Van", "Bus", "Motorcycle", "Unknown"]
 
-# Interest Constants
 INTEREST_TYPES = [
     "Loss Payee", 
     "Additional Insured", 
@@ -29,11 +24,23 @@ INTEREST_TYPES = [
     "Other"
 ]
 
-# Validation Patterns
 VIN_REGEX = "^[A-HJ-NPR-Z0-9]{17}$"
 
-# Application Settings
 DEFAULT_DAILY_BUDGET = 2.5
+
+# Confidence gate (review screen).
+# Threshold names the *minimum* confidence the user trusts; values below it are
+# pre-cleared on the review form so the user has to fill them in by hand. Soft
+# nudge only — Save is never blocked.
+#   "off"    — clear nothing
+#   "medium" — clear "low" (default; only the riskiest values get nuked)
+#   "high"   — clear "low" + "medium" (strict; everything but "high" gets nuked)
+CONFIDENCE_GATE_DEFAULT = "medium"
+CONFIDENCE_GATE_OPTIONS = {
+    "off": "Off — trust all extracted values",
+    "medium": "Clear low-confidence fields (recommended)",
+    "high": "Clear low + medium-confidence fields (strictest)",
+}
 
 # Policy list/search (Database, COI, Dashboard)
 POLICY_SEARCH_PAGE_LIMIT = 100

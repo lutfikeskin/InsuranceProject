@@ -1,0 +1,86 @@
+{
+  "policy": {
+    "carrier_name": "GEICO",
+    "underwriter_name": "GEICO Marine Insurance Company",
+    "naic_number": null,
+    "policy_number": "9300323751",
+    "effective_date": "05/06/2026",
+    "expiration_date": "05/06/2027",
+    "insured_name": "Sedat Ozturk",
+    "insured_address": "1600 RONALD REAGAN BLVD, 7413 UNIT",
+    "insured_city": "CUMMING",
+    "insured_state_code": "GA",
+    "insured_zip": "30041",
+    "financial_responsibility_name": null,
+    "liability_limit": "$1,000,000",
+    "general_liability_limit": null,
+    "cargo_limit": "$100k",
+    "cargo_deductible": "$1,000",
+    "um_uim_limit": "$100,000",
+    "med_pay_limit": "$1,000",
+    "pip_limit": null,
+    "comp_deductible": "$1,000",
+    "coll_deductible": "$1,000",
+    "has_general_liability": false,
+    "has_auto_liability": true,
+    "has_full_collision": false
+  },
+  "compliance": {},
+  "coverages": [],
+  "vehicles": [
+    {
+      "year": 2022,
+      "make": "FORD",
+      "model": "TRANSIT",
+      "vin": "1FDBF6P85NKA68985",
+      "gvw": null,
+      "type": "Straight Truck",
+      "chassis": "Cab Chassis",
+      "body": null,
+      "covered_auto_symbols": null,
+      "radius_of_operation": null,
+      "business_use_class": null,
+      "valuation_basis": null
+    }
+  ],
+  "drivers": [
+    {
+      "full_name": "Sedat Ozturk",
+      "license_number": null,
+      "is_excluded": null
+    }
+  ],
+  "audits": {
+    "premium": {
+      "flag": "MISSING_DATA",
+      "confidence": "low",
+      "reason": "missing premium or vehicle count"
+    }
+  },
+  "classification": {
+    "document_type": "memorandum",
+    "policy_type": "commercial_auto",
+    "confidence": "high",
+    "signals": [
+      "user_selected",
+      "text_hint:memorandum"
+    ]
+  },
+  "page_dimensions": [
+    {
+      "width": 612.0,
+      "height": 792.0
+    }
+  ],
+  "extraction_audit": {
+    "errors": [],
+    "rejected_coverages": [],
+    "classification_warnings": [],
+    "user_selected_policy_type": "commercial_auto",
+    "commercial_flags": {
+      "symbol1_any_auto_suggested": false
+    }
+  },
+  "policy_data_source": "coi_summary",
+  "variant_status": "new_carrier"
+}

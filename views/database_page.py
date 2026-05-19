@@ -1,13 +1,264 @@
 import streamlit as st
 import pandas as pd
+from datetime import date
+from sqlalchemy import or_
 from core.services import PolicyService
-from core.database import get_session
+from core.database import Policy, PolicyRelationship, get_session
+from core.customer_resolver import CustomerResolver
 from utils.exporter import create_excel_report
 
 from views.edit_dialog import edit_policy_dialog
 from core.constants import POLICY_SEARCH_PAGE_LIMIT, POLICY_DELETE_CANDIDATE_LIMIT
 
-def page_database(api_key):
+
+CUSTOMER_PAGE_SIZE = 25
+RELATIONSHIP_DISPLAY = {
+    "renewal": ("🔄", "Possible Renewal"),
+    "canceled_replaced": ("📋", "Possible Replacement"),
+    "rewrite": ("✏️", "Possible Rewrite"),
+    "same_customer_new_policy": ("👤", "Same Customer, New Policy"),
+}
+
+
+def _carrier_display(carrier_name: str | None, underwriter_name: str | None) -> str:
+    carrier = (carrier_name or "").strip()
+    underwriter = (underwriter_name or "").strip()
+    if underwriter and carrier and underwriter.lower() != carrier.lower():
+        return f"{carrier} ({underwriter})"
+    return carrier or underwriter or "Unknown Carrier"
+
+
+def render_customer_row(customer, session):
+    active = [p for p in customer.policies if (p.policy_status or "").lower() == "active"]
+    all_types = sorted(set(p.policy_type for p in customer.policies if p.policy_type))
+
+    header = (
+        f"**{customer.full_name}** — "
+        f"{len(active)} active / "
+        f"{len(customer.policies)} total"
+    )
+    if all_types:
+        header += f" — {', '.join(all_types)}"
+
+    with st.expander(header):
+        if customer.entities:
+            entity_strs = [
+                f"`{e.entity_name}` ({e.entity_type})"
+                for e in customer.entities
+                if e.entity_name
+            ]
+            if entity_strs:
+                st.markdown(f"**Known as:** {' · '.join(entity_strs)}")
+
+        if getattr(customer, "needs_real_name_entry", False):
+            st.warning(
+                "⚠️ Customer was created from a commercial policy "
+                "without a clear personal name. Please update."
+            )
+            new_name = st.text_input(
+                "Enter the person's real name:",
+                key=f"realname_{customer.id}",
+            )
+            if st.button("Update", key=f"updatename_{customer.id}") and new_name.strip():
+                clean_name = new_name.strip()
+                customer.full_name = clean_name
+                customer.needs_real_name_entry = False
+                resolver = CustomerResolver(session)
+                resolver.add_entity(customer, clean_name, "personal")
+                session.commit()
+                st.rerun()
+
+        st.divider()
+
+        icons = {"active": "✅", "expired": "⏰", "canceled": "❌", "replaced": "🔄"}
+        for status in ["active", "expired", "canceled", "replaced"]:
+            status_pols = [p for p in customer.policies if (p.policy_status or "").lower() == status]
+            if not status_pols:
+                continue
+            st.markdown(f"**{icons[status]} {status.title()}**")
+            for p in sorted(status_pols, key=lambda x: x.effective_date or date.min, reverse=True):
+                c1, c2 = st.columns([3, 2])
+                c1.markdown(
+                    f"`{p.policy_number}` — {p.policy_type or 'unknown'} — "
+                    f"{_carrier_display(p.carrier_name, getattr(p, 'underwriter_name', None))}"
+                )
+                c2.markdown(f"{p.effective_date} → {p.expiration_date}")
+
+        with st.expander("➕ Add business name / DBA / alias"):
+            new_entity = st.text_input("Entity name", key=f"newent_{customer.id}")
+            new_type = st.selectbox(
+                "Type",
+                ["business", "dba", "maiden_name", "personal"],
+                key=f"newent_type_{customer.id}",
+            )
+            if st.button("Add", key=f"addent_{customer.id}") and new_entity.strip():
+                resolver = CustomerResolver(session)
+                resolver.add_entity(customer, new_entity.strip(), new_type, source="manual")
+                session.commit()
+                st.rerun()
+
+
+def render_customers_view(session):
+    st.subheader("👥 Customer Portfolio")
+    service = PolicyService(session)
+    col_search, col_filter = st.columns([3, 1])
+    with col_search:
+        search = st.text_input("🔍 Search by name or business", key="customer_search")
+    with col_filter:
+        customer_filter = st.selectbox(
+            "Customer filter",
+            ["Active customers", "All customers", "Orphans only"],
+            key="customer_filter",
+            help="Orphans are customer profiles with no remaining policies.",
+        )
+    search_lower = search.strip().lower()
+    filter_map = {
+        "Active customers": "active",
+        "All customers": "all",
+        "Orphans only": "orphans",
+    }
+    orphan_filter = filter_map[customer_filter]
+
+    page_key = "customer_page_idx"
+    if page_key not in st.session_state:
+        st.session_state[page_key] = 0
+
+    last_search_key = "customer_search_last"
+    last_filter_key = "customer_filter_last"
+    if (
+        st.session_state.get(last_search_key) != search_lower
+        or st.session_state.get(last_filter_key) != orphan_filter
+    ):
+        st.session_state[page_key] = 0
+        st.session_state[last_search_key] = search_lower
+        st.session_state[last_filter_key] = orphan_filter
+
+    total_customers = service.count_customers(search_lower or None, orphan_filter=orphan_filter)
+    customers = service.search_customers(
+        search_lower or None,
+        orphan_filter=orphan_filter,
+        offset=st.session_state[page_key] * CUSTOMER_PAGE_SIZE,
+        limit=CUSTOMER_PAGE_SIZE,
+    )
+
+    start = st.session_state[page_key] * CUSTOMER_PAGE_SIZE + 1 if total_customers else 0
+    end = min((st.session_state[page_key] + 1) * CUSTOMER_PAGE_SIZE, total_customers)
+    st.caption(f"Showing {start}-{end} of {total_customers} customer(s)")
+    p1, p2, _ = st.columns([1, 1, 4])
+    if p1.button("⬅️ Prev", disabled=st.session_state[page_key] == 0, key="customers_prev"):
+        st.session_state[page_key] -= 1
+        st.rerun()
+    has_next = end < total_customers
+    if p2.button("Next ➡️", disabled=not has_next, key="customers_next"):
+        st.session_state[page_key] += 1
+        st.rerun()
+
+    if not customers:
+        if orphan_filter == "active":
+            st.info("No active customer profiles found. Switch to All customers or Orphans only to inspect retained profiles.")
+        elif orphan_filter == "orphans":
+            # Neutral information, not a success outcome — use info styling.
+            st.info("No orphan customer profiles found.")
+        else:
+            st.info("No customer profiles found for this search.")
+        return
+
+    # Sortable scan view: a dataframe of this page's customers with the most-
+    # asked-for columns (policy counts, last-seen, created). Click a row to
+    # jump directly to that customer's expander below. Without a selection,
+    # the existing per-customer expander list renders normally.
+    summary_rows = []
+    for customer in customers:
+        policies = list(customer.policies)
+        active_count = sum(1 for p in policies if (p.policy_status or "").lower() == "active")
+        last_effective = max(
+            (p.effective_date for p in policies if p.effective_date),
+            default=None,
+        )
+        summary_rows.append(
+            {
+                "Customer": customer.full_name,
+                "Active policies": active_count,
+                "Total policies": len(policies),
+                "Policy types": ", ".join(
+                    sorted({p.policy_type for p in policies if p.policy_type})
+                ) or "—",
+                "Last effective": last_effective,
+                "Created": customer.created_at.date() if customer.created_at else None,
+                "_customer_id": customer.id,
+            }
+        )
+
+    summary_df = pd.DataFrame(summary_rows)
+
+    table_state = st.dataframe(
+        summary_df,
+        column_config={
+            "Customer": st.column_config.TextColumn("Customer", pinned=True),
+            "Active policies": st.column_config.NumberColumn("Active", format="%d"),
+            "Total policies": st.column_config.NumberColumn("Total", format="%d"),
+            "Policy types": st.column_config.TextColumn("Policy types"),
+            "Last effective": st.column_config.DateColumn("Last effective", format="YYYY-MM-DD"),
+            "Created": st.column_config.DateColumn("Created", format="YYYY-MM-DD"),
+            "_customer_id": None,  # internal — used to locate selection
+        },
+        hide_index=True,
+        width="stretch",
+        height=min(400, 38 * (len(summary_rows) + 1) + 4),
+        selection_mode="single-row",
+        on_select="rerun",
+        key="customers_summary_table",
+    )
+
+    selected_rows = (
+        table_state.selection.rows if hasattr(table_state, "selection") else []
+    )
+    if selected_rows:
+        idx = selected_rows[0]
+        selected_id = summary_df.iloc[idx]["_customer_id"]
+        focused = next((c for c in customers if c.id == selected_id), None)
+        if focused is not None:
+            st.markdown("---")
+            st.caption("Showing selected customer. Clear selection to see the full list.")
+            render_customer_row(focused, session)
+            return
+
+    st.markdown("---")
+    for customer in customers:
+        render_customer_row(customer, session)
+
+
+def render_related_section(policy, session):
+    relationships = (
+        session.query(PolicyRelationship)
+        .filter(
+            or_(
+                PolicyRelationship.policy_id == policy.id,
+                PolicyRelationship.related_policy_id == policy.id,
+            )
+        )
+        .all()
+    )
+    if not relationships:
+        return
+
+    st.markdown("#### Related Policies")
+    for rel in relationships:
+        other_id = rel.related_policy_id if rel.policy_id == policy.id else rel.policy_id
+        other = session.query(Policy).get(other_id)
+        if not other:
+            continue
+        icon = RELATIONSHIP_DISPLAY.get(rel.relationship_type, ("🔗", "Related"))[0]
+        carrier_line = _carrier_display(
+            other.carrier_name, getattr(other, "underwriter_name", None)
+        )
+        st.markdown(
+            f"{icon} `{other.policy_number}` — {carrier_line} "
+            f"({rel.relationship_type}, {rel.confidence})"
+        )
+
+
+def _render_policies_tab(api_key):
     st.title("🗃️ Policy Database")
     st.markdown("Search, view, and edit all previously extracted insurance data.")
     
@@ -39,7 +290,6 @@ def page_database(api_key):
             st.info("No records found in database for this search.")
             return
 
-        # --- Chat with Data Feature ---
         with st.expander("💬 Chat with your Data (AI Search)", expanded=False):
             st.info("Ask complex questions like: 'Show me all policies with premium over $5000' or 'List all Mack trucks'.")
             
@@ -49,19 +299,16 @@ def page_database(api_key):
             with c_chat_btn:
                 ask_submitted = st.button("Ask AI", type="secondary", width='stretch')
 
-            # Initialize session state for results if not present
             if "ai_search_results" not in st.session_state:
                 st.session_state.ai_search_results = None
                 st.session_state.ai_debug_sql = None
 
             if ask_submitted and user_question:
-                # Get API Key passed from app loop
                 with st.spinner("Analyzing Database Schema & Generating SQL..."):
                         results, debug_sql = service.ask_your_data(user_question, api_key)
                         st.session_state.ai_search_results = results
                         st.session_state.ai_debug_sql = debug_sql
             
-            # Display results from Session State
             if st.session_state.ai_search_results is not None:
                 results = st.session_state.ai_search_results
                 debug_sql = st.session_state.ai_debug_sql
@@ -69,39 +316,31 @@ def page_database(api_key):
                 if results:
                     st.success(f"Found {len(results)} results")
                     
-                    # Display SQL in a clean expander
                     with st.expander("🛠️ View Generated SQL code"):
                         st.code(debug_sql, language="sql")
 
                     res_df = pd.DataFrame(results)
                     
                     if not res_df.empty:
-                        # Format columns to Title Case
                         res_df.columns = [col.replace('_', ' ').title() for col in res_df.columns]
                         
                         show_all_ai_cols = st.checkbox("Show all raw columns", value=False, key="ai_show_all")
                         
                         display_df = res_df
-                        should_fit_cols = False # Default for raw view
+                        should_fit_cols = False
                         
                         if not show_all_ai_cols:
-                            # Strict Whitelist for Default View
-                            # If the query returns "Policy Number" etc, we show them.
-                            # If it's an aggregate (Count, Sum), we show everything (usually few cols).
-                            
                             whitelist = [
                                 "Policy Number", "Insured Name", "Carrier Name", "Status", 
                                 "Effective Date", "Expiration Date", "Premium", "Liability Limit"
                             ]
                             
-                            # Check if we have at least one whitelist column
                             present_whitelist = [c for c in whitelist if c in res_df.columns]
                             
                             if len(present_whitelist) > 0:
                                 display_df = res_df[present_whitelist]
                                 should_fit_cols = True
                             else:
-                                # Fallback: If no whitelist cols found (e.g. "Select count(*)"), show all but clean up ID
                                 priority_cols = [c for c in res_df.columns if "Id" not in c and "Signal" not in c]
                                 if priority_cols:
                                     display_df = res_df[priority_cols]
@@ -124,19 +363,15 @@ def page_database(api_key):
                     else:
                         st.warning("Query returned empty result.")
                 else:
-                     # Empty list persistence
                      st.warning("Query executed successfully but returned no results.")
                      with st.expander("🛠️ View Generated SQL code"):
                         st.code(debug_sql, language="sql")
             elif ask_submitted:
-                 # Error case where results is None but logic ran? 
-                 # Actually services returns None, debug info if error
                  pass 
 
         
         st.divider()
 
-        # --- Main Data Preparation ---
         data_list = []
         export_data = []
         def parse_limit(val_str):
@@ -156,6 +391,21 @@ def page_database(api_key):
                 return 0.0
 
         for p in policies:
+            completeness = PolicyService.compute_completeness_score(
+                {
+                    "carrier_name": p.carrier_name,
+                    "underwriter_name": p.underwriter_name,
+                    "policy_number": p.policy_number,
+                    "effective_date": str(p.effective_date) if p.effective_date else None,
+                    "expiration_date": str(p.expiration_date) if p.expiration_date else None,
+                    "insured_name": p.insured_name,
+                    "liability_limit": p.liability_limit,
+                    "naic_number": p.naic_number,
+                    "insured_address": p.insured_address,
+                    "cargo_limit": p.cargo_limit,
+                },
+                p.document_type,
+            )
             eligibility_status = "✅ Eligible"
             eligibility_text = "Eligible"
             liab_val = parse_limit(p.liability_limit)
@@ -178,7 +428,8 @@ def page_database(api_key):
                 "Status": status_display,
                 "StatusText": status_text,
                 "Policy#": p.policy_number,
-                "Carrier": p.carrier_name,
+                "Carrier": _carrier_display(p.carrier_name, p.underwriter_name),
+                "Underwriter": p.underwriter_name,
                 "NAIC": p.naic_number,
                 "Insured": p.insured_name,
                 "Business Name": p.business_name,
@@ -206,11 +457,13 @@ def page_database(api_key):
                 "Eligibility": eligibility_text,
                 "Type": p.policy_type,
                 "Confidence": p.classification_confidence,
+                "Completeness": f"{completeness['score']} ({'ready' if completeness['coi_ready'] else 'review'})",
             })
 
             dict_data = {
                 "policy": {
                     "carrier_name": p.carrier_name,
+                    "underwriter_name": p.underwriter_name,
                     "naic_number": p.naic_number,
                     "policy_number": p.policy_number,
                     "effective_date": str(p.effective_date),
@@ -271,7 +524,6 @@ def page_database(api_key):
 
         df = pd.DataFrame(data_list)
 
-        # --- Column Visibility Control (Popover) ---
         all_cols = list(df.columns)
         strict_defaults = [
             "Status",
@@ -381,6 +633,25 @@ def page_database(api_key):
                             st.session_state["nav_request"] = "Create COI"
                             st.session_state["coi_policy_id"] = target_pol.id
                             st.rerun()
+                    st.markdown("#### Endorsements")
+                    endorsements = list(getattr(target_pol, "endorsements", []) or [])
+                    if endorsements:
+                        end_rows = []
+                        for row in endorsements:
+                            end_rows.append(
+                                {
+                                    "Type": row.endorsement_type,
+                                    "Effective Date": str(row.effective_date) if row.effective_date else "",
+                                    "Form #": row.endorsement_form_number or "",
+                                    "Parent Policy #": row.parent_policy_number or "",
+                                    "Summary": row.changes_summary or "",
+                                    "Created At": str(row.created_at) if row.created_at else "",
+                                }
+                            )
+                        st.dataframe(pd.DataFrame(end_rows), hide_index=True, use_container_width=True)
+                    else:
+                        st.caption("No endorsements linked to this policy yet.")
+                    render_related_section(target_pol, session)
             else:
                 st.button("✏️ Select a policy above to edit", disabled=True, width="stretch")
 
@@ -420,11 +691,36 @@ def page_database(api_key):
                     type="primary",
                     disabled=not delete_ok,
                 ):
+                    cleanup_removed = []
+                    cleanup_retained = []
                     for k in selected_to_delete:
                         pol = policy_map_del[k]
-                        service.delete_policy(pol)
-                    st.success("Deleted!")
+                        result = service.delete_policy(pol)
+                        cleanup = result.get("customer_cleanup", {})
+                        customer_name = cleanup.get("customer_name")
+                        if cleanup.get("deleted") and customer_name:
+                            cleanup_removed.append(customer_name)
+                        elif cleanup.get("reason") == "manual_or_contact_data" and customer_name:
+                            cleanup_retained.append(customer_name)
+                    message = f"Deleted {len(selected_to_delete)} polic{'y' if len(selected_to_delete) == 1 else 'ies'}."
+                    if cleanup_removed:
+                        message += f" Removed {len(set(cleanup_removed))} empty customer profile(s)."
+                    if cleanup_retained:
+                        message += f" Retained {len(set(cleanup_retained))} customer profile(s) with manual/contact data."
+                    st.success(message)
                     st.rerun()
 
     finally:
         session.close()
+
+
+def page_database(api_key):
+    tab_policies, tab_customers = st.tabs(["📄 Policies", "👥 Customers"])
+    with tab_policies:
+        _render_policies_tab(api_key)
+    with tab_customers:
+        session = get_session(st.session_state.db_engine)
+        try:
+            render_customers_view(session)
+        finally:
+            session.close()

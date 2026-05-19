@@ -45,6 +45,14 @@ alembic revision --autogenerate -m "describe change"
 - Premiums are currently persisted as strings on policy model.
 - Many coverage limits are stored as integer columns.
 - Dates are parsed in services before persistence.
+- Policy insurer fields are split:
+  - `carrier_name` = brand display name
+  - `underwriter_name` = legal underwriting entity (nullable)
+
+## Migration Notes
+
+- Added migration `d4e5f6a7b8c9_add_underwriter_name_to_policy.py` for `policies.underwriter_name`.
+- Upgrade path supports SQLite batch mode and includes downgrade support.
 
 ## Testing Notes
 

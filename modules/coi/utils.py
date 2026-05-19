@@ -1,5 +1,4 @@
 import pandas as pd
-import re
 
 def load_companies(filepath):
     """
@@ -12,11 +11,8 @@ def load_companies(filepath):
         print(f"Error loading Excel: {e}")
         return {}
     
-    # Normalize columns strip whitespace
     df.columns = [str(c).strip() for c in df.columns]
     
-    # Expected columns: 'COMP NAME', 'PARTNERS' (or 'PARTNERS ')
-    # Identify the 'partners' column robustly
     partners_col = None
     for col in df.columns:
         if 'PARTNERS' in col.upper():
@@ -36,12 +32,6 @@ def load_companies(filepath):
         if not name or name.lower() == 'nan':
             continue
             
-        # Address Parsing Logic
-        # Expected format:
-        # Street Address
-        # City, State Zip
-        
-        # Default empty
         addr_parts = {
             "name": name,
             "address": raw_address,
@@ -54,20 +44,16 @@ def load_companies(filepath):
             lines = [l.strip() for l in raw_address.split('\n') if l.strip()]
             
             if len(lines) >= 1:
-                addr_parts["address"] = lines[0] # Street is usually line 1
+                addr_parts["address"] = lines[0]
                 
             if len(lines) >= 2:
-                # Parse City, State Zip from line 2
-                # e.g. "KNOXVILLE, TN 37919"
                 city_line = lines[1]
                 
-                # Split by comma for City
                 if ',' in city_line:
                     city_part, state_zip_part = city_line.split(',', 1)
                     addr_parts["city"] = city_part.strip()
                     
                     state_zip_part = state_zip_part.strip()
-                    # Try to separate State and Zip (last "word" is likely Zip)
                     parts = state_zip_part.split()
                     if len(parts) >= 2:
                         addr_parts["zip"] = parts[-1]
@@ -75,7 +61,6 @@ def load_companies(filepath):
                     elif len(parts) == 1:
                          addr_parts["state"] = parts[0]
                 else:
-                    # Fallback if no comma
                     addr_parts["city"] = city_line
         
         companies[name] = addr_parts

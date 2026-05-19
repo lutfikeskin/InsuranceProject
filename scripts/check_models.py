@@ -26,7 +26,6 @@ try:
     models = genai.list_models()
     count = 0
     for m in models:
-        # Check for model name and supported methods
         if 'generateContent' in m.supported_generation_methods:
             print(f"  - {m.name} ({m.display_name})")
             count += 1

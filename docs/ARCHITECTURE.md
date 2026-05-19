@@ -37,7 +37,10 @@ flowchart TD
 ### 2) Service Layer
 - `PolicyService` in `core/services.py`
   - policy CRUD/search
+  - customer search/count with active/all/orphan filters
+  - safe cleanup of extraction-only orphan customer profiles after policy deletion
   - extraction persistence and duplicate update logic
+  - structured duplicate detection and pre-save update previews
   - dashboard/statistics queries
   - natural language SQL helper (`ask_your_data`)
 - `UsageService`
@@ -50,6 +53,10 @@ flowchart TD
   - `Policy`, `Vehicle`, `Driver`, `Coverage`, `AdditionalInterest`, `ApiUsage`
 - History model:
   - `core/history_model.py`, `core/history_service.py`
+- Duplicate detection:
+  - `core/duplicate_detection.py`
+  - normalizes policy numbers for match checks
+  - distinguishes exact policy matches, same-number conflicts, possible related policies, and new-policy saves
 - Ontology:
   - `core/coverage_ontology.py`
 
@@ -71,8 +78,10 @@ flowchart TD
 1. User uploads PDF(s) in `views/process_policies.py`.
 2. `modules.extraction.process_pdf()` runs extraction (with cache checks and Gemini calls).
 3. Output is reviewed in-app or bulk-saved.
-4. `PolicyService.save_policy_from_extraction()` inserts or updates policy by `policy_number`.
-5. Change history is recorded via `HistoryService`.
+4. `PolicyService.detect_duplicate_for_extraction()` checks the incoming payload against existing policies.
+5. Individual review shows the duplicate status and, for exact matches, a non-mutating diff preview.
+6. `PolicyService.save_policy_from_extraction()` inserts or updates policy by normalized `policy_number`.
+7. Change history is recorded via `HistoryService` when an update is applied.
 
 ### COI Generation
 
@@ -85,6 +94,8 @@ flowchart TD
 ### Dashboard and Search
 
 - Dashboard and database pages call `PolicyService` query methods for counts, search, timeline, and distributions.
+- The customer portfolio tab uses server-side customer search and pagination. It hides customers with no policies by default, while still allowing retained orphan profiles to be inspected with an explicit filter.
+- Deleting the last policy for an extraction-only customer removes the empty customer profile. Customer profiles with manual aliases or contact data are retained.
 
 ## Storage and State
 

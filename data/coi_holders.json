@@ -1359,21 +1359,30 @@
         "email": ""
     },
     {
-        "name": "Enterprise FM Trust",
-        "full_address": "P.O. Box 16805\nSt. Louis, MO 63105",
-        "address": "P.O. Box 16805",
-        "city": "St. Louis",
-        "state": "MD",
-        "zip": "63105",
+        "name": "Tradex International LLC",
+        "full_address": "3901 Santa Lydia Mission\nMission, TX 78572",
+        "address": "3901 Santa Lydia Mission",
+        "city": "Mission",
+        "state": "TX",
+        "zip": "78572",
         "email": ""
     },
     {
-        "name": "WINGSTAR TRANSPORTATION LLC",
-        "full_address": "480 E Highland Rd\nMacedonia, OH 44056",
-        "address": "480 E Highland Rd",
-        "city": "Macedonia",
-        "state": "OH",
-        "zip": "44056",
+        "name": "New Gen Expedite Inc",
+        "full_address": "640 Taylor Street Suite 1200\nFort Worth, TX 76102",
+        "address": "640 Taylor Street Suite 1200",
+        "city": "Fort Worth",
+        "state": "TX",
+        "zip": "76102",
+        "email": ""
+    },
+    {
+        "name": "FALCON LOGISTICS INC",
+        "full_address": "2550 Five Star Pkwy, Suite 136\nBessemer, AL 35022",
+        "address": "2550 Five Star Pkwy, Suite 136",
+        "city": "Bessemer",
+        "state": "AL",
+        "zip": "35022",
         "email": ""
     }
 ]

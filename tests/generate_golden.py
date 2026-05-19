@@ -3,12 +3,9 @@ import os
 import json
 import argparse
 
-# Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from modules.extraction import process_pdf
-from core.database import init_db # Just to ensure DB setup if needed
-from core.logger import logger
 
 def generate_golden(pdf_path, output_path=None, api_key=None):
     """
@@ -24,19 +21,16 @@ def generate_golden(pdf_path, output_path=None, api_key=None):
     with open(pdf_path, "rb") as f:
         file_bytes = f.read()
 
-    # Run Pipeline
     data, usage, error = process_pdf(file_bytes, api_key=api_key)
     
     if error:
         print(f"Extraction Failed: {error}")
         return
 
-    # Determine Output Path
     if not output_path:
         base_name = os.path.splitext(os.path.basename(pdf_path))[0]
         output_path = os.path.join(os.path.dirname(pdf_path), f"{base_name}.json")
 
-    # Save to JSON
     with open(output_path, "w", encoding='utf-8') as f:
         json.dump(data, f, indent=4)
 
@@ -50,10 +44,8 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    # Try to load key from settings if not provided
     api_key = args.key
     if not api_key:
-        # Minimal attempt to load from a settings file if it exists, roughly
         try:
             with open(".streamlit/secrets.toml", "r") as f:
                 for line in f:
@@ -64,7 +56,6 @@ if __name__ == "__main__":
             pass
             
     if not api_key:
-        # Try env var
         api_key = os.environ.get("GEMINI_API_KEY")
 
     if not api_key:

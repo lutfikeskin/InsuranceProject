@@ -1,18 +1,169 @@
 from __future__ import annotations
 
+import copy
 import streamlit as st
 import pandas as pd
-from core.constants import VEHICLE_TYPES, INTEREST_TYPES, VIN_REGEX
+from core.constants import (
+    CONFIDENCE_GATE_DEFAULT,
+    CONFIDENCE_GATE_OPTIONS,
+    INTEREST_TYPES,
+    VEHICLE_TYPES,
+    VIN_REGEX,
+)
 import json
 from core.services import PolicyService
-from core.database import get_session, Policy, Vehicle, Driver, Coverage, AdditionalInterest
+from datetime import date
+from core.database import get_session, Customer
+from core.customer_resolver import CustomerResolver
 from modules.extraction import process_pdf
-from utils.vehicle_utils import refine_vehicle_type
+from modules.extraction.pipeline import POLICY_TYPE_ENUM
 from utils.naic_utils import get_naic_for_carrier
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from streamlit_pdf_viewer import pdf_viewer
 
-# Highlights disabled for performance
+from views.ui_utils import (
+    CONFIDENCE_LEGEND_CAPTION,
+    build_confidence_map,
+    confidence_label as _confidence_label,
+    gate_value,
+    should_clear_field,
+)
+
+MAX_PARALLEL_WORKERS = 3
+
+RELATIONSHIP_DISPLAY = {
+    "renewal": ("🔄", "Possible Renewal"),
+    "canceled_replaced": ("📋", "Possible Replacement"),
+    "rewrite": ("✏️", "Possible Rewrite"),
+    "same_customer_new_policy": ("👤", "Same Customer, New Policy"),
+}
+
+
+def _carrier_display(carrier_name: str | None, underwriter_name: str | None) -> str:
+    carrier = (carrier_name or "").strip()
+    underwriter = (underwriter_name or "").strip()
+    if underwriter and carrier and underwriter.lower() != carrier.lower():
+        return f"{carrier} ({underwriter})"
+    return carrier or underwriter or ""
+
+
+def _dataframe_to_record_list(df: pd.DataFrame) -> list:
+    if df is None or df.empty:
+        return []
+    out = []
+    for rec in df.to_dict("records"):
+        row = {}
+        for k, v in rec.items():
+            if v is None:
+                row[k] = None
+            elif isinstance(v, float) and pd.isna(v):
+                row[k] = None
+            else:
+                row[k] = v
+        out.append(row)
+    return out
+
+
+def _coverages_from_editor_rows(c_data: list, edited_c: pd.DataFrame) -> list:
+    """Rebuild extraction-style coverage dicts from the flat review data_editor rows."""
+    if edited_c is None or edited_c.empty:
+        return []
+    rows = edited_c.to_dict("records")
+    out = []
+    for idx, row in enumerate(rows):
+        t = (row.get("type") or "").strip()
+        if not t:
+            continue
+        orig = c_data[idx] if idx < len(c_data) and isinstance(c_data[idx], dict) else {}
+        limits = dict(orig.get("limits") or {})
+        for k in ("per_occurrence", "aggregate", "combined_single_limit", "deductible"):
+            v = row.get(k)
+            if v is not None and v != "":
+                limits[k] = v
+        item = {k: v for k, v in orig.items() if k not in ("limits", "display_name", "type")}
+        item["display_name"] = t
+        item["type"] = t
+        item["coverage_code"] = row.get("coverage_code")
+        item["limits"] = limits
+        if row.get("deductible") is not None and row.get("deductible") != "":
+            item["deductible"] = row.get("deductible")
+        out.append(item)
+    return out
+
+
+def _stringify_diff_value(value):
+    if isinstance(value, (list, tuple)):
+        return json.dumps(value, default=str)
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _render_duplicate_preview(duplicate_info: dict, diff_preview: dict | None):
+    status = duplicate_info.get("status")
+    existing = duplicate_info.get("existing_policy") or {}
+    reason = duplicate_info.get("reason") or ""
+
+    if status == "no_match":
+        st.success("No existing policy has this policy number. Saving will create a new policy.")
+        return
+    if status == "missing_policy_number":
+        st.warning("Policy number is missing. Add a policy number before saving when possible.")
+        return
+    if status == "possible_related_policy":
+        st.info("No policy-number duplicate found, but an existing policy may be related.")
+    if status == "exact_number_carrier_conflict":
+        st.warning(
+            "Policy number already exists, but key identity fields differ. Review carefully before updating."
+        )
+    elif status == "exact_policy_match":
+        st.warning("Policy number already exists. Saving will update the current policy.")
+
+    if existing:
+        carrier = _carrier_display(existing.get("carrier_name"), existing.get("underwriter_name"))
+        st.caption(
+            f"Existing: `{existing.get('policy_number')}` | "
+            f"{existing.get('insured_name') or 'Unknown insured'} | "
+            f"{carrier or 'Unknown carrier'} | "
+            f"{existing.get('effective_date') or '?'} to {existing.get('expiration_date') or '?'}"
+        )
+    if reason:
+        st.caption(reason)
+
+    if status == "possible_related_policy" or not diff_preview:
+        return
+    changes = diff_preview.get("changes") or []
+    if not changes:
+        st.info("No field-level changes detected against the existing policy.")
+        return
+    with st.expander(f"Preview changes before updating ({len(changes)} change groups)", expanded=False):
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "field": c.get("field"),
+                        "existing": _stringify_diff_value(c.get("old_value")),
+                        "incoming": _stringify_diff_value(c.get("new_value")),
+                    }
+                    for c in changes
+                ]
+            ),
+            hide_index=True,
+            width='stretch',
+        )
+
+
+def _compute_parallel_workers(total_files: int) -> int:
+    """
+    Adaptive worker sizing:
+    - small batches keep lower concurrency to avoid bursty rate limits
+    - larger batches scale up to a conservative cap
+    """
+    if total_files <= 2:
+        return 2
+    if total_files <= 6:
+        return 2
+    return MAX_PARALLEL_WORKERS
 
 
 def _friendly_extraction_error(message: str | None) -> str:
@@ -33,18 +184,134 @@ def _friendly_extraction_error(message: str | None) -> str:
         return "API quota or rate limit issue. Wait a moment, check your billing, and retry."
     if "API Key" in m or "api" in m.lower() and "key" in m.lower():
         return "API key problem. Add or update your Gemini key in Settings."
+    if "invalid policy type" in m.lower():
+        return "Invalid policy type selection. Choose a type from the list or use Auto-detect."
     return m
 
 
-def _process_one_pdf(fname: str, content: bytes, api_key: str, force_refresh: bool):
+def _policy_type_selectbox_options() -> tuple[list[str], dict[str, str | None]]:
+    """Streamlit option strings mapped to API policy_type or None for auto-detect."""
+    manual = [pt for pt in POLICY_TYPE_ENUM if pt != "unknown"]
+    labels = ["Auto-detect (recommended)"] + [pt.replace("_", " ").title() for pt in manual]
+    label_to_value: dict[str, str | None] = {labels[0]: None}
+    for pt, lbl in zip(manual, labels[1:]):
+        label_to_value[lbl] = pt
+    return labels, label_to_value
+
+
+def _process_one_pdf(
+    fname: str,
+    content: bytes,
+    api_key: str,
+    force_refresh: bool,
+    user_policy_type: str | None,
+):
     """Worker for parallel extraction; each call uses its own stack (process_pdf creates its own client)."""
     try:
         data, usage, error_msg = process_pdf(
-            content, api_key, status_callback=None, force_refresh=force_refresh
+            content,
+            api_key,
+            status_callback=None,
+            force_refresh=force_refresh,
+            user_policy_type=user_policy_type,
         )
         return fname, data, usage, error_msg, None
     except Exception as e:
         return fname, None, None, None, str(e)
+
+
+def render_related_policy(match, current_item, service):
+    existing = match.get("policy") or {}
+    rel_type = match.get("relationship_type")
+    confidence = float(match.get("score") or 0.0)
+    icon, label = RELATIONSHIP_DISPLAY.get(rel_type, ("🔗", "Related"))
+    existing_id = existing.get("id")
+
+    new_p = current_item["data"].get("policy", {})
+    expanded_default = confidence > 0.8
+    existing_carrier = _carrier_display(
+        existing.get("carrier_name"), existing.get("underwriter_name")
+    )
+    incoming_carrier = _carrier_display(
+        new_p.get("carrier_name"), new_p.get("underwriter_name")
+    )
+    with st.expander(
+        f"{icon} {label} — `{existing.get('policy_number')}` "
+        f"({existing.get('insured_name')}) — "
+        f"{int(confidence * 100)}% match",
+        expanded=expanded_default,
+    ):
+        c1, c2 = st.columns(2)
+        c1.markdown(
+            f"**Existing**\n\n"
+            f"Number: `{existing.get('policy_number')}`\n\n"
+            f"Carrier: {existing_carrier}\n\n"
+            f"Insured: {existing.get('insured_name')}\n\n"
+            f"Type: {existing.get('policy_type')}\n\n"
+            f"Effective: {existing.get('effective_date')}\n\n"
+            f"Expires: {existing.get('expiration_date')}\n\n"
+            f"Status: {existing.get('policy_status', 'unknown')}"
+        )
+        c2.markdown(
+            f"**Incoming**\n\n"
+            f"Number: `{new_p.get('policy_number')}`\n\n"
+            f"Carrier: {incoming_carrier}\n\n"
+            f"Insured: {new_p.get('insured_name')}\n\n"
+            f"Type: {current_item['data'].get('classification', {}).get('policy_type')}\n\n"
+            f"Effective: {new_p.get('effective_date')}\n\n"
+            f"Expires: {new_p.get('expiration_date')}"
+        )
+
+        st.divider()
+        b1, _, b3 = st.columns(3)
+
+        if rel_type == "renewal":
+            if b1.button("🔄 Save as Renewal", key=f"act_renewal_{existing_id}"):
+                success, msg = service.save_with_relationship(
+                    current_item["data"], existing_id, "renewal"
+                )
+                if success:
+                    st.success("Saved as renewal")
+                    st.session_state["review_queue"].pop(0)
+                    st.rerun()
+                else:
+                    st.warning(msg or "Save failed")
+
+        elif rel_type in ("canceled_replaced", "rewrite"):
+            if b1.button("📋 Save as Replacement", key=f"act_replace_{existing_id}"):
+                success, msg = service.save_with_relationship(
+                    current_item["data"], existing_id, rel_type
+                )
+                if success:
+                    st.success("Saved as replacement, old policy marked replaced")
+                    st.session_state["review_queue"].pop(0)
+                    st.rerun()
+                else:
+                    st.warning(msg or "Save failed")
+
+        elif rel_type == "same_customer_new_policy":
+            if b1.button("👤 Link as Same Customer", key=f"act_link_{existing_id}"):
+                success, msg = service.save_with_relationship(
+                    current_item["data"], existing_id, "same_customer_new_policy"
+                )
+                if success:
+                    st.success("Saved and linked as same customer")
+                    st.session_state["review_queue"].pop(0)
+                    st.rerun()
+                else:
+                    st.warning(msg or "Save failed")
+
+        if b3.button(
+            "Ignore",
+            key=f"act_ignore_{existing_id}",
+            help="Don't link, save as separate",
+        ):
+            current_item["data"]["_related_policy_candidates"] = [
+                m
+                for m in (current_item["data"].get("_related_policy_candidates") or [])
+                if (m.get("policy") or {}).get("id") != existing_id
+            ]
+            st.rerun()
 
 
 def page_process_policies(api_key):
@@ -56,6 +323,14 @@ def page_process_policies(api_key):
     
     if "temp_extracted" not in st.session_state:
         st.session_state["temp_extracted"] = []
+    if "batch_telemetry_today" not in st.session_state:
+        st.session_state["batch_telemetry_today"] = {
+            "day": date.today().isoformat(),
+            "files": 0,
+            "cache_hits": 0,
+            "retries": 0,
+            "errors": 0,
+        }
         
     tab_upload, tab_manual = st.tabs(["📄 Upload & Extract", "✍️ Manual Entry"])
 
@@ -64,15 +339,16 @@ def page_process_policies(api_key):
         if not field_locations:
             return None
         formatted_key = field_name
-        # Map simple keys to field_locations keys if different
-        # Currently the pipeline saves keys like "premium", "policy_number" directly.
-        
         for loc in field_locations:
              if loc.get("field") == field_name:
                  page = loc.get("page_number")
-                 # bbox = loc.get("bbox") # Optional: Add bbox details if valuable
                  return f"Found on Page {page}"
         return None
+
+    # _confidence_label and build_confidence_map were lifted to views/ui_utils.py
+    # so future review screens render the same badge convention. The legend
+    # caption rendered in Step 2 explains the symbols.
+    _build_confidence_map = build_confidence_map
 
     with tab_upload:
         expanded_upload = not (bool(st.session_state["review_queue"]) or bool(st.session_state["temp_extracted"]))
@@ -80,7 +356,23 @@ def page_process_policies(api_key):
         with st.expander("Step 1: Upload & Extract", expanded=expanded_upload):
             if not api_key:
                  st.warning("⚠️ Access Restricted: Please add your Gemini API Key in Settings to proceed.")
-            
+
+            _ptype_labels, _ptype_map = _policy_type_selectbox_options()
+            preferred_default = "Commercial Auto"
+            default_index = (
+                _ptype_labels.index(preferred_default)
+                if preferred_default in _ptype_labels
+                else 0
+            )
+            policy_type_label = st.selectbox(
+                "Policy type",
+                options=_ptype_labels,
+                index=default_index,
+                help="Auto-detect runs classification then extraction (two model calls). "
+                "A manual type skips classification and uses one extraction call with a scoped coverage registry.",
+            )
+            user_policy_type = _ptype_map[policy_type_label]
+
             uploaded_files = st.file_uploader("Drop PDF files here", type=["pdf"], accept_multiple_files=True)
             
             if not uploaded_files:
@@ -89,9 +381,9 @@ def page_process_policies(api_key):
             opt_c1, opt_c2 = st.columns(2)
             with opt_c1:
                 parallel_extract = st.checkbox(
-                    "Parallel extraction (max 2 files at a time)",
+                    "Parallel extraction (adaptive max 2-3 files at a time)",
                     value=False,
-                    help="Faster for many PDFs; logs are less detailed than sequential mode.",
+                    help="Faster for many PDFs; retry policy is handled centrally in extraction pipeline.",
                 )
             with opt_c2:
                 force_refresh = st.checkbox(
@@ -112,42 +404,87 @@ def page_process_policies(api_key):
                 files_map = {f.name: f.getvalue() for f in uploaded_files}
                 batch_rows = []
 
-                def _record_batch(fname, ok, detail, source=""):
+                def _record_batch(fname, ok, detail, source="", retries=0, error_class=""):
                     batch_rows.append(
                         {
                             "filename": fname,
                             "status": "ok" if ok else "error",
                             "detail": detail,
                             "source": source,
+                            "retries": retries,
+                            "error_class": error_class,
                         }
                     )
 
+                def _classify_error(message: str | None) -> str:
+                    m = (message or "").lower()
+                    if any(t in m for t in ["quota", "rate limit", "429", "resource exhausted"]):
+                        return "rate_limit_or_quota"
+                    if "timeout" in m:
+                        return "timeout"
+                    if "api key" in m or ("api" in m and "key" in m):
+                        return "auth"
+                    if "json" in m or "parse" in m:
+                        return "parse"
+                    if m:
+                        return "other"
+                    return ""
+
                 if parallel_extract and total_files > 1:
                     done = 0
-                    with ThreadPoolExecutor(max_workers=2) as pool:
+                    worker_count = _compute_parallel_workers(total_files)
+                    status_text.text(f"Parallel mode: using {worker_count} workers with retry/backoff.")
+                    with ThreadPoolExecutor(max_workers=worker_count) as pool:
                         futures = {
                             pool.submit(
-                                _process_one_pdf, fn, files_map[fn], api_key, force_refresh
+                                _process_one_pdf,
+                                fn,
+                                files_map[fn],
+                                api_key,
+                                force_refresh,
+                                user_policy_type,
                             ): fn
                             for fn in files_map
                         }
                         for fut in as_completed(futures):
                             fname, data, usage, error_msg, exc = fut.result()
+                            retries_used = int((usage or {}).get("llm_retries", 0))
                             done += 1
                             progress_bar.progress(done / total_files)
                             if exc:
                                 st.error(f"`{fname}`: {_friendly_extraction_error(exc)}")
-                                _record_batch(fname, False, exc)
+                                _record_batch(
+                                    fname,
+                                    False,
+                                    exc,
+                                    retries=retries_used,
+                                    error_class=_classify_error(exc),
+                                )
                             elif data:
                                 if usage and usage.get("source") == "cache":
                                     st.info(f"`{fname}`: loaded from extraction cache (no API charge).")
+                                rejected = len(data.get("extraction_audit", {}).get("rejected_coverages", []))
+                                if rejected:
+                                    st.warning(f"`{fname}`: {rejected} coverage entries were rejected by validation rules.")
                                 st.session_state["temp_extracted"].append(
                                     {"filename": fname, "pdf_bytes": files_map[fname], "data": data}
                                 )
-                                _record_batch(fname, True, "extracted", usage.get("source", "") if usage else "")
+                                _record_batch(
+                                    fname,
+                                    True,
+                                    "extracted",
+                                    usage.get("source", "") if usage else "",
+                                    retries=retries_used,
+                                )
                             else:
                                 st.error(f"`{fname}`: {_friendly_extraction_error(error_msg)}")
-                                _record_batch(fname, False, error_msg or "")
+                                _record_batch(
+                                    fname,
+                                    False,
+                                    error_msg or "",
+                                    retries=retries_used,
+                                    error_class=_classify_error(error_msg),
+                                )
                     status_text.text("Extraction complete (parallel).")
                 else:
                     for i, (fname, content) in enumerate(files_map.items()):
@@ -171,7 +508,7 @@ def page_process_policies(api_key):
                                         state="complete",
                                         expanded=False,
                                     )
-                                    _record_batch(fname, True, "session_memory", "")
+                                    _record_batch(fname, True, "session_memory", "", retries=0)
                                     continue
 
                                 data, usage, error_msg = process_pdf(
@@ -179,17 +516,22 @@ def page_process_policies(api_key):
                                     api_key,
                                     status_callback=update_status,
                                     force_refresh=force_refresh,
+                                    user_policy_type=user_policy_type,
                                 )
 
                                 if usage and usage.get("source") == "cache":
                                     status.write("Loaded from file hash cache (no API call).")
 
                                 if data:
+                                    retries_used = int((usage or {}).get("llm_retries", 0))
+                                    rejected = len(data.get("extraction_audit", {}).get("rejected_coverages", []))
+                                    if rejected:
+                                        status.write(f"Validation rejected {rejected} coverage entries (see review).")
                                     st.session_state["temp_extracted"].append(
                                         {"filename": fname, "pdf_bytes": content, "data": data}
                                     )
                                     status.update(
-                                        label=f"`{fname}` Processed Successfully!",
+                                        label=f"Processed `{fname}`.",
                                         state="complete",
                                         expanded=False,
                                     )
@@ -198,6 +540,7 @@ def page_process_policies(api_key):
                                         True,
                                         "extracted",
                                         usage.get("source", "") if usage else "",
+                                        retries=retries_used,
                                     )
                                 else:
                                     status.update(
@@ -208,7 +551,13 @@ def page_process_policies(api_key):
                                     friendly = _friendly_extraction_error(error_msg)
                                     status.write(friendly)
                                     st.error(f"`{fname}`: {friendly}")
-                                    _record_batch(fname, False, error_msg or "")
+                                    _record_batch(
+                                        fname,
+                                        False,
+                                        error_msg or "",
+                                        retries=0,
+                                        error_class=_classify_error(error_msg),
+                                    )
 
                             except Exception as e:
                                 status.update(
@@ -219,7 +568,13 @@ def page_process_policies(api_key):
                                 friendly = _friendly_extraction_error(str(e))
                                 status.write(friendly)
                                 st.error(f"`{fname}`: {friendly}")
-                                _record_batch(fname, False, str(e))
+                                _record_batch(
+                                    fname,
+                                    False,
+                                    str(e),
+                                    retries=0,
+                                    error_class=_classify_error(str(e)),
+                                )
 
                         progress_bar.progress((i + 1) / total_files)
 
@@ -229,6 +584,28 @@ def page_process_policies(api_key):
                     rep = pd.DataFrame(batch_rows)
                     st.subheader("Batch report")
                     st.dataframe(rep, hide_index=True, use_container_width=True)
+                    today_key = date.today().isoformat()
+                    telem = st.session_state.get("batch_telemetry_today", {})
+                    if telem.get("day") != today_key:
+                        telem = {
+                            "day": today_key,
+                            "files": 0,
+                            "cache_hits": 0,
+                            "retries": 0,
+                            "errors": 0,
+                        }
+                    telem["files"] += int(len(rep))
+                    telem["cache_hits"] += int((rep["source"] == "cache").sum()) if "source" in rep else 0
+                    telem["retries"] += int(rep["retries"].sum()) if "retries" in rep else 0
+                    telem["errors"] += int((rep["status"] == "error").sum()) if "status" in rep else 0
+                    st.session_state["batch_telemetry_today"] = telem
+                    if len(rep) > 1:
+                        cache_hits = int((rep["source"] == "cache").sum()) if "source" in rep else 0
+                        total_retries = int(rep["retries"].sum()) if "retries" in rep else 0
+                        error_total = int((rep["status"] == "error").sum()) if "status" in rep else 0
+                        st.caption(
+                            f"Batch telemetry: cache_hits={cache_hits}, total_retries={total_retries}, errors={error_total}"
+                        )
                     if len(batch_rows) > 1:
                         st.download_button(
                             "Download batch report (CSV)",
@@ -238,7 +615,6 @@ def page_process_policies(api_key):
                             key="batch_report_csv",
                         )
 
-        # Decision Section (Inside Tab 1)
         if st.session_state["temp_extracted"]:
             st.divider()
             st.subheader(f"Extraction Complete ({len(st.session_state['temp_extracted'])} files)")
@@ -260,14 +636,27 @@ def page_process_policies(api_key):
                 
                 try:
                     for item in st.session_state["temp_extracted"]:
-                        # Check for duplicates before saving
-                        pol_num = item['data'].get('policy', {}).get('policy_number', '')
-                        existing = service.check_duplicate(pol_num) if pol_num else None
+                        if item["data"].get("extractable") is False:
+                            skipped_count += 1
+                            st.toast(
+                                f"Skipped {item['filename']}: {item['data'].get('message', 'document not extractable')}",
+                                icon="⚠️",
+                            )
+                            continue
+                        duplicate_info = service.detect_duplicate_for_extraction(item["data"])
+                        if duplicate_info.get("status") == "exact_number_carrier_conflict":
+                            st.session_state["review_queue"].append(item)
+                            skipped_count += 1
+                            st.toast(
+                                f"Sent {item['filename']} to review: {duplicate_info.get('reason')}",
+                                icon="⚠️",
+                            )
+                            continue
                         
                         success, msg = service.save_policy_from_extraction(item['data'])
                         
                         if success:
-                            if existing:
+                            if duplicate_info.get("status") == "exact_policy_match":
                                 updated_count += 1
                             else:
                                 processed_count += 1
@@ -275,14 +664,13 @@ def page_process_policies(api_key):
                             skipped_count += 1
                             st.toast(msg, icon="⚠️")
                     
-                    # Summary message
                     parts = []
                     if processed_count:
                         parts.append(f"**{processed_count}** new {'policy' if processed_count == 1 else 'policies'} saved")
                     if updated_count:
                         parts.append(f"**{updated_count}** existing {'policy' if updated_count == 1 else 'policies'} updated")
                     if skipped_count:
-                        parts.append(f"**{skipped_count}** skipped (no changes)")
+                        parts.append(f"**{skipped_count}** skipped or routed to review")
                     
                     st.success(" • ".join(parts) if parts else "No changes made.")
                     st.session_state["temp_extracted"] = []
@@ -301,6 +689,7 @@ def page_process_policies(api_key):
             col1, col2 = st.columns(2)
             with col1:
                 m_carrier = st.text_input("Carrier Name")
+                m_underwriter = st.text_input("Underwriter Name (Legal Entity)")
                 m_pol_num = st.text_input("Policy Number *")
                 m_naic = st.text_input("NAIC Code")
                 m_premium = st.text_input("Premium", value="$0.00")
@@ -326,7 +715,6 @@ def page_process_policies(api_key):
             m_cargo = l3.text_input("Cargo Limit")
             m_cargo_ded = l4.text_input("Cargo Deductible")
             
-            # New Manual Inputs
             n1, n2, n3, n4, n5 = st.columns(5)
             m_um = n1.text_input("UM/UIM")
             m_med = n2.text_input("Med Pay")
@@ -349,12 +737,12 @@ def page_process_policies(api_key):
                     session = get_session(st.session_state.db_engine)
                     service = PolicyService(session)
                     try:
-                        # Determine Account Type logic matches service
                         from core.services import ACCOUNT_TYPE_BY_POLICY
                         acc_type = ACCOUNT_TYPE_BY_POLICY.get(m_type, "Commercial")
                         
                         policy_payload = {
                             "carrier_name": m_carrier,
+                            "underwriter_name": m_underwriter,
                             "naic_number": m_naic,
                             "policy_number": m_pol_num,
                             "effective_date": m_eff,
@@ -388,8 +776,6 @@ def page_process_policies(api_key):
                         success, msg = service.save_policy_object(policy)
                         if success:
                             st.toast(f"Policy {m_pol_num} saved successfully!", icon="✅")
-                            # We can't easily clear the form without rerun, but rerun clears the toast.
-                            # Just show success.
                         else:
                             st.error(f"Error: {msg}")
                             
@@ -398,7 +784,6 @@ def page_process_policies(api_key):
                     finally:
                         session.close()
 
-    # Review Section
     if st.session_state["review_queue"]:
         st.divider()
         st.subheader(f"Step 2: Review & Save ({len(st.session_state['review_queue'])} remaining)")
@@ -411,117 +796,387 @@ def page_process_policies(api_key):
         
         with c_pdf:
             st.markdown(f"**Viewing:** `{fname}`")
-            # Highlights Toggle
-            show_highlights = st.toggle("✨ Show Field Locations", value=False, help="Highlight extracted fields on the PDF. May affect performance.")
-            
-            annotations = []
-            if show_highlights:
-                locs = p.get('field_locations', [])
-                for loc in locs:
-                    page = loc.get('page_number', 1)
-                    bbox = loc.get('bbox') # [ymin, xmin, ymax, xmax] 0-1000 scale
-                    
-                    if bbox and len(bbox) == 4:
-                        # Streamlit PDF Viewer expects [x, y, width, height] in some versions or direct PDF coords?
-                        # The standard format for many PDF tools is [x, y, width, height].
-                        # Gemini returns [ymin, xmin, ymax, xmax] on 1000x1000 scale.
-                        # We need to map this. For now, we will try a simple red rectangle wrapper.
-                        # Note: st_pdf_viewer annotations support might differ. 
-                        # Assuming simple rectangular highlight support:
-                        annotations.append({
-                            "page": page,
-                            "x": bbox[1], # xmin
-                            "y": bbox[0], # ymin
-                            "width": bbox[3] - bbox[1], # xmax - xmin
-                            "height": bbox[2] - bbox[0], # ymax - ymin
-                            "color": "rgba(255, 0, 0, 0.3)",
-                            "type": "rect"
-                        })
-
-            pdf_viewer(input=current_item['pdf_bytes'], width=600, height=800, annotations=annotations if show_highlights else [])
+            render_text = st.toggle(
+                "Selectable text",
+                value=True,
+                key=f"pdf_render_text_{fname}",
+                help=(
+                    "PDF viewer display only: lets you select/copy text in the preview when supported. "
+                    "Does not run extraction again or change saved policy data."
+                ),
+            )
+            pdf_viewer(
+                input=current_item['pdf_bytes'],
+                width="100%",
+                height=850,
+                zoom_level=None,
+                render_text=render_text,
+                resolution_boost=1,
+                viewer_align="center",
+                show_page_separator=True,
+            )
             
         with c_form:
             st.markdown("#### Verify Extracted Data")
-            with st.form(key=f"review_form_{fname}"):
-                c1, c2 = st.columns(2)
-                
-                # Metadata for Tooltips (Global fetch inside form)
-                locs = p.get('field_locations', [])
-                
-                r_carrier = c1.text_input("Carrier", value=p.get('carrier_name', ''), help=get_source_help("carrier_name", locs))
-                r_pol_num = c2.text_input("Policy Number", value=p.get('policy_number', ''), help=get_source_help("policy_number", locs))
-                
-                # Show Classification Info
-                classification = current_item['data'].get('classification', {})
-                cc1, cc2 = st.columns(2)
-                r_type = cc1.text_input("Policy Type", value=classification.get('policy_type', ''), disabled=True)
-                r_conf = cc2.text_input("Confidence", value=classification.get('confidence', ''), disabled=True)
-                
-                c3, c4 = st.columns(2)
-                
-                # Auto-fill NAIC if missing
-                current_naic = p.get('naic_number', '')
-                if not current_naic:
-                    current_naic = get_naic_for_carrier(p.get('carrier_name', ''))
-                
-                # Metadata for Tooltips
-                locs = p.get('field_locations', [])
-                
-                r_naic = c3.text_input("NAIC Code", value=current_naic)
-                
-                # Premium with Audit & Tooltip
-                prem_help = get_source_help("premium", locs)
-                audit_meta = p.get("premium_audit", {})
-                
-                # Premium Label with Indicator
-                prem_label = "Premium"
-                if audit_meta.get("confidence") == "low":
-                    prem_label += " ⚠️ (Check Split/Installment)"
-                elif audit_meta.get("confidence") == "high":
-                    prem_label += " ✅"
+            st.caption(CONFIDENCE_LEGEND_CAPTION)
+            classification = current_item['data'].get('classification', {})
+            document_type = (
+                current_item['data'].get('document_type')
+                or classification.get('document_type')
+                or "unknown"
+            )
+            is_extractable = current_item['data'].get('extractable', True)
 
-                r_premium = c3.text_input(prem_label, value=p.get('premium', ''), help=prem_help)
-                
-                if audit_meta and audit_meta.get("confidence") == "low":
-                    st.caption(f"**Audit Flag:** {audit_meta.get('flag')}")
-                r_eff = c4.text_input("Effective Date", value=p.get('effective_date', ''), help=get_source_help("effective_date", locs))
-                r_exp = c4.text_input("Expiration Date", value=p.get('expiration_date', ''), help=get_source_help("expiration_date", locs))
-                
-                st.divider()
-                r_ins_name = st.text_input("Insured Name", value=p.get('insured_name', ''))
-                r_ins_addr = st.text_input("Insured Address", value=p.get('insured_address', ''))
-                ic1, ic2, ic3 = st.columns(3)
-                r_ins_city = ic1.text_input("City", value=p.get('insured_city', ''))
-                r_ins_state = ic2.text_input("State", value=p.get('insured_state_code', ''))
-                r_ins_zip = ic3.text_input("Zip", value=p.get('insured_zip', ''))
-                
-                st.divider()
-                r_liab = st.text_input("Auto Liability Limit", value=p.get('liability_limit', ''))
-                r_gl_limit = st.text_input("GL Limit", value=p.get('general_liability_limit', ''))
-                r_cargo = st.text_input("Cargo Limit", value=p.get('cargo_limit', ''))
-                r_cargo_ded = st.text_input("Cargo Ded", value=p.get('cargo_deductible', ''))
-                
-                # New Review Inputs
-                st.markdown("##### Additional Coverages")
-                rc1, rc2, rc3, rc4, rc5 = st.columns(5)
-                r_um = rc1.text_input("UM/UIM", value=p.get('um_uim_limit', ''))
-                r_med = rc2.text_input("Med Pay", value=p.get('med_pay_limit', ''))
-                r_pip = rc3.text_input("PIP", value=p.get('pip_limit', ''))
-                r_comp = rc4.text_input("Comp Ded", value=p.get('comp_deductible', ''))
-                r_coll = rc5.text_input("Coll Ded", value=p.get('coll_deductible', ''))
-                
-                r_gl = st.checkbox("Has GL", value=p.get('has_general_liability', True))
-                r_auto = st.checkbox("Has Auto", value=p.get('has_auto_liability', True))
-                r_status = st.selectbox("Status", ["Active", "Pending", "Quote", "Expired"], index=0)
+            if not is_extractable:
+                st.error(current_item['data'].get('message', "This document type is not extractable yet."))
+                st.info(f"Document type detected: `{document_type}`")
+                if st.button("Skip This Document", key=f"skip_non_extractable_{fname}", type="primary"):
+                    st.session_state["review_queue"].pop(0)
+                    st.rerun()
+                st.stop()
 
-                st.divider()
-                st.markdown("#### Detailed Inventory (Editable)")
-                t1, t2, t3, t4 = st.tabs(["🚙 Vehicles", "👤 Drivers", "🛡️ Coverages", "🏢 Additional Interests"])
+            if document_type == "renewal_declarations":
+                st.info("Renewal declarations detected. Review effective/expiration dates carefully before saving.")
+            if document_type in ("certificate_of_insurance", "memorandum"):
+                st.info("COI/Memorandum detected: vehicle and driver schedules are extracted when present.")
+            if document_type == "endorsement":
+                st.info("Endorsement detected: metadata-only capture. No policy row will be created.")
+                endorsement = current_item["data"].get("endorsement") or {}
+                with st.form(key=f"review_endorsement_form_{fname}"):
+                    endorsement_options = [
+                        "additional_insured",
+                        "excluded_driver",
+                        "coverage_change",
+                        "vehicle_add",
+                        "vehicle_delete",
+                        "cargo_amendment",
+                        "premium_change",
+                        "other",
+                    ]
+                    default_endorsement_type = endorsement.get("endorsement_type")
+                    default_endorsement_idx = (
+                        endorsement_options.index(default_endorsement_type)
+                        if default_endorsement_type in endorsement_options
+                        else 0
+                    )
+                    e_type = st.selectbox(
+                        "Endorsement Type",
+                        options=endorsement_options,
+                        index=default_endorsement_idx,
+                    )
+                    e_parent_number = st.text_input(
+                        "Parent Policy Number",
+                        value=endorsement.get("parent_policy_number", ""),
+                    )
+                    e_form_number = st.text_input(
+                        "Endorsement Form Number",
+                        value=endorsement.get("endorsement_form_number", ""),
+                    )
+                    e_effective = st.text_input(
+                        "Effective Date",
+                        value=endorsement.get("effective_date", ""),
+                    )
+                    e_summary = st.text_area(
+                        "Changes Summary",
+                        value=endorsement.get("changes_summary", ""),
+                        height=120,
+                    )
 
-                with t1:
-                    v_data = current_item['data'].get('vehicles', [])
+                    session = get_session(st.session_state.db_engine)
+                    service = PolicyService(session)
+                    all_policies = service.search_policies(None, limit=5000, offset=0)
+                    matched_parent = service.get_policy_by_number(e_parent_number) if e_parent_number else None
+                    if matched_parent:
+                        st.success(
+                            f"Matched parent policy: {matched_parent.policy_number} ({matched_parent.insured_name})"
+                        )
+                        selected_parent_number = matched_parent.policy_number
+                    else:
+                        st.warning("No parent policy match found. Select one manually.")
+                        policy_choices = [""] + [
+                            f"{p.policy_number} | {p.insured_name or 'Unknown'}"
+                            for p in all_policies
+                            if p.policy_number
+                        ]
+                        selected_choice = st.selectbox(
+                            "Manual Parent Policy Selection",
+                            options=policy_choices,
+                            index=0,
+                        )
+                        selected_parent_number = selected_choice.split(" | ")[0] if selected_choice else e_parent_number
+
+                    b_col1, b_col2, b_col3 = st.columns([1, 1, 1])
+                    saved_endorsement = b_col1.form_submit_button("💾 Save", type="secondary")
+                    save_next_endorsement = b_col2.form_submit_button("💾⏩ Save & Next", type="primary")
+                    discard_endorsement = b_col3.form_submit_button("🗑️ Discard")
+
+                    if saved_endorsement or save_next_endorsement:
+                        try:
+                            payload = {
+                                "classification": classification,
+                                "policy_data_source": "endorsement_summary",
+                                "endorsement": {
+                                    "parent_policy_number": selected_parent_number,
+                                    "endorsement_type": e_type,
+                                    "endorsement_form_number": e_form_number,
+                                    "effective_date": e_effective,
+                                    "changes_summary": e_summary,
+                                    "file_hash": endorsement.get("file_hash"),
+                                },
+                            }
+                            success, msg = service.save_policy_from_extraction(payload)
+                            if success:
+                                st.toast("✅ Endorsement saved.")
+                                st.session_state["review_queue"].pop(0)
+                                st.rerun()
+                            st.toast(f"⚠️ Could not save endorsement: {msg}", icon="⚠️")
+                        except Exception as e:
+                            st.toast(f"❌ Save failed: {e}", icon="❌")
+                        finally:
+                            session.close()
+                    elif discard_endorsement:
+                        session.close()
+                        st.session_state["review_queue"].pop(0)
+                        st.rerun()
+                    else:
+                        session.close()
+                st.stop()
+
+            coi_summary = current_item["data"].get("coi_summary") or {}
+            coi_policies = coi_summary.get("policies") or []
+            if coi_policies:
+                st.markdown("##### COI Policies Detected")
+                list_rows = []
+                for idx, row in enumerate(coi_policies):
+                    if not isinstance(row, dict):
+                        continue
+                    list_rows.append(
+                        {
+                            "index": idx,
+                            "policy_type": row.get("policy_type"),
+                            "carrier_name": _carrier_display(
+                                row.get("carrier_name"),
+                                row.get("underwriter_name"),
+                            ),
+                            "underwriter_name": row.get("underwriter_name"),
+                            "policy_number": row.get("policy_number"),
+                            "effective_date": row.get("effective_date"),
+                            "expiration_date": row.get("expiration_date"),
+                        }
+                    )
+                if list_rows:
+                    st.dataframe(pd.DataFrame(list_rows), hide_index=True, width='stretch')
+                    selected_policy_idx = st.selectbox(
+                        "Select COI policy row to review",
+                        options=list(range(len(list_rows))),
+                        format_func=lambda i: f"{list_rows[i].get('policy_number') or 'no_policy_number'} ({list_rows[i].get('carrier_name') or 'unknown_carrier'})",
+                        key=f"coi_policy_pick_{fname}",
+                    )
+                    selected_row = coi_policies[selected_policy_idx] if selected_policy_idx < len(coi_policies) else {}
+                    selected_limits = selected_row.get("limits") if isinstance(selected_row.get("limits"), dict) else {}
+                    p = {
+                        **p,
+                        "carrier_name": selected_row.get("carrier_name"),
+                        "underwriter_name": selected_row.get("underwriter_name"),
+                        "naic_number": selected_row.get("naic_number"),
+                        "policy_number": selected_row.get("policy_number"),
+                        "effective_date": selected_row.get("effective_date"),
+                        "expiration_date": selected_row.get("expiration_date"),
+                        "liability_limit": selected_limits.get("liability_limit"),
+                        "general_liability_limit": selected_limits.get("general_liability_limit"),
+                        "cargo_limit": selected_limits.get("cargo_limit"),
+                        "cargo_deductible": selected_limits.get("cargo_deductible"),
+                        "um_uim_limit": selected_limits.get("um_uim_limit"),
+                        "med_pay_limit": selected_limits.get("med_pay_limit"),
+                        "pip_limit": selected_limits.get("pip_limit"),
+                        "comp_deductible": selected_limits.get("comp_deductible"),
+                        "coll_deductible": selected_limits.get("coll_deductible"),
+                    }
+
+            variant_status = current_item["data"].get("variant_status")
+            if variant_status == "new_carrier":
+                st.warning(
+                    "⚠️ **New carrier layout detected.** After saving, consider generating a golden file for regression testing."
+                )
+            elif variant_status == "new_layout_variant":
+                st.info(
+                    "ℹ️ **New layout variant of known carrier.** Verify fields carefully — this format hasn't been extracted before."
+                )
+            elif variant_status == "new_policy_type_variant":
+                st.info(
+                    "ℹ️ **New policy type for this carrier.** Verify fields carefully."
+                )
+
+            confidence_map = _build_confidence_map(
+                p,
+                p.get("field_confidences")
+                or current_item["data"].get("field_confidences")
+                or current_item["data"].get("policy", {}).get("field_confidences"),
+            )
+            low_fields = [k for k, v in confidence_map.items() if v == "low"]
+            medium_fields = [k for k, v in confidence_map.items() if v == "medium"]
+
+            # Soft confidence gate — pre-clear extracted values whose confidence
+            # falls below the user's chosen threshold so they have to look at
+            # the PDF and type the value rather than skim-and-save. The Save
+            # button is *not* blocked; this is a nudge, not a wall.
+            gate_threshold = st.session_state.get(
+                "confidence_gate_threshold", CONFIDENCE_GATE_DEFAULT
+            )
+            gated_fields = [
+                f
+                for f in confidence_map
+                if should_clear_field(f, confidence_map, gate_threshold)
+            ]
+
+            def _gv(field_name: str, default: str = "") -> str:
+                """Apply the soft confidence gate to one extracted value.
+
+                Local closure so the gate args (confidence_map + threshold)
+                don't have to be repeated at every widget call site.
+                """
+                return gate_value(
+                    p.get(field_name, default),
+                    field_name,
+                    confidence_map,
+                    gate_threshold,
+                    blank=default,
+                )
+
+            if gated_fields:
+                # Gate fired — explain why some fields look empty.
+                threshold_label = CONFIDENCE_GATE_OPTIONS.get(gate_threshold, gate_threshold)
+                st.info(
+                    f"ℹ️ **{len(gated_fields)} field(s) cleared** because their "
+                    f"extraction confidence is below your threshold "
+                    f"(*{threshold_label}*). Verify the value in the PDF and "
+                    f"type it in. Adjust the threshold in **Settings ⚙️**."
+                )
+            elif low_fields:
+                # Gate is off (or set to "medium" and only medium-confidence
+                # fields present) — keep the pre-feature warning so the user
+                # still gets a heads-up about unreliable extractions.
+                st.markdown(
+                    "<div style='background-color:#fff7d6;padding:8px 10px;border-radius:6px;border:1px solid #f0d77a;'>"
+                    "⚠️ <b>Low-confidence fields detected.</b> Please verify highlighted values before saving."
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+            elif medium_fields:
+                st.caption("◐ Some fields are medium confidence. Verify if ambiguous.")
+
+            completeness = PolicyService.compute_completeness_score(p, document_type)
+            coi_badge = "✅ COI Ready" if completeness["coi_ready"] else "⚠️ COI Needs Review"
+            st.caption(
+                f"Completeness Score: **{completeness['score']}** | {coi_badge} | "
+                f"Missing required: {len(completeness['missing_required'])} | "
+                f"Missing recommended: {len(completeness['missing_recommended'])}"
+            )
+
+            c1, c2 = st.columns(2)
+            
+            locs = p.get('field_locations', [])
+            
+            r_carrier = c1.text_input(_confidence_label("Carrier (Brand)", "carrier_name", confidence_map), value=_gv('carrier_name'), help=get_source_help("carrier_name", locs))
+            r_underwriter = c2.text_input("Underwriter (Legal Entity)", value=p.get("underwriter_name", ""))
+            r_pol_num = c2.text_input(_confidence_label("Policy Number", "policy_number", confidence_map), value=_gv('policy_number'), help=get_source_help("policy_number", locs))
+            
+            cc1, cc2 = st.columns(2)
+            r_type = cc1.text_input("Policy Type", value=classification.get('policy_type', ''), disabled=True)
+            r_conf = cc2.text_input("Confidence", value=classification.get('confidence', ''), disabled=True)
+            
+            c3, c4 = st.columns(2)
+            
+            current_naic = p.get('naic_number', '')
+            if not current_naic:
+                current_naic = get_naic_for_carrier(p.get('carrier_name', ''))
+            
+            locs = p.get('field_locations', [])
+            
+            r_naic = c3.text_input("NAIC Code", value=current_naic)
+            
+            prem_help = get_source_help("premium", locs)
+            premium_audit = (
+                (current_item["data"].get("audits") or {}).get("premium")
+                or {}
+            )
+            
+            prem_label = _confidence_label("Premium", "premium", confidence_map)
+            audit_flag = premium_audit.get("flag")
+            if audit_flag == "PLAUSIBLE":
+                prem_label += " ✅"
+            elif audit_flag in {"POSSIBLE_INSTALLMENT", "UNUSUALLY_HIGH"}:
+                prem_label += " ⚠️"
+
+            r_premium = c3.text_input(prem_label, value=_gv('premium'), help=prem_help)
+            
+            if audit_flag == "PLAUSIBLE":
+                st.success(
+                    f"Premium audit: PLAUSIBLE ({premium_audit.get('per_vehicle', 'n/a')} per vehicle)"
+                )
+            elif audit_flag in {"POSSIBLE_INSTALLMENT", "UNUSUALLY_HIGH"}:
+                st.warning(
+                    premium_audit.get("reason")
+                    or f"Premium audit warning: {audit_flag}"
+                )
+            elif audit_flag in {"MISSING_DATA", "SKIP"}:
+                st.caption(
+                    premium_audit.get("reason")
+                    or f"Premium audit: {audit_flag}"
+                )
+            r_eff = c4.text_input(_confidence_label("Effective Date", "effective_date", confidence_map), value=_gv('effective_date'), help=get_source_help("effective_date", locs))
+            r_exp = c4.text_input(_confidence_label("Expiration Date", "expiration_date", confidence_map), value=_gv('expiration_date'), help=get_source_help("expiration_date", locs))
+            
+            st.divider()
+            r_ins_name = st.text_input(_confidence_label("Insured Name", "insured_name", confidence_map), value=_gv('insured_name'))
+            r_ins_addr = st.text_input("Insured Address", value=p.get('insured_address', ''))
+            ic1, ic2, ic3 = st.columns(3)
+            r_ins_city = ic1.text_input("City", value=p.get('insured_city', ''))
+            r_ins_state = ic2.text_input("State", value=p.get('insured_state_code', ''))
+            r_ins_zip = ic3.text_input("Zip", value=p.get('insured_zip', ''))
+            
+            st.divider()
+            r_liab = st.text_input(_confidence_label("Auto Liability Limit", "liability_limit", confidence_map), value=_gv('liability_limit'))
+            r_gl_limit = st.text_input("GL Limit", value=p.get('general_liability_limit', ''))
+            r_cargo = st.text_input(_confidence_label("Cargo Limit", "cargo_limit", confidence_map), value=_gv('cargo_limit'))
+            r_cargo_ded = st.text_input("Cargo Ded", value=p.get('cargo_deductible', ''))
+            
+            st.markdown("##### Additional Coverages")
+            rc1, rc2, rc3, rc4, rc5 = st.columns(5)
+            r_um = rc1.text_input("UM/UIM", value=p.get('um_uim_limit', ''))
+            r_med = rc2.text_input("Med Pay", value=p.get('med_pay_limit', ''))
+            r_pip = rc3.text_input("PIP", value=p.get('pip_limit', ''))
+            r_comp = rc4.text_input("Comp Ded", value=p.get('comp_deductible', ''))
+            r_coll = rc5.text_input("Coll Ded", value=p.get('coll_deductible', ''))
+            
+            r_gl = st.checkbox("Has GL", value=bool(p.get('has_general_liability')))
+            r_auto = st.checkbox("Has Auto", value=bool(p.get('has_auto_liability')))
+            r_status = st.selectbox("Status", ["Active", "Pending", "Quote", "Expired"], index=0)
+
+            st.divider()
+            st.markdown("#### Detailed Inventory (Editable)")
+            v_data = current_item['data'].get('vehicles') or []
+            d_data = current_item['data'].get('drivers') or []
+            show_vehicle_tab = len(v_data) > 0
+            show_driver_tab = len(d_data) > 0
+
+            tab_defs = []
+            if show_vehicle_tab:
+                tab_defs.append(("vehicles", "🚙 Vehicles"))
+            if show_driver_tab:
+                tab_defs.append(("drivers", "👤 Drivers"))
+            tab_defs.extend([
+                ("coverages", "🛡️ Coverages"),
+                ("additional_interests", "🏢 Additional Interests"),
+            ])
+            tab_views = dict(zip([k for k, _ in tab_defs], st.tabs([label for _, label in tab_defs])))
+
+            edited_v = pd.DataFrame(v_data) if show_vehicle_tab else pd.DataFrame()
+            edited_d = pd.DataFrame(d_data) if show_driver_tab else pd.DataFrame()
+
+            if show_vehicle_tab:
+                with tab_views["vehicles"]:
                     v_df = pd.DataFrame(v_data)
-                    # Helper to ensures columns exist
                     for col in ["year", "make", "model", "vin", "type", "gvw"]:
                         if col not in v_df.columns: v_df[col] = None
                     
@@ -540,8 +1195,8 @@ def page_process_policies(api_key):
                         key=f"edt_v_{fname}"
                     )
 
-                with t2:
-                    d_data = current_item['data'].get('drivers', [])
+            if show_driver_tab:
+                with tab_views["drivers"]:
                     d_df = pd.DataFrame(d_data)
                     for col in ["full_name", "license_number", "is_excluded"]:
                         if col not in d_df.columns: d_df[col] = None
@@ -557,147 +1212,283 @@ def page_process_policies(api_key):
                         width='stretch',
                         key=f"edt_d_{fname}"
                     )
+            
+            with tab_views["coverages"]:
+                c_data = current_item['data'].get('coverages', [])
+                c_rows = []
+                for c in c_data:
+                     row = {
+                         "type": c.get('display_name') or c.get('type'),
+                         "coverage_code": c.get('coverage_code'),
+                         "per_occurrence": c.get('limits', {}).get('per_occurrence'),
+                         "aggregate": c.get('limits', {}).get('aggregate'),
+                         "combined_single_limit": c.get('limits', {}).get('combined_single_limit'),
+                         "deductible": c.get('deductible')
+                     }
+                     c_rows.append(row)
                 
-                with t3:
-                    c_data = current_item['data'].get('coverages', [])
-                    # Flatten current extracted limits for editor if needed or present as is
-                    c_rows = []
-                    for c in c_data:
-                         row = {
-                             "type": c.get('display_name') or c.get('type'),
-                             "coverage_code": c.get('coverage_code'),
-                             "per_occurrence": c.get('limits', {}).get('per_occurrence'),
-                             "aggregate": c.get('limits', {}).get('aggregate'),
-                             "combined_single_limit": c.get('limits', {}).get('combined_single_limit'),
-                             "deductible": c.get('deductible')
-                         }
-                         c_rows.append(row)
-                    
-                    c_df = pd.DataFrame(c_rows)
-                    if c_df.empty:
-                        c_df = pd.DataFrame(columns=["type", "coverage_code", "per_occurrence", "aggregate", "combined_single_limit", "deductible"])
+                c_df = pd.DataFrame(c_rows)
+                if c_df.empty:
+                    c_df = pd.DataFrame(columns=["type", "coverage_code", "per_occurrence", "aggregate", "combined_single_limit", "deductible"])
 
-                    edited_c = st.data_editor(
-                        c_df,
-                        num_rows="dynamic",
-                        column_config={
-                            "type": st.column_config.TextColumn("Coverage Type", required=True),
-                            "coverage_code": st.column_config.TextColumn("Code"),
-                            "per_occurrence": st.column_config.NumberColumn("Occ Limit", format="$%d"),
-                            "aggregate": st.column_config.NumberColumn("Agg Limit", format="$%d"),
-                            "combined_single_limit": st.column_config.NumberColumn("CSL", format="$%d"),
-                            "deductible": st.column_config.NumberColumn("Ded", format="$%d"),
-                        },
-                        width='stretch',
-                        key=f"edt_c_{fname}"
-                    )
+                edited_c = st.data_editor(
+                    c_df,
+                    num_rows="dynamic",
+                    column_config={
+                        "type": st.column_config.TextColumn("Coverage Type", required=True),
+                        "coverage_code": st.column_config.TextColumn("Code"),
+                        "per_occurrence": st.column_config.NumberColumn("Occ Limit", format="$%d"),
+                        "aggregate": st.column_config.NumberColumn("Agg Limit", format="$%d"),
+                        "combined_single_limit": st.column_config.NumberColumn("CSL", format="$%d"),
+                        "deductible": st.column_config.NumberColumn("Ded", format="$%d"),
+                    },
+                    width='stretch',
+                    key=f"edt_c_{fname}"
+                )
 
-                with t4:
-                    ai_data = current_item['data'].get('additional_interests', [])
-                    ai_df = pd.DataFrame(ai_data)
-                    for col in ["name", "address", "interest_type"]:
-                        if col not in ai_df.columns: ai_df[col] = None
+            with tab_views["additional_interests"]:
+                ai_data = current_item['data'].get('additional_interests', [])
+                ai_df = pd.DataFrame(ai_data)
+                for col in ["name", "address", "interest_type"]:
+                    if col not in ai_df.columns: ai_df[col] = None
 
-                    edited_ai = st.data_editor(
-                        ai_df,
-                        num_rows="dynamic",
-                        column_config={
-                            "name": st.column_config.TextColumn("Entity Name", required=True),
-                            "address": st.column_config.TextColumn("Address"),
-                            "interest_type": st.column_config.SelectboxColumn(
-                                "Interest Type", 
-                                options=INTEREST_TYPES
-                            )
-                        },
-                        width='stretch',
-                        key=f"edt_ai_{fname}"
-                    )
+                edited_ai = st.data_editor(
+                    ai_df,
+                    num_rows="dynamic",
+                    column_config={
+                        "name": st.column_config.TextColumn("Entity Name", required=True),
+                        "address": st.column_config.TextColumn("Address"),
+                        "interest_type": st.column_config.SelectboxColumn(
+                            "Interest Type", 
+                            options=INTEREST_TYPES
+                        )
+                    },
+                    width='stretch',
+                    key=f"edt_ai_{fname}"
+                )
 
-                st.markdown("---")
-                
-                # Duplicate detection warning
-                b_col_warn = st.container()
-                
-                b_col1, b_col2, b_col3 = st.columns([1, 1, 1])
-                saved = b_col1.form_submit_button("💾 Save", type="secondary")
-                save_next = b_col2.form_submit_button("💾⏩ Save & Next", type="primary")
-                discarded = b_col3.form_submit_button("🗑️ Discard")
-                
-                if saved or save_next:
-                    session = get_session(st.session_state.db_engine)
-                    service = PolicyService(session)
-                    try:
-                        # Check for duplicate before saving
-                        existing = service.check_duplicate(r_pol_num)
-                        if existing:
-                            b_col_warn.warning(
-                                f"⚡ **Duplicate Detected:** Policy `{r_pol_num}` already exists "
-                                f"(Insured: {existing.insured_name}, Carrier: {existing.carrier_name}). "
-                                f"Saving will **update** the existing record."
-                            )
-                        
-                        # Construct flattened dictionary for factory
-                        policy_payload = {
-                            "carrier_name": r_carrier,
-                            "naic_number": r_naic,
-                            "policy_number": r_pol_num,
-                            "effective_date": r_eff, # Factory handles parsing
-                            "expiration_date": r_exp,
-                            "insured_name": r_ins_name,
-                            "insured_address": r_ins_addr,
-                            "insured_city": r_ins_city,
-                            "insured_state_code": r_ins_state,
-                            "insured_zip": r_ins_zip,
-                            "liability_limit": r_liab,
-                            "general_liability_limit": r_gl_limit,
-                            "cargo_limit": r_cargo,
-                            "cargo_deductible": r_cargo_ded,
-                            "um_uim_limit": r_um,
-                            "med_pay_limit": r_med,
-                            "pip_limit": r_pip,
-                            "comp_deductible": r_comp,
-                            "coll_deductible": r_coll,
-                            "has_general_liability": r_gl,
-                            "has_auto_liability": r_auto,
-                            "account_type": p.get('account_type'),
-                            "policy_type": classification.get('policy_type'),
-                            "classification_confidence": classification.get('confidence'),
-                            "classification_signals": classification.get('signals', []),
-                            "business_name": p.get('business_name'),
-                            "premium": r_premium,
-                            "financial_responsibility_name": p.get('financial_responsibility_name'),
-                            "has_full_collision": p.get('has_full_collision'),
-                            "status": r_status,
-                            
-                            # Collections (Editor DFs converted to list of dicts)
-                            "vehicles": edited_v.to_dict('records') if not edited_v.empty else [],
-                            "drivers": edited_d.to_dict('records') if not edited_d.empty else [],
-                            "coverages": edited_c.to_dict('records') if not edited_c.empty else [],
-                            "additional_interests": edited_ai.to_dict('records') if not edited_ai.empty else []
-                        }
-                        
-                        policy = service.create_policy_from_dict(policy_payload)
+            st.markdown("---")
+            st.subheader("👤 Customer")
+            st.caption(
+                "Customer matching uses the insured name, policy number, and drivers from the fields above."
+            )
+            confirm_key = f"confirm_customer_id_{fname}"
+            owner_widget_key = f"commercial_owner_input_{fname}"
+            owner_storage_key = f"commercial_owner_name_{fname}"
+            if confirm_key not in st.session_state:
+                st.session_state[confirm_key] = None
+            if owner_storage_key not in st.session_state:
+                st.session_state[owner_storage_key] = ""
 
-                        # We should use service.save_policy_object
-                        success, msg = service.save_policy_object(policy)
-                        
-                        if success:
-                            st.toast(f"✅ Saved {r_pol_num}!")
-                            st.session_state["review_queue"].pop(0)
-                            st.rerun()
+            policy_type = (classification or {}).get("policy_type", "")
+            data_for_resolve = copy.deepcopy(current_item["data"])
+            rp = data_for_resolve.setdefault("policy", {})
+            rp["insured_name"] = r_ins_name
+            rp["policy_number"] = r_pol_num
+            data_for_resolve["classification"] = dict(classification or {})
+            if not edited_d.empty:
+                data_for_resolve["drivers"] = _dataframe_to_record_list(edited_d)
+            embedded_owner = CustomerResolver.extract_embedded_owner_name(r_ins_name)
+
+            customer_session = get_session(st.session_state.db_engine)
+            try:
+                resolved = CustomerResolver(customer_session).resolve(data_for_resolve)
+                conf = resolved.get("confidence")
+                res_customer = resolved.get("customer")
+
+                if conf == "confirmed" and res_customer is not None:
+                    customer = customer_session.query(Customer).get(res_customer.id)
+                    if customer:
+                        st.success(f"✅ Matched to: **{customer.full_name}**")
+                        other_pols = [
+                            op
+                            for op in (customer.policies or [])
+                            if (op.policy_number or "") != (r_pol_num or "").strip()
+                        ]
+                        if other_pols:
+                            st.caption("Their other policies with us:")
+                            for op in other_pols[:5]:
+                                icon = (
+                                    "✅"
+                                    if (op.policy_status or "").lower() == "active"
+                                    else "⏰"
+                                )
+                                st.markdown(
+                                    f"{icon} `{op.policy_number}` {op.policy_type} "
+                                    f"— {_carrier_display(op.carrier_name, getattr(op, 'underwriter_name', None))}"
+                                )
+                elif conf == "suggested" and res_customer is not None:
+                    customer = customer_session.query(Customer).get(res_customer.id)
+                    if customer:
+                        st.warning(
+                            f"⚠️ Possible match: **{customer.full_name}** — "
+                            f"{resolved.get('match_reason', 'Needs review')}"
+                        )
+                        c1, c2 = st.columns(2)
+                        if c1.button("✅ Yes, same customer", key=f"yes_customer_{fname}"):
+                            st.session_state[confirm_key] = customer.id
+                        if c2.button("❌ No, different person", key=f"no_customer_{fname}"):
+                            st.session_state[confirm_key] = None
+                        chosen = st.session_state.get(confirm_key)
+                        if chosen == customer.id:
+                            st.success("Will link to this customer on save.")
+                        elif chosen is None:
+                            st.caption("Will not auto-link this suggestion.")
+                else:
+                    st.info("🆕 New customer will be created")
+                    if policy_type != "personal_auto":
+                        if embedded_owner:
+                            st.success(f"Owner detected from DBA: **{embedded_owner['owner_name']}**")
+                            st.caption("The full insured/DBA name will be saved as a business entity.")
+                            st.session_state[owner_storage_key] = ""
                         else:
-                            st.toast(f"⚠️ Could not save: {msg}", icon="⚠️")
-                            # If individual save (not next), maybe we show error persistent? 
-                            # Toast is fine for now as it doesn't block flow.
-                        
-                    except Exception as e:
-                        st.toast(f"❌ Save failed: {e}", icon="❌")
-                    finally:
-                        session.close()
-                
-                if discarded:
-                    st.session_state["review_queue"].pop(0)
-                    st.rerun()
+                            st.markdown("**Commercial — who is the owner?**")
+                            owner_name = st.text_input(
+                                "Owner / Principal Name",
+                                placeholder="e.g. Ayaz Demir",
+                                key=owner_widget_key,
+                            )
+                            if owner_name.strip():
+                                st.session_state[owner_storage_key] = owner_name.strip()
+                            else:
+                                st.session_state[owner_storage_key] = ""
+            finally:
+                customer_session.close()
+
+            related = (current_item["data"].get("_related_policy_candidates") or [])[:3]
+            if related:
+                st.divider()
+                st.subheader("🔗 Potential Related Policies")
+                st.caption("Found existing policies that may be related to this one.")
+                relationship_session = get_session(st.session_state.db_engine)
+                relationship_service = PolicyService(relationship_session)
+                try:
+                    for match in related:
+                        render_related_policy(match, current_item, relationship_service)
+                finally:
+                    relationship_session.close()
+
+            st.divider()
+            
+            b_col_warn = st.container()
+
+            review_extraction_result = copy.deepcopy(current_item["data"])
+            pol_save = review_extraction_result.setdefault("policy", {})
+            pol_save.update(
+                {
+                    "carrier_name": r_carrier,
+                    "underwriter_name": r_underwriter,
+                    "naic_number": r_naic,
+                    "policy_number": r_pol_num,
+                    "effective_date": r_eff,
+                    "expiration_date": r_exp,
+                    "insured_name": r_ins_name,
+                    "insured_address": r_ins_addr,
+                    "insured_city": r_ins_city,
+                    "insured_state_code": r_ins_state,
+                    "insured_zip": r_ins_zip,
+                    "liability_limit": r_liab,
+                    "general_liability_limit": r_gl_limit,
+                    "cargo_limit": r_cargo,
+                    "cargo_deductible": r_cargo_ded,
+                    "um_uim_limit": r_um,
+                    "med_pay_limit": r_med,
+                    "pip_limit": r_pip,
+                    "comp_deductible": r_comp,
+                    "coll_deductible": r_coll,
+                    "has_general_liability": r_gl,
+                    "has_auto_liability": r_auto,
+                    "account_type": p.get("account_type"),
+                    "document_type": document_type,
+                    "premium": r_premium,
+                    "business_name": p.get("business_name"),
+                    "financial_responsibility_name": p.get("financial_responsibility_name"),
+                    "has_full_collision": p.get("has_full_collision"),
+                    "status": r_status,
+                    "field_confidences": confidence_map,
+                }
+            )
+            review_extraction_result["classification"] = dict(classification or {})
+            review_extraction_result["vehicles"] = _dataframe_to_record_list(edited_v)
+            review_extraction_result["drivers"] = _dataframe_to_record_list(edited_d)
+            review_extraction_result["coverages"] = _coverages_from_editor_rows(c_data, edited_c)
+            review_extraction_result["additional_interests"] = _dataframe_to_record_list(edited_ai)
+            review_extraction_result["_review_confirm_customer_id"] = st.session_state.get(confirm_key)
+            review_extraction_result["_review_commercial_owner_name"] = (
+                (st.session_state.get(owner_storage_key) or "").strip()
+            )
+
+            if (
+                review_extraction_result.get("policy_data_source") == "coi_summary"
+                and (review_extraction_result.get("coi_summary") or {}).get("policies")
+            ):
+                review_extraction_result.pop("coi_summary", None)
+                review_extraction_result["policy_data_source"] = (
+                    document_type or "certificate_of_insurance"
+                )
+
+            duplicate_info = {"status": "no_match"}
+            diff_preview = None
+            duplicate_session = get_session(st.session_state.db_engine)
+            duplicate_service = PolicyService(duplicate_session)
+            try:
+                duplicate_info = duplicate_service.detect_duplicate_for_extraction(review_extraction_result)
+                existing_id = duplicate_info.get("existing_policy_id")
+                if existing_id:
+                    existing_policy = duplicate_service.get_policy_by_id(existing_id)
+                    if existing_policy:
+                        diff_preview = duplicate_service.preview_update_from_extraction(
+                            existing_policy,
+                            review_extraction_result,
+                        )
+            finally:
+                duplicate_session.close()
+
+            with b_col_warn:
+                _render_duplicate_preview(duplicate_info, diff_preview)
+            
+            b_col1, b_col2, b_col3 = st.columns([1, 1, 1])
+            duplicate_status = duplicate_info.get("status")
+            has_existing_policy = duplicate_status in {
+                "exact_policy_match",
+                "exact_number_carrier_conflict",
+            }
+            primary_label = "Update Current Policy" if has_existing_policy else "Create New Policy"
+            next_label = "Update & Next" if has_existing_policy else "Create & Next"
+            saved = b_col1.button(primary_label, type="secondary", key=f"save_review_{fname}")
+            save_next = b_col2.button(next_label, type="primary", key=f"save_next_review_{fname}")
+            discarded = b_col3.button("🗑️ Discard", key=f"discard_review_{fname}")
+            if has_existing_policy:
+                st.caption("To create a separate policy entry instead, edit the incoming policy number first.")
+            
+            if saved or save_next:
+                session = get_session(st.session_state.db_engine)
+                service = PolicyService(session)
+                try:
+                    review_extraction_result["_duplicate_action"] = (
+                        "update_existing" if has_existing_policy else "create_new"
+                    )
+                    success, msg = service.save_policy_from_extraction(review_extraction_result)
+                    
+                    if success:
+                        st.toast(f"✅ Saved {r_pol_num}!")
+                        st.session_state.pop(confirm_key, None)
+                        st.session_state.pop(owner_storage_key, None)
+                        st.session_state["review_queue"].pop(0)
+                        st.rerun()
+                    else:
+                        st.toast(f"⚠️ Could not save: {msg}", icon="⚠️")
+                    
+                except Exception as e:
+                    st.toast(f"❌ Save failed: {e}", icon="❌")
+                finally:
+                    session.close()
+            
+            if discarded:
+                st.session_state.pop(confirm_key, None)
+                st.session_state.pop(owner_storage_key, None)
+                st.session_state["review_queue"].pop(0)
+                st.rerun()
     else:
         if "review_queue" in st.session_state and isinstance(st.session_state["review_queue"], list):
              st.info("No policies pending review.")

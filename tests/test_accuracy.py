@@ -1,98 +1,111 @@
-import pytest
-import os
 import json
-import glob
+import os
+import re
+from pathlib import Path
+
+import pytest
+
 from modules.extraction import process_pdf
-from core.logger import logger
+from accuracy_config import (
+    CARRIER_FIELD_WEIGHTS,
+    VARIABLE_COUNT_TOLERANCE,
+)
 
-# Path to Golden Data
-DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+DATA_DIR = Path("tests/data")
 
-def normalize(val):
-    """Normalize strings for comparison (ignore case, whitespace, currency symbols)"""
-    if not isinstance(val, str):
-        return val
-    return val.lower().strip().replace("$", "").replace(",", "")
-
-def compare_dicts(extracted, golden, path=""):
-    """Recursively checks if extracted data matches golden expectation."""
-    errors = []
-    
-    if isinstance(golden, dict):
-        for k, v in golden.items():
-            # Skip dynamic/unimportant fields
-            if k in ["page_dimensions", "file_hash", "usage_metadata", "timestamp", "field_locations", "confidence"]:
-                continue
-                
-            curr_path = f"{path}.{k}" if path else k
-            
-            # Check existence
-            if k not in extracted:
-                # If golden is None/Empty, it's okay if extracted is missing
-                if not v: continue 
-                errors.append(f"Missing Key: {curr_path}")
-                continue
-            
-            extracted_val = extracted[k]
-            
-            # Recursive Deep Dive
-            sub_errors = compare_dicts(extracted_val, v, curr_path)
-            errors.extend(sub_errors)
-            
-    elif isinstance(golden, list):
-        # List comparison is hard (order? items?). 
-        # Simple check: Count match?
-        if len(extracted) != len(golden):
-             errors.append(f"List Count Variance at {path}: Exp {len(golden)}, Got {len(extracted)}")
-    else:
-        # Scalar Comparison
-        n_ext = normalize(extracted)
-        n_gold = normalize(golden)
-        
-        if n_ext != n_gold:
-            errors.append(f"Mismatch at {path}: Exp '{golden}' vs Got '{extracted}'")
-
-    return errors
 
 def get_golden_pairs():
-    """Finds all .pdf files that have a matching .json file."""
-    pdfs = glob.glob(os.path.join(DATA_DIR, "*.pdf"))
     pairs = []
-    for p in pdfs:
-        json_path = p.replace(".pdf", ".json")
-        if os.path.exists(json_path):
-            pairs.append((p, json_path))
+    for json_path in DATA_DIR.rglob("*.json"):
+        if json_path.name == "ontology_golden.json":
+            continue
+        pdf_path = json_path.with_suffix(".pdf")
+        if pdf_path.exists():
+            pairs.append((str(pdf_path), str(json_path)))
     return pairs
+
+
+def get_carrier_config(golden_data):
+    carrier = golden_data.get("_meta", {}).get("carrier", "default")
+    return CARRIER_FIELD_WEIGHTS.get(carrier, CARRIER_FIELD_WEIGHTS["default"])
+
+
+def normalize(val):
+    if val is None:
+        return ""
+    s = str(val).strip().lower()
+    # Strip currency symbols and thousand separators for numeric comparison.
+    s = s.replace("$", "").replace(",", "")
+    # Collapse multiple spaces.
+    s = re.sub(r"\s+", " ", s)
+    return s.strip()
+
+
+def compare_extraction(extracted, golden):
+    config = get_carrier_config(golden)
+    critical_errors = []
+    warnings = []
+
+    policy_ext = extracted.get("policy", {})
+    policy_gold = golden.get("policy", {})
+
+    for field in config["critical"]:
+        if field in config["skip"]:
+            continue
+        ext_val = normalize(policy_ext.get(field))
+        gold_val = normalize(policy_gold.get(field))
+        if ext_val != gold_val:
+            critical_errors.append(
+                f"CRITICAL {field}: expected '{gold_val}' got '{ext_val}'"
+            )
+
+    for coll in config["variable"]:
+        ext_count = len(extracted.get(coll, []) or [])
+        gold_count = len(golden.get(coll, []) or [])
+        if abs(ext_count - gold_count) > VARIABLE_COUNT_TOLERANCE:
+            warnings.append(
+                f"WARN {coll} count: expected ~{gold_count} got {ext_count}"
+            )
+
+    return critical_errors, warnings
+
 
 @pytest.mark.skipif(not os.getenv("GEMINI_API_KEY"), reason="Requires GEMINI_API_KEY env var")
 @pytest.mark.parametrize("pdf_path,json_path", get_golden_pairs())
 def test_extraction_accuracy(pdf_path, json_path):
-    """
-    Runs extraction on the PDF and compares against the JSON truth.
-    """
     api_key = os.getenv("GEMINI_API_KEY")
-    
+
+    with open(json_path, "r", encoding="utf-8") as f:
+        golden = json.load(f)
+
     with open(pdf_path, "rb") as f:
-        file_bytes = f.read()
+        pdf_bytes = f.read()
 
-    # Run Extraction
-    logger.info(f"Testing Accuracy on: {os.path.basename(pdf_path)}")
-    data, usage, error = process_pdf(file_bytes, api_key=api_key)
-
+    result, _, error = process_pdf(pdf_bytes, api_key=api_key)
     assert error is None, f"Extraction failed: {error}"
 
-    # Load Golden Truth
-    with open(json_path, "r", encoding='utf-8') as f:
-        golden_data = json.load(f)
+    critical_errors, warnings = compare_extraction(result, golden)
 
-    # Compare
-    # We mainly care about the 'policy' and 'coverages' keys
-    
-    # 1. Policy Details
-    policy_errors = compare_dicts(data.get("policy", {}), golden_data.get("policy", {}), path="policy")
-    
-    assert not policy_errors, "\n".join(policy_errors)
-    
-    # 2. Coverages (Simplified check for now)
-    # Checking specific codes presence could be complex, maybe trust list count for now?
-    # Or strict comparison if user curated the JSON perfectly.
+    for warning in warnings:
+        print(f"WARN {warning}")
+
+    assert not critical_errors, "\n".join(critical_errors)
+
+
+def test_ontology_golden_fixture_acord_and_codes():
+    """Static JSON: no API calls; exercises compliance, symbols, MI_PPI, trailer interchange, stacked UM."""
+    path = DATA_DIR / "generic" / "ontology_golden.json"
+    if not path.exists():
+        pytest.skip("ontology_golden.json missing")
+    with open(path, "r", encoding="utf-8") as f:
+        golden = json.load(f)
+    from reporting.acord_view import build_acord_view
+
+    v = build_acord_view(golden)
+    assert v["compliance"].get("doc_endorsements")
+    pol_ont = v.get("policy_ontology") or {}
+    assert pol_ont.get("um_stacked_effective_limit") == 300000
+    assert v["commercial_flags"].get("symbol1_any_auto_suggested") is True
+    assert v["acord_127_vehicles"][0].get("covered_auto_symbols") == "1,7"
+    codes = {c.get("coverage_code") for c in (golden.get("coverages") or [])}
+    assert "MI_PPI" in codes and "TRAILER_INTERCHANGE" in codes

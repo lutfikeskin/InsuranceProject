@@ -54,7 +54,6 @@ def test_bulk_generation_logic():
                     safe_name = "".join([c for c in comp_name if c.isalnum() or c in (' ', '_')]).strip()
                     zf.writestr(f"COI_{safe_name}.pdf", pdf)
         
-        # Verify ZIP
         zip_buffer.seek(0)
         with zipfile.ZipFile(zip_buffer, "r") as zf:
             file_list = zf.namelist()

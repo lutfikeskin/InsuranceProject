@@ -21,7 +21,6 @@ def page_dashboard():
         daily_spend = usage_service.get_daily_usage()
         budget_limit = DEFAULT_DAILY_BUDGET
         
-        # --- COMMAND CENTER HEADER ---
         today = date.today()
         hour = pd.Timestamp.now().hour
         greeting = "Good morning" if hour < 12 else ("Good afternoon" if hour < 17 else "Good evening")
@@ -34,7 +33,6 @@ def page_dashboard():
         </div>
         """, unsafe_allow_html=True)
 
-        # --- METRICS GRID ---
         m_col1, m_col2, m_col3 = st.columns(3)
         
         with m_col1:
@@ -44,7 +42,6 @@ def page_dashboard():
         with m_col3:
             st.metric("Total Premium", f"${total_premium:,.2f}")
 
-        # --- EXPIRATION ALERTS ---
         expiring_30 = service.get_expiring_policies(days=30)
         expiring_60 = service.get_expiring_policies(days=60)
         
@@ -99,7 +96,6 @@ def page_dashboard():
                 st.divider()
                 st.success("✅ **All policies are current** — no upcoming expirations in the next 60 days.")
 
-        # --- PORTFOLIO ANALYTICS ---
         if total_policies > 0:
             st.divider()
             st.subheader("📊 Portfolio Analytics")
