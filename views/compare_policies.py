@@ -31,6 +31,7 @@ from core.comparison_service import (
     ScalarDiff,
 )
 from core.database import Policy, get_session
+from core.logger import logger
 from core.services import PolicyService
 
 
@@ -129,6 +130,9 @@ def _render_kpi_strip(result: ComparisonResult) -> None:
             if s.premium_delta_pct is not None
             else None
         ),
+        # Premium going up is "bad" for the broker; flip Streamlit's default
+        # so a positive delta renders red and a drop renders green.
+        delta_color="inverse",
         help=prem_help,
     )
 
@@ -184,7 +188,8 @@ def _render_scalar_table(result: ComparisonResult) -> None:
 def _get(row, *attrs, default=None):
     """Attribute-or-key access. Mirrors the helper in the email drafter so
     the same code works on ORM objects, dicts, and SimpleNamespace mocks."""
-    for attr in attrs:
+    last_idx = len(attrs) - 1
+    for idx, attr in enumerate(attrs):
         if row is None:
             return default
         if isinstance(row, dict):
@@ -194,7 +199,7 @@ def _get(row, *attrs, default=None):
                 return default
         else:
             row = getattr(row, attr, None)
-            if row is None and attrs.index(attr) < len(attrs) - 1:
+            if row is None and idx < last_idx:
                 return default
     return row if row is not None else default
 
@@ -479,13 +484,22 @@ def page_compare_policies() -> None:
                 "make sure this is intentional."
             )
 
-        result = ComparisonService(session).compare(policy_a, policy_b)
+        try:
+            result = ComparisonService(session).compare(policy_a, policy_b)
 
-        st.divider()
-        _render_kpi_strip(result)
-        st.divider()
-        _render_scalar_table(result)
-        st.divider()
-        _render_collection_details(result)
+            st.divider()
+            _render_kpi_strip(result)
+            st.divider()
+            _render_scalar_table(result)
+            st.divider()
+            _render_collection_details(result)
+        except Exception as exc:
+            logger.exception(
+                "Compare page failed for policies %s/%s", pid_a, pid_b
+            )
+            st.error(
+                f"Could not compute comparison: {exc}. "
+                "Try refreshing the page — if it persists, check the app log."
+            )
     finally:
         session.close()

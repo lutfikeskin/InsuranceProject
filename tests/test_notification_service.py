@@ -173,6 +173,17 @@ class TestCountInWindow:
         # Row at exactly `end` must NOT be counted.
         assert svc.count_in_window(datetime(2024, 6, 1), when) == 0
 
+    def test_counts_across_all_policies(self, svc, mock_db_session):
+        # The Renewals KPI relies on a cross-policy aggregate count.
+        # Pins the contract: count_in_window is NOT filtered by policy.
+        svc.record_contact(policy_id=1, contacted_at=datetime(2024, 6, 5))
+        svc.record_contact(policy_id=2, contacted_at=datetime(2024, 6, 6))
+        svc.record_contact(policy_id=3, contacted_at=datetime(2024, 6, 7))
+        mock_db_session.commit()
+        assert (
+            svc.count_in_window(datetime(2024, 6, 1), datetime(2024, 6, 30)) == 3
+        )
+
 
 class TestKnownMethodsConstant:
     def test_includes_documented_methods(self):

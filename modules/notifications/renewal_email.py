@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Optional
 
+from core.logger import logger
+
 
 @dataclass(frozen=True)
 class RenewalEmailDraft:
@@ -139,9 +141,25 @@ def draft_renewal_email(
         Override for the "days remaining" calculation. Mainly here so
         tests don't depend on the wall clock.
     """
-    insured_name = _get(policy, "insured_name") or "Policyholder"
-    carrier = _get(policy, "carrier_name") or "(carrier on file)"
-    policy_number = _get(policy, "policy_number") or "(policy number on file)"
+    policy_id = _get(policy, "id")
+    raw_insured_name = _get(policy, "insured_name")
+    raw_carrier = _get(policy, "carrier_name")
+    raw_policy_number = _get(policy, "policy_number")
+    for field, value in (
+        ("insured_name", raw_insured_name),
+        ("carrier_name", raw_carrier),
+        ("policy_number", raw_policy_number),
+    ):
+        if not value:
+            logger.warning(
+                "draft_renewal_email: missing %s for policy %s — using placeholder",
+                field,
+                policy_id,
+            )
+
+    insured_name = raw_insured_name or "Policyholder"
+    carrier = raw_carrier or "(carrier on file)"
+    policy_number = raw_policy_number or "(policy number on file)"
     effective = _format_date(_get(policy, "effective_date"))
     expiration_raw = _get(policy, "expiration_date")
     expiration = _format_date(expiration_raw)

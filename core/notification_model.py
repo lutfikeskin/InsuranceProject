@@ -21,9 +21,13 @@ Design notes:
   assumed.
 """
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .database import Base
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class NotificationLog(Base):
@@ -37,7 +41,7 @@ class NotificationLog(Base):
         nullable=True,
         index=True,
     )
-    contacted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    contacted_at = Column(DateTime, default=_utcnow, nullable=False)
     method = Column(String, nullable=False, default="email_draft")
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)

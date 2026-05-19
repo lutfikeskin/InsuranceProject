@@ -172,11 +172,11 @@ class TestScalarDiff:
         assert "carrier_name" in names
 
     def test_whitespace_normalized_equality(self, svc):
-        # HistoryService._normalize delegates to utils.text_utils.normalize_string
+        # HistoryService.normalize delegates to utils.text_utils.normalize_string
         # which strips/collapses whitespace. "  100,000" and "100,000" should
         # therefore compare equal even though their raw values differ.
         # NOTE: Currency-like normalization (',' / '$' stripping) is NOT
-        # currently implemented in HistoryService._normalize despite the
+        # currently implemented in HistoryService.normalize despite the
         # docstring — pre-existing bug, tracked separately. So we test the
         # behavior that IS implemented.
         a = _policy(liability_limit="  100,000  ")
@@ -185,16 +185,23 @@ class TestScalarDiff:
         diff = next(d for d in result.scalar_diffs if d.field == "liability_limit")
         assert diff.equal is True
 
+    @pytest.mark.xfail(
+        strict=False,
+        reason=(
+            "Documents a known gap: HistoryService.normalize doesn't strip "
+            "commas / $, so '100,000' and '100000' are treated as different. "
+            "When normalize is fixed this will start passing — flip the "
+            "assertion to `is True` and drop the marker."
+        ),
+    )
     def test_different_string_formattings_are_currently_treated_as_different(self, svc):
-        # Documents the *current* behavior — "100,000" vs "100000" lands as a
-        # change. When HistoryService._normalize learns to strip commas,
-        # this test will start failing and someone will replace it with the
-        # equality assertion. That's the intent.
         a = _policy(liability_limit="100,000")
         b = _policy(2, liability_limit="100000")
         result = svc.compare(a, b)
         diff = next(d for d in result.scalar_diffs if d.field == "liability_limit")
-        assert diff.equal is False
+        # Pinning the future-correct behavior so the marker auto-flips green
+        # once normalization handles thousands separators.
+        assert diff.equal is True
 
     def test_none_vs_value_is_change(self, svc):
         a = _policy(insured_name="Acme")
@@ -211,6 +218,37 @@ class TestScalarDiff:
         result = svc.compare(a, b)
         diff = next(d for d in result.scalar_diffs if d.field == "naic_number")
         assert diff.equal is True
+
+
+class TestSelfCompare:
+    """Compare a policy against itself — every bucket must be empty and the
+    premium delta must be zero. Guards against future defensive-guard edits
+    that might short-circuit identical-ID compares incorrectly."""
+
+    def test_self_compare_yields_no_changes(self, svc):
+        p = _policy(
+            carrier_name="X",
+            policy_number="P1",
+            premium=1000.0,
+            vehicles=[_vehicle("V1"), _vehicle("V2")],
+            drivers=[_driver("Jane")],
+            coverages=[_coverage("BI", per_person=100000, per_accident=300000)],
+            additional_interests=[_interest("Bank A")],
+        )
+        result = svc.compare(p, p)
+        assert result.summary.n_scalar_changed == 0
+        assert result.summary.premium_delta == 0.0
+        assert result.summary.premium_delta_pct == 0.0
+        assert result.vehicles.only_in_a == []
+        assert result.vehicles.only_in_b == []
+        assert len(result.vehicles.unchanged) == 2
+        assert result.drivers.only_in_a == []
+        assert result.drivers.only_in_b == []
+        assert result.coverages.only_in_a == []
+        assert result.coverages.only_in_b == []
+        assert result.coverages.limit_changed == []
+        assert result.additional_interests.only_in_a == []
+        assert result.additional_interests.only_in_b == []
 
 
 # ---------------------------------------------------------------------------

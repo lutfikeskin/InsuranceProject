@@ -15,10 +15,11 @@ A/B don't imply newer/older; the page can label sides however it likes
 
 Field maps and signature tuples are reused from `HistoryService` so there's
 exactly one source of truth for "what counts as a scalar field" and "what
-makes two vehicles equal." Trade-off documented in the feature plan:
-private-method coupling vs. duplicated lists that drift over time. We
-chose coupling so a schema change in HistoryService propagates here on
-the next test run.
+makes two vehicles equal." The reused helpers (`vehicle_sig`, `driver_sig`,
+`coverage_sig`, `additional_interest_sig`, `normalize`, and the
+`SCALAR_FIELD_MAP` constant) are part of the HistoryService public surface
+because two services depend on them; renaming any of them is a contract
+break that must update both files together.
 """
 from __future__ import annotations
 
@@ -144,10 +145,10 @@ class ComparisonService:
         already loaded from the session."""
         scalar_diffs = self._scalar_diffs(policy_a, policy_b)
         vehicles = self._collection_diff(
-            policy_a.vehicles or [], policy_b.vehicles or [], self._hs._vehicle_sig
+            policy_a.vehicles or [], policy_b.vehicles or [], self._hs.vehicle_sig
         )
         drivers = self._collection_diff(
-            policy_a.drivers or [], policy_b.drivers or [], self._hs._driver_sig
+            policy_a.drivers or [], policy_b.drivers or [], self._hs.driver_sig
         )
         coverages = self._coverage_diff(
             policy_a.coverages or [], policy_b.coverages or []
@@ -155,7 +156,7 @@ class ComparisonService:
         additional_interests = self._collection_diff(
             policy_a.additional_interests or [],
             policy_b.additional_interests or [],
-            self._hs._additional_interest_sig,
+            self._hs.additional_interest_sig,
         )
         summary = self._summary(
             policy_a, policy_b, scalar_diffs, vehicles, drivers, coverages
@@ -186,8 +187,8 @@ class ComparisonService:
             value_b = getattr(policy_b, attr, None)
             # Normalize for equality so '100,000' and 100000 don't count
             # as different (same normalization HistoryService uses on saves).
-            norm_a = self._hs._normalize(value_a)
-            norm_b = self._hs._normalize(value_b)
+            norm_a = self._hs.normalize(value_a)
+            norm_b = self._hs.normalize(value_b)
             equal = norm_a == norm_b
             diffs.append(
                 ScalarDiff(
@@ -229,7 +230,7 @@ class ComparisonService:
     def _coverage_diff(self, rows_a, rows_b) -> CoverageDiff:
         """Coverage diff with an extra `limit_changed` bucket — same
         (coverage_code, vehicle_vin) on both sides but different limits."""
-        sig_full = self._hs._coverage_sig
+        sig_full = self._hs.coverage_sig
 
         def _ident(cov):
             """Identity key for 'same coverage line' — only the type/code

@@ -55,28 +55,36 @@ class TestBucketPlacement:
         assert p in result["urgent"]
 
     def test_urgent_bucket_upper_boundary(self, svc, mock_db_session):
+        # Day 14 sits in urgent, NOT warning — pins the fence post against
+        # an accidental `<= 14` flip.
         p = _insert(mock_db_session, "URG-14", 14)
         mock_db_session.commit()
         result = svc.get_renewal_buckets()
         assert p in result["urgent"]
+        assert p not in result["warning"]
 
     def test_warning_bucket_lower_boundary(self, svc, mock_db_session):
+        # Day 15 sits in warning, NOT urgent — sister assertion to the
+        # day-14 boundary above.
         p = _insert(mock_db_session, "WARN-15", 15)
         mock_db_session.commit()
         result = svc.get_renewal_buckets()
         assert p in result["warning"]
+        assert p not in result["urgent"]
 
     def test_warning_bucket_upper_boundary(self, svc, mock_db_session):
         p = _insert(mock_db_session, "WARN-30", 30)
         mock_db_session.commit()
         result = svc.get_renewal_buckets()
         assert p in result["warning"]
+        assert p not in result["watch"]
 
     def test_watch_bucket_lower_boundary(self, svc, mock_db_session):
         p = _insert(mock_db_session, "WATCH-31", 31)
         mock_db_session.commit()
         result = svc.get_renewal_buckets()
         assert p in result["watch"]
+        assert p not in result["warning"]
 
     def test_watch_bucket_upper_boundary(self, svc, mock_db_session):
         p = _insert(mock_db_session, "WATCH-60", 60)

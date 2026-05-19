@@ -12,7 +12,7 @@ goes through.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import func
@@ -51,17 +51,23 @@ class NotificationService:
                 f"Allowed without enforcement; consider adding it to KNOWN_METHODS."
             )
 
-        ts = contacted_at or datetime.utcnow()
+        ts = contacted_at or datetime.now(timezone.utc)
         row = NotificationLog(
             policy_id=policy_id,
             customer_id=customer_id,
             method=method,
             notes=notes,
             contacted_at=ts,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
-        self.session.add(row)
-        self.session.flush()  # populate row.id so the caller can use it
+        try:
+            self.session.add(row)
+            self.session.flush()  # populate row.id so the caller can use it
+        except Exception:
+            logger.exception(
+                "NotificationService.record_contact failed for policy %s", policy_id
+            )
+            raise
         return row
 
     def get_for_policy(self, policy_id: int, limit: int = 10) -> list[NotificationLog]:

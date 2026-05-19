@@ -44,7 +44,7 @@ class HistoryService:
     def __init__(self, session: Session):
         self.session = session
 
-    def _normalize(self, val):
+    def normalize(self, val):
         """Reduces '100,000' and 100000 to same value for comparison."""
         from utils.text_utils import normalize_string
         
@@ -55,7 +55,7 @@ class HistoryService:
         return normalize_string(val)
 
     def _sig_value(self, val):
-        normalized = self._normalize(val)
+        normalized = self.normalize(val)
         return "" if normalized is None else str(normalized)
 
     def _get_next_version(self, policy_id: int) -> int:
@@ -90,7 +90,7 @@ class HistoryService:
             "additional_interests": False
         }
 
-    def _vehicle_sig(self, vehicle):
+    def vehicle_sig(self, vehicle):
         if isinstance(vehicle, dict):
             return (
                 self._sig_value(vehicle.get("vin")),
@@ -113,7 +113,7 @@ class HistoryService:
             self._sig_value(getattr(vehicle, "body", None)),
         )
 
-    def _driver_sig(self, driver):
+    def driver_sig(self, driver):
         if isinstance(driver, dict):
             return (
                 self._sig_value(driver.get("full_name")),
@@ -126,7 +126,7 @@ class HistoryService:
             self._sig_value(getattr(driver, "is_excluded", None)),
         )
 
-    def _coverage_sig(self, coverage):
+    def coverage_sig(self, coverage):
         if isinstance(coverage, dict):
             limits = coverage.get("limits") if isinstance(coverage.get("limits"), dict) else {}
             return (
@@ -155,7 +155,7 @@ class HistoryService:
             self._sig_value(getattr(coverage, "deductible", None)),
         )
 
-    def _additional_interest_sig(self, interest):
+    def additional_interest_sig(self, interest):
         if isinstance(interest, dict):
             return (
                 self._sig_value(interest.get("name")),
@@ -186,7 +186,7 @@ class HistoryService:
                 parsed_new = self._parse_field_value(json_key, p_data.get(json_key))
                 old_val = getattr(policy, attr)
 
-                if self._normalize(parsed_new) != self._normalize(old_val):
+                if self.normalize(parsed_new) != self.normalize(old_val):
                     changes.append({
                         "field": attr,
                         "old_value": str(old_val),
@@ -195,8 +195,8 @@ class HistoryService:
 
         if 'vehicles' in new_data:
             new_vehs = new_data.get('vehicles', [])
-            old_sigs = self._sorted_sigs(policy.vehicles, self._vehicle_sig)
-            new_sigs = self._sorted_sigs(new_vehs, self._vehicle_sig)
+            old_sigs = self._sorted_sigs(policy.vehicles, self.vehicle_sig)
+            new_sigs = self._sorted_sigs(new_vehs, self.vehicle_sig)
             if old_sigs != new_sigs:
                 changes.append({
                     "field": "vehicles",
@@ -207,8 +207,8 @@ class HistoryService:
 
         if 'coverages' in new_data:
             new_covs = new_data.get('coverages', [])
-            old_sigs = self._sorted_sigs(policy.coverages, self._coverage_sig)
-            new_sigs = self._sorted_sigs(new_covs, self._coverage_sig)
+            old_sigs = self._sorted_sigs(policy.coverages, self.coverage_sig)
+            new_sigs = self._sorted_sigs(new_covs, self.coverage_sig)
             if old_sigs != new_sigs:
                 changes.append({
                     "field": "coverages",
@@ -219,8 +219,8 @@ class HistoryService:
 
         if 'drivers' in new_data:
             new_drvs = new_data.get('drivers', [])
-            old_sigs = self._sorted_sigs(policy.drivers, self._driver_sig)
-            new_sigs = self._sorted_sigs(new_drvs, self._driver_sig)
+            old_sigs = self._sorted_sigs(policy.drivers, self.driver_sig)
+            new_sigs = self._sorted_sigs(new_drvs, self.driver_sig)
             if old_sigs != new_sigs:
                 changes.append({
                     "field": "drivers",
@@ -231,8 +231,8 @@ class HistoryService:
 
         if 'additional_interests' in new_data:
             new_ais = new_data.get('additional_interests', [])
-            old_sigs = self._sorted_sigs(policy.additional_interests, self._additional_interest_sig)
-            new_sigs = self._sorted_sigs(new_ais, self._additional_interest_sig)
+            old_sigs = self._sorted_sigs(policy.additional_interests, self.additional_interest_sig)
+            new_sigs = self._sorted_sigs(new_ais, self.additional_interest_sig)
             if old_sigs != new_sigs:
                 changes.append({
                     "field": "additional_interests",
@@ -244,7 +244,7 @@ class HistoryService:
         if "extraction_extras" in new_data:
             new_ex = new_data.get("extraction_extras")
             old_ex = getattr(policy, "extraction_extras", None)
-            if self._normalize(new_ex) != self._normalize(old_ex):
+            if self.normalize(new_ex) != self.normalize(old_ex):
                 changes.append({
                     "field": "extraction_extras",
                     "old_value": str(old_ex)[:500] if old_ex else "",

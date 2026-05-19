@@ -22,13 +22,14 @@ No SQL lives in this file.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Iterable, Optional
 
 import pandas as pd
 import streamlit as st
 
 from core.database import Policy, get_session
+from core.logger import logger
 from core.notification_service import NotificationService
 from core.services import PolicyService
 from modules.notifications import draft_renewal_email
@@ -50,11 +51,12 @@ _AGENCY_NAME = "Truckers National"
 # ---------------------------------------------------------------------------
 
 
-def _parse_premium(value) -> float:
+def _parse_premium(value, policy_id: Optional[int] = None) -> float:
     """Best-effort float coercion for the 'premium at risk' KPI.
 
     Returns 0.0 for anything we can't parse so a malformed value
-    doesn't poison the sum across many policies."""
+    doesn't poison the sum across many policies. Logs a warning when
+    a non-numeric value is silently skipped so the KPI gap is auditable."""
     if value is None:
         return 0.0
     if isinstance(value, (int, float)):
@@ -63,11 +65,16 @@ def _parse_premium(value) -> float:
         cleaned = str(value).replace("$", "").replace(",", "").strip()
         return float(cleaned) if cleaned else 0.0
     except (ValueError, TypeError):
+        logger.warning(
+            "Non-numeric premium for policy %s: %r — excluded from at-risk total",
+            policy_id,
+            value,
+        )
         return 0.0
 
 
 def _premium_at_risk(policies: Iterable[Policy]) -> float:
-    return sum(_parse_premium(p.premium) for p in policies)
+    return sum(_parse_premium(p.premium, policy_id=p.id) for p in policies)
 
 
 def _policies_to_dataframe(
@@ -162,21 +169,26 @@ def _render_action_panel(
     else:
         st.caption("📞 No prior contact logged for this policy.")
 
-    # Look up a confirmed prior renewal once so the "Compare" button can
-    # decide whether to render. A separate short-lived session keeps the
-    # query scoped (the caller's session is for the bucket queries).
+    # Look up a confirmed prior renewal so the "Compare" button can decide
+    # whether to render. Reuses the bucket session (held by notif_service)
+    # since this is a read-only lookup. A failure here is cosmetic — the
+    # Compare button simply won't appear, and the rest of the panel still
+    # renders.
     related_policy = None
     related_label = None
-    cmp_sess = get_session(st.session_state.db_engine)
     try:
-        related_policy = PolicyService(cmp_sess).find_related_policy(policy.id)
+        related_policy = PolicyService(notif_service.session).find_related_policy(
+            policy.id
+        )
         if related_policy is not None:
             related_label = (
                 f"{related_policy.carrier_name or '—'} "
                 f"{related_policy.policy_number or '—'}"
             )
-    finally:
-        cmp_sess.close()
+    except Exception:
+        logger.warning(
+            "find_related_policy failed for policy %s", policy.id, exc_info=True
+        )
 
     action_col, log_col = st.columns([1, 1])
 
@@ -220,6 +232,10 @@ def _render_action_panel(
                     icon="✅",
                 )
                 st.rerun()
+            except Exception as exc:
+                session.rollback()
+                logger.exception("Log-contact failed for policy %s", policy.id)
+                st.error(f"Could not save contact log: {exc}")
             finally:
                 session.close()
 
@@ -289,15 +305,22 @@ def _renewal_email_dialog(policy_id: int) -> None:
             # Build a notes line that captures who/what was drafted so the
             # log entry is useful even without the email body itself.
             recipient_note = edited_to or "(no recipient on file)"
-            NotificationService(session).record_contact(
-                policy_id=policy.id,
-                customer_id=getattr(policy, "customer_id", None),
-                method="email_draft",
-                notes=f"Drafted reminder. To: {recipient_note}",
-            )
-            session.commit()
-            st.toast("Logged as 'email_draft' contact", icon="✅")
-            st.rerun()
+            try:
+                NotificationService(session).record_contact(
+                    policy_id=policy.id,
+                    customer_id=getattr(policy, "customer_id", None),
+                    method="email_draft",
+                    notes=f"Drafted reminder. To: {recipient_note}",
+                )
+                session.commit()
+                st.toast("Logged as 'email_draft' contact", icon="✅")
+                st.rerun()
+            except Exception as exc:
+                session.rollback()
+                logger.exception(
+                    "email_draft log-contact failed for policy %s", policy_id
+                )
+                st.error(f"Could not save contact log: {exc}")
     finally:
         session.close()
 
@@ -329,8 +352,9 @@ def page_renewals() -> None:
         attention_now = len(overdue) + len(urgent)
         premium_at_risk = _premium_at_risk(overdue + urgent)
 
-        week_ago = datetime.utcnow() - timedelta(days=7)
-        contacted_this_week = notif_service.count_in_window(week_ago, datetime.utcnow())
+        now = datetime.now(timezone.utc)
+        week_ago = now - timedelta(days=7)
+        contacted_this_week = notif_service.count_in_window(week_ago, now)
 
         k1, k2, k3, k4 = st.columns(4)
         k1.metric(
@@ -350,9 +374,9 @@ def page_renewals() -> None:
             "Non-numeric premium values are skipped.",
         )
         k4.metric(
-            "Contacted this week",
+            "Contact logs this week",
             contacted_this_week,
-            help="Renewal-related notification log rows in the last 7 days.",
+            help="All notification log rows in the last 7 days (any method).",
         )
 
         st.divider()
@@ -395,6 +419,12 @@ def page_renewals() -> None:
             key="watch",
             notif_service=notif_service,
             expanded=False,
+        )
+    except Exception as exc:
+        logger.exception("Renewals page failed to render")
+        st.error(
+            f"Could not load the Renewals page: {exc}. "
+            "Refresh and try again — if it persists, check the app log."
         )
     finally:
         session.close()
