@@ -15,6 +15,7 @@ from views.upload_queue import (
     retry_hint,
     retryable_filenames,
     status_emoji,
+    upsert_row,
 )
 
 
@@ -212,3 +213,32 @@ class TestRetryableFilenames:
     def test_drops_rows_without_filename(self):
         rows = [_err("a.pdf"), {**_err(""), "filename": ""}]
         assert retryable_filenames(rows) == ["a.pdf"]
+
+
+# upsert_row --------------------------------------------------------------
+
+
+class TestUpsertRow:
+    def test_empty_input_returns_single_row(self):
+        new = _ok("a.pdf")
+        assert upsert_row([], new) == [new]
+
+    def test_replaces_matching_filename_preserving_order(self):
+        old = [_err("a.pdf"), _ok("b.pdf"), _err("c.pdf")]
+        new = _ok("b.pdf", source="cache", retries=1)
+        result = upsert_row(old, new)
+        assert [r["filename"] for r in result] == ["a.pdf", "b.pdf", "c.pdf"]
+        assert result[1] is new
+
+    def test_appends_when_no_filename_matches(self):
+        old = [_ok("a.pdf"), _err("b.pdf")]
+        new = _err("c.pdf", error_class="timeout")
+        result = upsert_row(old, new)
+        assert [r["filename"] for r in result] == ["a.pdf", "b.pdf", "c.pdf"]
+        assert result[2] is new
+
+    def test_does_not_mutate_input(self):
+        old = [_err("a.pdf"), _ok("b.pdf")]
+        snapshot = [dict(r) for r in old]
+        upsert_row(old, _ok("a.pdf"))
+        assert old == snapshot

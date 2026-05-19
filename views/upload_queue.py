@@ -153,3 +153,27 @@ def retryable_filenames(rows: Iterable[dict]) -> list[str]:
     """Return the filenames of rows that failed. Order preserved so the
     UI can render the retry buttons in the same order as the batch ran."""
     return [r["filename"] for r in rows if r.get("status") == "error" and r.get("filename")]
+
+
+# ---------------------------------------------------------------------------
+# In-place row update (for retry results)
+# ---------------------------------------------------------------------------
+
+
+def upsert_row(rows: Iterable[dict], new_row: dict) -> list[dict]:
+    """Return a new list with the row matching new_row['filename'] replaced
+    by new_row, preserving order. Appends new_row if no match exists. Only
+    the first match is replaced — duplicates (which the batch flow doesn't
+    produce) are left intact."""
+    target = new_row.get("filename")
+    out: list[dict] = []
+    replaced = False
+    for r in rows:
+        if not replaced and r.get("filename") == target:
+            out.append(new_row)
+            replaced = True
+        else:
+            out.append(r)
+    if not replaced:
+        out.append(new_row)
+    return out

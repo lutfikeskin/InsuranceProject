@@ -34,6 +34,7 @@ from views.upload_queue import (
     retry_hint,
     retryable_filenames,
     status_emoji,
+    upsert_row,
 )
 
 MAX_PARALLEL_WORKERS = 3
@@ -235,6 +236,94 @@ def _process_one_pdf(
         return fname, None, None, None, str(e)
 
 
+def _retry_one_file(fname: str, api_key: str) -> tuple[bool, str]:
+    """Re-run extraction for a single previously-failed file using the bytes
+    + settings retained from the original batch. Updates last_batch_rows
+    and the temp_extracted / temp_failed session state to match the new
+    outcome. Caller is responsible for st.rerun(). Returns (ok, detail).
+
+    `retries` accumulates across attempts so the KPI strip reflects the
+    cumulative LLM cost the broker paid on this file."""
+    files_map = st.session_state.get("last_batch_files_map") or {}
+    if fname not in files_map:
+        return False, "Original file bytes are no longer in session — re-upload required."
+
+    settings = st.session_state.get("last_batch_settings") or {}
+    force_refresh = settings.get("force_refresh", False)
+    user_policy_type = settings.get("user_policy_type")
+    content = files_map[fname]
+
+    _fname, data, usage, error_msg, exc = _process_one_pdf(
+        fname, content, api_key, force_refresh, user_policy_type
+    )
+    new_retries = int((usage or {}).get("llm_retries", 0))
+    prior_row = next(
+        (r for r in st.session_state.get("last_batch_rows", []) if r.get("filename") == fname),
+        {},
+    )
+    cumulative_retries = int(prior_row.get("retries", 0)) + new_retries
+
+    def _commit(new_row: dict) -> None:
+        st.session_state["last_batch_rows"] = upsert_row(
+            st.session_state.get("last_batch_rows", []), new_row
+        )
+
+    if exc:
+        _commit({
+            "filename": fname, "status": "error", "detail": exc, "source": "",
+            "retries": cumulative_retries, "error_class": _classify_error(exc),
+        })
+        return False, _friendly_extraction_error(exc)
+
+    if data:
+        _commit({
+            "filename": fname, "status": "ok", "detail": "extracted",
+            "source": (usage or {}).get("source", ""),
+            "retries": cumulative_retries, "error_class": "",
+        })
+        already_extracted = any(
+            it["filename"] == fname for it in st.session_state.get("temp_extracted", [])
+        )
+        if not already_extracted:
+            st.session_state.setdefault("temp_extracted", []).append(
+                {"filename": fname, "pdf_bytes": content, "data": data}
+            )
+        st.session_state["temp_failed"] = [
+            it for it in st.session_state.get("temp_failed", [])
+            if it.get("filename") != fname
+        ]
+        return True, "extracted"
+
+    _commit({
+        "filename": fname, "status": "error", "detail": error_msg or "",
+        "source": "", "retries": cumulative_retries,
+        "error_class": _classify_error(error_msg),
+    })
+    return False, _friendly_extraction_error(error_msg)
+
+
+def _classify_error(message: str | None) -> str:
+    """Classify an extraction error message into a coarse bucket the UI
+    can show as a retry hint. Mirrors the function inlined in the upload
+    click block so retries get a consistent error_class label.
+
+    Kept module-level so `_retry_one_file` can reuse it. The original
+    click handler still has its own local copy (left intact to avoid
+    touching a working code path) — same classification rules."""
+    m = (message or "").lower()
+    if any(t in m for t in ["quota", "rate limit", "429", "resource exhausted"]):
+        return "rate_limit_or_quota"
+    if "timeout" in m:
+        return "timeout"
+    if "api key" in m or ("api" in m and "key" in m):
+        return "auth"
+    if "json" in m or "parse" in m:
+        return "parse"
+    if m:
+        return "other"
+    return ""
+
+
 def render_related_policy(match, current_item, service):
     existing = match.get("policy") or {}
     rel_type = match.get("relationship_type")
@@ -329,13 +418,14 @@ def render_related_policy(match, current_item, service):
             st.rerun()
 
 
-def _render_batch_summary() -> None:
-    """Post-batch summary panel — KPI strip + enhanced table + CSV exports.
+def _render_batch_summary(api_key: str) -> None:
+    """Post-batch summary panel — KPI strip + enhanced table + CSV exports
+    + per-file retry buttons for any failed rows.
 
-    Reads from session_state so the panel survives reruns. Per-file retry
-    is added in the next commit; this commit just lays down the
-    summary + downloads.
-    """
+    Reads from session_state so the panel survives reruns. The retry path
+    uses the bytes stashed in `last_batch_files_map` and the original
+    `last_batch_settings`, so the broker doesn't have to re-upload after
+    a transient API failure."""
     rows = st.session_state.get("last_batch_rows") or []
     if not rows:
         return
@@ -394,6 +484,55 @@ def _render_batch_summary() -> None:
         )
     rep = pd.DataFrame(rep_rows)
     st.dataframe(rep, hide_index=True, width="stretch")
+
+    # Per-file retry section — one container per failed row plus a "Retry
+    # all" shortcut. Re-runs extraction with the same settings as the
+    # original batch using bytes retained in last_batch_files_map.
+    failed_names = retryable_filenames(rows)
+    if failed_names:
+        st.markdown(f"##### Retry failed files ({len(failed_names)})")
+        st.caption(
+            "Re-runs extraction with the same settings as the original "
+            "batch. Bytes are reused — no re-upload needed."
+        )
+        if st.button(
+            f"🔄 Retry all ({len(failed_names)})",
+            key="batch_retry_all",
+            help="Run each failed file again, serially.",
+        ):
+            results = [_retry_one_file(fn, api_key) for fn in failed_names]
+            n_ok = sum(1 for ok, _ in results if ok)
+            n_fail = len(results) - n_ok
+            if n_ok and not n_fail:
+                st.toast(f"Retried {n_ok} file(s) — all succeeded.", icon="✅")
+            elif n_ok and n_fail:
+                st.toast(
+                    f"Retried {len(results)}: {n_ok} ok, {n_fail} still failing.",
+                    icon="⚠️",
+                )
+            else:
+                st.toast(f"Retried {n_fail} file(s) — still failing.", icon="❌")
+            st.rerun()
+
+        for fname in failed_names:
+            row = next((r for r in rows if r.get("filename") == fname), {})
+            with st.container(border=True):
+                cl, cr = st.columns([5, 1])
+                cl.markdown(f"{status_emoji(row)} **`{fname}`**")
+                hint = retry_hint(row)
+                if hint:
+                    cl.caption(hint)
+                if cr.button(
+                    "🔄 Retry",
+                    key=f"batch_retry_one_{fname}",
+                    width="stretch",
+                ):
+                    ok, detail = _retry_one_file(fname, api_key)
+                    if ok:
+                        st.toast(f"`{fname}` re-extracted.", icon="✅")
+                    else:
+                        st.toast(f"`{fname}` still failing: {detail}", icon="❌")
+                    st.rerun()
 
     # Two CSV downloads side by side.
     dl_col_full, dl_col_failed, clear_col = st.columns([1, 1, 1])
@@ -744,7 +883,7 @@ def page_process_policies(api_key):
         # rerun-after-click pattern and (in the next commit) lets the
         # broker retry failed files without re-uploading the whole batch.
         if st.session_state.get("last_batch_rows"):
-            _render_batch_summary()
+            _render_batch_summary(api_key)
 
         if st.session_state.get("temp_failed"):
             st.divider()
