@@ -1413,6 +1413,15 @@
         "email": ""
     },
     {
+        "name": "Logistics Systems LLC",
+        "full_address": "116 Buck Rd, Suite 3 Rd\nSouthampton, PA 18966",
+        "address": "116 Buck Rd, Suite 3",
+        "city": "Southampton",
+        "state": "PA",
+        "zip": "18966",
+        "email": "ray@logisticssystemsllc.com"
+    },
+    {
         "name": "Shift Line Transit",
         "full_address": "5383 Southern Blvd. Ste 464\nDallas, TX 75240",
         "address": "5383 Southern Blvd. Ste 464",
