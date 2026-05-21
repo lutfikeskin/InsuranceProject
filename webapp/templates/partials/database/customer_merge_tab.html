@@ -1,0 +1,58 @@
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+<section class="panel">
+  <div class="panel-header">
+    <h3>{{ i.icon('compare', 16) }} Merge into another customer</h3>
+    <span class="pill warn">destructive</span>
+  </div>
+
+  <div class="toast warn mb-3" data-toast style="position:static;">
+    <div class="toast-icon">{{ i.icon('alert-triangle', 14) }}</div>
+    <div class="toast-body">
+      <div class="toast-title">This deletes <strong>{{ customer.full_name }}</strong></div>
+      <div class="toast-message">All {{ policy_count }} polic{{ 'y' if policy_count == 1 else 'ies' }} and {{ entity_count }} entit{{ 'y' if entity_count == 1 else 'ies' }} move to the kept customer. The audit log lives on the kept customer's History tab. This cannot be undone.</div>
+    </div>
+  </div>
+
+  <form method="get"
+        hx-get="/database/customer/{{ customer.id }}/tab/merge"
+        hx-target="#tab-body"
+        hx-trigger="keyup changed delay:300ms from:#merge-search, search from:#merge-search"
+        hx-indicator="#merge-search-loading"
+        hx-include="#merge-search"
+        class="toolbar mb-3">
+    <div class="search-wrap" style="flex:1; max-width:520px;">
+      {{ i.icon('search', 16) }}
+      <input id="merge-search" type="search" name="q" value="{{ merge_query }}"
+             placeholder="Search the customer to KEEP…" autocomplete="off">
+    </div>
+    <span id="merge-search-loading" class="htmx-indicator"><span class="spinner"></span></span>
+  </form>
+
+  {% if merge_query and not merge_candidates %}
+    {{ m.empty_state('No matches', 'Try a different search.', 'search') }}
+  {% elif merge_candidates %}
+    <div class="form-grid">
+      {% for cand in merge_candidates %}
+        <form method="post" action="/database/customer/{{ customer.id }}/merge"
+              hx-confirm="Permanently merge {{ customer.full_name }} INTO {{ cand.full_name }}? This deletes the current customer."
+              class="row-card" style="margin:0;">
+          <input type="hidden" name="target_customer_id" value="{{ cand.id }}">
+          <div class="row-card-head">
+            <div class="flex gap-2">
+              {{ i.icon('user', 14) }}
+              <strong>{{ cand.full_name }}</strong>
+            </div>
+            <button type="submit" class="primary sm">{{ i.icon('compare', 13) }} Merge into this customer</button>
+          </div>
+          <div class="muted" style="font-size:12.5px;">
+            {{ cand.policies|length }} polic{{ 'y' if cand.policies|length == 1 else 'ies' }} ·
+            {{ cand.entities|length }} entit{{ 'y' if cand.entities|length == 1 else 'ies' }}
+          </div>
+        </form>
+      {% endfor %}
+    </div>
+  {% else %}
+    {{ m.empty_state('Search for the surviving customer', 'Type at least part of the customer or business name. The one you pick is the customer that survives.', 'search') }}
+  {% endif %}
+</section>

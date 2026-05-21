@@ -33,21 +33,12 @@ from utils.naic_utils import get_naic_for_carrier
 from .customer_resolver import CustomerResolver
 from .duplicate_detection import DuplicateDetectionService
 from core.logger import logger
+from core.product_registry import account_type_for_policy
 from utils.vehicle_utils import refine_vehicle_type
 from utils.text_utils import clean_text as _shared_clean_text, clean_limit_text as _shared_clean_limit_text
 import pandas as pd
 import json
 
-ACCOUNT_TYPE_BY_POLICY = {
-    "personal_auto": "Personal",
-    "commercial_auto": "Commercial",
-    "general_liability": "Commercial",
-    "bop": "Commercial",
-    "commercial_package": "Commercial",
-    "umbrella": "Commercial",
-    "motor_truck_cargo": "Commercial",
-    "unknown": "Commercial" # Default to Commercial for unknown if we somehow get here
-}
 
 
 def build_extraction_extras_json(extraction_result: dict) -> str | None:
@@ -983,7 +974,7 @@ class PolicyService:
         classification = extraction_result.get('classification', {})
         policy_type = classification.get('policy_type', 'unknown')
         
-        account_type = ACCOUNT_TYPE_BY_POLICY.get(policy_type, "Commercial")
+        account_type = account_type_for_policy(policy_type)
         policy_data['account_type'] = account_type
         
         policy_data['policy_type'] = policy_type
@@ -1203,11 +1194,13 @@ class PolicyService:
 
     def confirm_customer_match(self, policy_id, customer_id):
         """Called when user confirms a 'suggested' match in the UI."""
+        from .customer_history_service import CustomerHistoryService
         from .database import Customer
 
         policy = self.session.query(Policy).get(policy_id)
         if not policy:
             return
+        previously_linked = policy.customer_id == customer_id
         policy.customer_id = customer_id
         resolver = CustomerResolver(self.session)
         customer = self.session.query(Customer).get(customer_id)
@@ -1221,6 +1214,13 @@ class PolicyService:
             if any(t in insured_name.lower() for t in ["llc", "inc", "corp", "ltd"])
             else "personal",
         )
+        if not previously_linked:
+            CustomerHistoryService(self.session).record_policy_link(
+                customer,
+                policy_id=policy.id,
+                policy_number=policy.policy_number,
+                linked=True,
+            )
         self.session.commit()
 
     def save_with_relationship(self, extraction_result, related_policy_id, relationship_type):
@@ -1290,6 +1290,32 @@ class PolicyService:
                         name=a.get('name'), address=a.get('address'), interest_type=a.get('interest_type')
                     ))
 
+            if collection_changes.get("coverages"):
+                new_covs = final_payload.get("coverages", [])
+                policy.coverages.clear()
+                vin_map = {
+                    str(vehicle.vin).strip().upper(): vehicle
+                    for vehicle in policy.vehicles
+                    if vehicle.vin
+                }
+                for c in new_covs:
+                    vehicle = None
+                    vehicle_vin = (c.get("vehicle_vin") or "").strip().upper()
+                    if vehicle_vin:
+                        vehicle = vin_map.get(vehicle_vin)
+                    limits = dict(c.get("limits") or {})
+                    policy.coverages.append(Coverage(
+                        type=c.get("type") or c.get("display_name"),
+                        coverage_code=c.get("coverage_code"),
+                        family=c.get("family"),
+                        vehicle=vehicle,
+                        per_person=limits.get("per_person"),
+                        per_accident=limits.get("per_accident"),
+                        per_occurrence=limits.get("per_occurrence"),
+                        combined_single_limit=limits.get("combined_single_limit"),
+                        aggregate=limits.get("aggregate"),
+                        deductible=c.get("deductible"),
+                    ))
             self.session.commit()
             return True, f"Updated ({len(changes)} changes logged)."
         else:

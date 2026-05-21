@@ -1,3 +1,4 @@
+from collections import Counter
 import json
 import os
 import re
@@ -12,6 +13,15 @@ from accuracy_config import (
 )
 
 DATA_DIR = Path("tests/data")
+FORCE_REFRESH_ENV = "EXTRACTION_ACCURACY_FORCE_REFRESH"
+CLASSIFICATION_FIELDS = ("document_type", "policy_type")
+COVERAGE_LIMIT_FIELDS = (
+    "per_person",
+    "per_accident",
+    "per_occurrence",
+    "combined_single_limit",
+    "aggregate",
+)
 
 
 def get_golden_pairs():
@@ -30,6 +40,10 @@ def get_carrier_config(golden_data):
     return CARRIER_FIELD_WEIGHTS.get(carrier, CARRIER_FIELD_WEIGHTS["default"])
 
 
+def force_refresh_enabled() -> bool:
+    return os.getenv(FORCE_REFRESH_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def normalize(val):
     if val is None:
         return ""
@@ -41,10 +55,107 @@ def normalize(val):
     return s.strip()
 
 
+def _truthy_signature(value) -> str:
+    normalized = normalize(value)
+    if normalized in {"true", "yes", "y", "1"}:
+        return "true"
+    if normalized in {"false", "no", "n", "0", ""}:
+        return "false"
+    return normalized
+
+
+def _counter_delta(expected: Counter, actual: Counter) -> tuple[list, list]:
+    missing = list((expected - actual).elements())
+    extra = list((actual - expected).elements())
+    return missing, extra
+
+
+def _format_signature(sig) -> str:
+    if isinstance(sig, tuple):
+        return " | ".join(str(part) for part in sig if part not in ("", None))
+    return str(sig)
+
+
+def _coverage_signature(row: dict) -> tuple:
+    limits = row.get("limits") if isinstance(row.get("limits"), dict) else {}
+    return (
+        normalize(row.get("coverage_code")),
+        normalize(row.get("vehicle_vin")),
+        *(normalize(limits.get(field)) for field in COVERAGE_LIMIT_FIELDS),
+        normalize(row.get("deductible")),
+    )
+
+
+def _vehicle_signature(row: dict) -> tuple:
+    vin = normalize(row.get("vin"))
+    if vin:
+        return ("vin", vin)
+    return (
+        "vehicle",
+        normalize(row.get("year")),
+        normalize(row.get("make")),
+        normalize(row.get("model")),
+        normalize(row.get("type") or row.get("vehicle_type")),
+    )
+
+
+def _driver_signature(row: dict) -> tuple:
+    return (
+        normalize(row.get("full_name") or row.get("name")),
+        _truthy_signature(row.get("is_excluded")),
+    )
+
+
+def _compare_classification(extracted: dict, golden: dict, critical_errors: list[str]) -> None:
+    ext_classification = extracted.get("classification") or {}
+    golden_meta = golden.get("_meta") or {}
+    golden_classification = golden.get("classification") or {}
+    for field in CLASSIFICATION_FIELDS:
+        expected = golden_meta.get(field) or golden_classification.get(field)
+        if not expected:
+            continue
+        actual = ext_classification.get(field)
+        if normalize(actual) != normalize(expected):
+            critical_errors.append(
+                f"CRITICAL classification.{field}: expected '{normalize(expected)}' got '{normalize(actual)}'"
+            )
+
+
+def _compare_signature_collection(
+    name: str,
+    extracted_rows: list,
+    golden_rows: list,
+    signature_fn,
+    critical_errors: list[str],
+    warnings: list[str],
+    *,
+    missing_is_critical: bool = True,
+) -> None:
+    expected = Counter(
+        signature_fn(row)
+        for row in golden_rows
+        if isinstance(row, dict) and any(normalize(value) for value in row.values())
+    )
+    actual = Counter(
+        signature_fn(row)
+        for row in extracted_rows
+        if isinstance(row, dict) and any(normalize(value) for value in row.values())
+    )
+    missing, extra = _counter_delta(expected, actual)
+    missing_target = critical_errors if missing_is_critical else warnings
+    missing_prefix = "CRITICAL" if missing_is_critical else "WARN"
+    for sig in missing:
+        missing_target.append(f"{missing_prefix} {name} missing: {_format_signature(sig)}")
+    for sig in extra:
+        warnings.append(f"WARN {name} extra: {_format_signature(sig)}")
+
+
 def compare_extraction(extracted, golden):
     config = get_carrier_config(golden)
     critical_errors = []
     warnings = []
+
+    _compare_classification(extracted, golden, critical_errors)
 
     policy_ext = extracted.get("policy", {})
     policy_gold = golden.get("policy", {})
@@ -56,7 +167,7 @@ def compare_extraction(extracted, golden):
         gold_val = normalize(policy_gold.get(field))
         if ext_val != gold_val:
             critical_errors.append(
-                f"CRITICAL {field}: expected '{gold_val}' got '{ext_val}'"
+                f"CRITICAL policy.{field}: expected '{gold_val}' got '{ext_val}'"
             )
 
     for coll in config["variable"]:
@@ -67,7 +178,77 @@ def compare_extraction(extracted, golden):
                 f"WARN {coll} count: expected ~{gold_count} got {ext_count}"
             )
 
+    _compare_signature_collection(
+        "coverage",
+        extracted.get("coverages", []) or [],
+        golden.get("coverages", []) or [],
+        _coverage_signature,
+        critical_errors,
+        warnings,
+        missing_is_critical=False,
+    )
+    _compare_signature_collection(
+        "vehicle",
+        extracted.get("vehicles", []) or [],
+        golden.get("vehicles", []) or [],
+        _vehicle_signature,
+        critical_errors,
+        warnings,
+    )
+    _compare_signature_collection(
+        "driver",
+        extracted.get("drivers", []) or [],
+        golden.get("drivers", []) or [],
+        _driver_signature,
+        critical_errors,
+        warnings,
+    )
+
     return critical_errors, warnings
+
+def test_compare_extraction_detects_nested_mismatch():
+    golden = {
+        "_meta": {"carrier": "default", "document_type": "declarations_page", "policy_type": "commercial_auto"},
+        "policy": {
+            "policy_number": "P1",
+            "effective_date": "2026-01-01",
+            "expiration_date": "2027-01-01",
+            "carrier_name": "Carrier",
+            "insured_name": "Insured",
+            "liability_limit": "$1,000,000 CSL",
+        },
+        "coverages": [
+            {
+                "coverage_code": "AUTO_LIAB_CSL",
+                "vehicle_vin": None,
+                "limits": {"combined_single_limit": 1_000_000},
+                "deductible": None,
+            }
+        ],
+        "vehicles": [{"vin": "VIN123", "year": 2024, "make": "Ford", "model": "Transit"}],
+        "drivers": [{"full_name": "Jane Driver", "is_excluded": False}],
+    }
+    extracted = {
+        "classification": {"document_type": "declarations_page", "policy_type": "personal_auto"},
+        "policy": dict(golden["policy"]),
+        "coverages": [],
+        "vehicles": [],
+        "drivers": [],
+    }
+
+    critical_errors, warnings = compare_extraction(extracted, golden)
+
+    assert any("classification.policy_type" in error for error in critical_errors)
+    assert any("vehicle missing" in error for error in critical_errors)
+    assert any("driver missing" in error for error in critical_errors)
+    assert any("coverage missing" in warning for warning in warnings)
+
+
+def test_force_refresh_env(monkeypatch):
+    monkeypatch.delenv(FORCE_REFRESH_ENV, raising=False)
+    assert force_refresh_enabled() is False
+    monkeypatch.setenv(FORCE_REFRESH_ENV, "true")
+    assert force_refresh_enabled() is True
 
 
 @pytest.mark.skipif(not os.getenv("GEMINI_API_KEY"), reason="Requires GEMINI_API_KEY env var")
@@ -81,7 +262,11 @@ def test_extraction_accuracy(pdf_path, json_path):
     with open(pdf_path, "rb") as f:
         pdf_bytes = f.read()
 
-    result, _, error = process_pdf(pdf_bytes, api_key=api_key)
+    result, _, error = process_pdf(
+        pdf_bytes,
+        api_key=api_key,
+        force_refresh=force_refresh_enabled(),
+    )
     assert error is None, f"Extraction failed: {error}"
 
     critical_errors, warnings = compare_extraction(result, golden)

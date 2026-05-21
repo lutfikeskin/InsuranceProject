@@ -13,9 +13,6 @@ COPY . ./
 # Install production dependencies.
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Run the web service on container startup. Here we use the gunicorn webserver,
-# with one worker process and 8 threads.
-# For environments with multiple CPU cores, increase the number of workers
-# to be equal to the cores available.
-# Timeout is set to 0 to disable the timeouts of the workers to allow Cloud Run to handle instance scaling.
-CMD streamlit run app.py --server.port 8080 --server.address 0.0.0.0
+# Run the web service on container startup with the HTMX shell.
+# For environments with multiple CPU cores, increase workers via a real WSGI server as needed.
+CMD flask --app webapp.app run --host 0.0.0.0 --port 8080

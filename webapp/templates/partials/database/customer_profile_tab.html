@@ -1,0 +1,44 @@
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+<section class="panel">
+  <div class="panel-header">
+    <h3>{{ i.icon('user', 16) }} Profile</h3>
+    {% if status_message %}<span class="pill success">{{ status_message }}</span>{% endif %}
+  </div>
+
+  {% if form_error %}
+    <div class="toast danger mb-3" data-toast style="position:static;">
+      <div class="toast-icon">{{ i.icon('alert-circle', 14) }}</div>
+      <div class="toast-body"><div class="toast-title">Couldn't save</div><div class="toast-message">{{ form_error }}</div></div>
+    </div>
+  {% endif %}
+
+  <form hx-post="/database/customer/{{ customer.id }}/save"
+        hx-target="#tab-body"
+        hx-swap="innerHTML"
+        hx-indicator="#profile-save-spinner"
+        class="form-grid">
+    <div class="form-section">
+      <h4>Identity</h4>
+      <div class="form-grid cols-2">
+        <label>Full name<input name="full_name" value="{{ customer.full_name or '' }}" required></label>
+        <label style="display:flex; align-items:flex-end; gap:8px;">
+          <span class="muted">Needs real name entry</span>
+          {% if customer.needs_real_name_entry %}
+            <span class="pill warn">flagged</span>
+          {% else %}
+            <span class="pill success">no</span>
+          {% endif %}
+        </label>
+        <label>Primary email<input type="email" name="primary_email" value="{{ customer.primary_email or '' }}"></label>
+        <label>Primary phone<input type="tel" name="primary_phone" value="{{ customer.primary_phone or '' }}"></label>
+      </div>
+    </div>
+
+    <div class="sticky-actions">
+      <button type="submit" class="primary">{{ i.icon('save', 15) }} Save Customer</button>
+      <span class="spacer"></span>
+      <span id="profile-save-spinner" class="htmx-indicator"><span class="spinner"></span> Saving…</span>
+    </div>
+  </form>
+</section>

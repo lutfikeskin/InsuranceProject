@@ -26,6 +26,7 @@ from core.database import Base
 # Import all models to register them with Base.metadata
 from core.history_model import PolicyHistory  # noqa: F401  — side-effect import registers PolicyHistory with Base.metadata so Alembic autogenerate sees it
 from core.notification_model import NotificationLog  # noqa: F401  — same pattern: register NotificationLog with Base.metadata
+from core.review_model import UploadedDocument, ExtractionRun, ReviewTask  # noqa: F401  — same pattern: register durable review workflow tables with Base.metadata
 
 target_metadata = Base.metadata
 

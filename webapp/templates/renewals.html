@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% block title %}Renewals{% endblock %}
+{% block content %}
+  {% call m.page_header('Renewals', 'Policies expiring soon, grouped by urgency.') %}{% endcall %}
+
+  <section class="grid metrics">
+    {{ m.kpi_card('Overdue',           overdue|length, icon_name='alert-circle',   tone='danger') }}
+    {{ m.kpi_card('Urgent · 0–14 d',   urgent|length,  icon_name='flame',          tone='danger') }}
+    {{ m.kpi_card('Warning · 15–30 d', warning|length, icon_name='alert-triangle', tone='warn') }}
+    {{ m.kpi_card('Watch · 31–60 d',   watch|length,   icon_name='clock',          tone='info') }}
+  </section>
+
+  {% macro bucket(title, items, badge_class, icon_name) %}
+    <div class="panel">
+      <div class="panel-header">
+        <h3>{{ i.icon(icon_name, 16) }} {{ title }}</h3>
+        <span class="pill {{ badge_class }}">{{ items|length }}</span>
+      </div>
+      {% if items %}
+        <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px;">
+          {% for policy in items %}
+            <li>
+              <a href="/renewals?policy_id={{ policy.id }}"
+                 class="flex-between"
+                 style="padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-soft); background:var(--bg-subtle); text-decoration:none; color:inherit;">
+                <span>
+                  <span class="mono" style="color:var(--primary-700);">{{ policy.policy_number }}</span>
+                  <span class="muted"> · </span>
+                  <span>{{ policy.insured_name }}</span>
+                </span>
+                <span class="muted nowrap" style="font-size:12.5px;">{{ policy.expiration_date }}</span>
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        {{ m.empty_state('Nothing here', 'No policies in this bucket.', 'check-circle') }}
+      {% endif %}
+    </div>
+  {% endmacro %}
+
+  <section class="grid cards-2">
+    {{ bucket('Overdue',          overdue, 'danger',  'alert-circle') }}
+    {{ bucket('Urgent (0–14)',    urgent,  'danger',  'flame') }}
+    {{ bucket('Warning (15–30)',  warning, 'warn',    'alert-triangle') }}
+    {{ bucket('Watch (31–60)',    watch,   'primary', 'clock') }}
+  </section>
+
+  {% if selected_policy %}
+    <section class="panel mt-5">
+      <div class="panel-header">
+        <h3>{{ i.icon('mail', 16) }} {{ selected_policy.policy_number }} — {{ selected_policy.insured_name }}</h3>
+        <span class="pill">{{ selected_policy.carrier_name }}</span>
+      </div>
+
+      {% if related_policy %}
+        <a class="btn ghost mb-3" href="/compare?policy_a={{ selected_policy.id }}&policy_b={{ related_policy.id }}">
+          {{ i.icon('compare', 14) }} Compare to prior renewal ({{ related_policy.policy_number }})
+        </a>
+      {% endif %}
+
+      {% if last_contact %}
+        <ul class="timeline mb-4">
+          <li>
+            <div class="tl-icon">{{ i.icon('clock', 14) }}</div>
+            <div class="tl-body">
+              <div class="tl-title">Last contacted {{ last_contact.contacted_at }} · {{ last_contact.method }}</div>
+              {% if last_contact.notes %}<div class="tl-meta">{{ last_contact.notes }}</div>{% endif %}
+            </div>
+          </li>
+        </ul>
+      {% endif %}
+
+      {% if form_error %}
+        <div class="toast danger mb-3" data-toast style="position:static;">
+          <div class="toast-icon">{{ i.icon('alert-circle', 14) }}</div>
+          <div class="toast-body"><div class="toast-title">Couldn't process</div><div class="toast-message">{{ form_error }}</div></div>
+        </div>
+      {% endif %}
+
+      {% if draft %}
+        <h4 class="mt-3 mb-2">{{ i.icon('pen', 14) }} Email Draft</h4>
+        <form method="post" action="/renewals/draft-download" class="form-grid">
+          <input type="hidden" name="policy_id" value="{{ selected_policy.id }}">
+          <input type="hidden" name="download_filename" value="{{ draft.download_filename }}">
+          <div class="form-grid cols-2">
+            <label>To<input type="text" name="to" value="{{ draft.to }}"></label>
+            <label>Subject<input type="text" name="subject" value="{{ draft.subject }}"></label>
+          </div>
+          <label>Body<textarea name="body" rows="14" class="email-body">{{ draft.body }}</textarea></label>
+          <div class="toolbar" style="margin:0;">
+            <button type="submit">{{ i.icon('download', 14) }} Download .txt</button>
+            <button type="button" class="ghost"
+                    onclick="navigator.clipboard.writeText(this.closest('form').querySelector('textarea').value); this.textContent='Copied ✓'; setTimeout(()=>{this.innerHTML=this.dataset.l;}, 1500);"
+                    data-l='Copy body'>{{ i.icon('copy', 14) }} Copy body</button>
+            <span class="spacer"></span>
+            <span class="muted">Outbound delivery is handled by IT — this generates the draft only.</span>
+          </div>
+        </form>
+
+        <form method="post" action="/renewals/log-draft" class="toolbar mt-3">
+          <input type="hidden" name="policy_id" value="{{ selected_policy.id }}">
+          <input type="hidden" name="to" value="{{ draft.to }}">
+          <button type="submit" class="primary">{{ i.icon('check-circle', 14) }} Log as email_draft contact</button>
+        </form>
+      {% endif %}
+
+      <div class="divider"></div>
+      <h4 class="mb-2">{{ i.icon('phone', 14) }} Log Contact</h4>
+      <form method="post" action="/renewals/log-contact" class="form-grid" style="max-width: 560px;">
+        <input type="hidden" name="policy_id" value="{{ selected_policy.id }}">
+        <div class="form-grid cols-2">
+          <label>Method
+            <select name="method">
+              <option value="email_draft">email_draft</option>
+              <option value="phone">phone</option>
+              <option value="manual">manual</option>
+              <option value="other">other</option>
+            </select>
+          </label>
+          <label>&nbsp;
+            <button type="submit" class="primary full">{{ i.icon('save', 14) }} Log Contact</button>
+          </label>
+        </div>
+        <label>Notes<textarea name="notes" rows="3" placeholder="What you said, what they said, next steps…"></textarea></label>
+      </form>
+    </section>
+  {% else %}
+    <section class="panel mt-5">
+      {{ m.empty_state('Pick a policy from above', 'Select any policy in the buckets to draft a renewal reminder and log contact.', 'mail') }}
+    </section>
+  {% endif %}
+{% endblock %}

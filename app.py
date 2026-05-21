@@ -3,6 +3,7 @@ import os
 from core.database import init_db, get_session
 import core.history_model  # noqa: F401  — side-effect import registers PolicyHistory with SQLAlchemy's metadata
 import core.notification_model  # noqa: F401  — side-effect import registers NotificationLog with SQLAlchemy's metadata
+import core.review_model  # noqa: F401  — side-effect import registers durable review workflow models
 from core.services import UsageService
 from streamlit_option_menu import option_menu
 from core.constants import (
@@ -18,6 +19,7 @@ from views.database_page import page_database
 from views.create_coi import page_create_coi
 from views.renewals import page_renewals
 from views.compare_policies import page_compare_policies
+from views.review_queue import page_review_queue
 
 st.set_page_config(
     page_title="Insurance Doc Intelligence", 
@@ -134,7 +136,7 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
     
-    MENU_OPTIONS = ["Dashboard", "Process Policies", "Renewals", "Compare", "Database", "Create COI"]
+    MENU_OPTIONS = ["Dashboard", "Process Policies", "Review Queue", "Renewals", "Compare", "Database", "Create COI"]
     manual_nav = None
     if st.session_state.get("nav_request"):
         req = st.session_state.pop("nav_request", None)
@@ -144,7 +146,7 @@ with st.sidebar:
     selected = option_menu(
         menu_title=None,
         options=MENU_OPTIONS,
-        icons=["house-fill", "cloud-arrow-up-fill", "bell-fill", "arrow-left-right", "database-fill", "file-earmark-pdf-fill"],
+        icons=["house-fill", "cloud-arrow-up-fill", "clipboard-check-fill", "bell-fill", "arrow-left-right", "database-fill", "file-earmark-pdf-fill"],
         menu_icon="cast",
         default_index=0,
         manual_select=manual_nav,
@@ -225,6 +227,8 @@ if selected == "Dashboard":
     page_dashboard()
 elif selected == "Process Policies":
     page_process_policies(api_key)
+elif selected == "Review Queue":
+    page_review_queue()
 elif selected == "Renewals":
     page_renewals()
 elif selected == "Compare":

@@ -18,6 +18,8 @@ When changing any of the following, ALSO update the listed downstream files. Thi
 | core/coverage_ontology.py                | coverage_normalization.py, schemas.py, services.py validation    |
 | core/history_model.py                    | history_service.py, services.py save flow, Alembic migration     |
 | core/notification_model.py               | notification_service.py, views/renewals.py, alembic migration `e7d8b9a0c1f2`; new methods need an entry in `KNOWN_METHODS` (notification_service.py) for spell-check warnings |
+| core/customer_history_model.py           | customer_history_service.py, alembic migration `a7b8c9d0e1f2`, `Customer.history` relationship + late import in `core/database.py`, `webapp/templates/partials/database/_history_event.html` (event_meta dict) — adding a new event_type means adding a (label, icon, tone) entry there so the timeline renders it |
+| core/customer_history_service.py         | All write sites: `core/customer_resolver.py` (create_customer / add_entity / merge_customers), `core/services.py` `PolicyService.confirm_customer_match`, `webapp/app.py` (`database_customer_save` / `database_customer_entity_add` / `database_customer_entity_remove`). New `SCALAR_FIELDS` entry requires a matching column on `Customer` |
 | modules/notifications/                   | views/renewals.py email-preview dialog. The `draft_renewal_email()` signature is part of the future-email-integration contract — IT will hand its result to SMTP later, so keep `RenewalEmailDraft` field names stable |
 | core/comparison_service.py               | views/compare_policies.py (only consumer today). Couples to `HistoryService.SCALAR_FIELD_MAP` and the public sig helpers (`vehicle_sig`, `driver_sig`, `coverage_sig`, `additional_interest_sig`, `normalize`) — renaming any of those is a two-file change. `ComparisonResult` is the contract; UI reads its fields directly so renaming a key breaks the page |
 | utils/text_utils.py                      | services.py `_clean_text` / `_clean_limit_text` delegations, extraction_response.py `_clean_text` / `_parse_us_address` aliases — single source of truth for null coercion |
@@ -77,6 +79,7 @@ Before merging or closing a phase, run this checklist:
 
 - Customer, CustomerEntity, PolicyRelationship, PolicyEndorsement (database.py models)
 - PolicyHistory (core/history_model.py + core/history_service.py)
+- CustomerHistory (core/customer_history_model.py + core/customer_history_service.py) — append-only audit trail for customer changes; mirrors PolicyHistory shape; written by CustomerResolver (create / add_entity / merge), PolicyService.confirm_customer_match, and the HTMX database UI
 - NotificationLog (core/notification_model.py + core/notification_service.py) — renewal-contact audit trail
 - modules/notifications/ (`draft_renewal_email`, `RenewalEmailDraft`) — pure email-draft generator; no network/DB
 - views/renewals.py — sidebar page with KPI bar + urgency buckets + email-preview dialog + mark-contacted action

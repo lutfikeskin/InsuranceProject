@@ -7,7 +7,6 @@ Pure-Python module so no Streamlit harness needed.
 import csv
 import io
 
-import pytest
 
 from views.upload_queue import (
     failed_rows_csv_bytes,

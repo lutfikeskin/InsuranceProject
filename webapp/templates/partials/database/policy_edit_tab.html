@@ -1,0 +1,231 @@
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+<section class="panel">
+  <div class="panel-header">
+    <h3>{{ i.icon('pen', 16) }} Edit Policy {{ policy.policy_number }}</h3>
+    {% if status_message %}<span class="pill success">{{ status_message }}</span>{% endif %}
+  </div>
+
+  {% if form_error %}
+    <div class="toast danger mb-3" data-toast style="position:static;">
+      <div class="toast-icon">{{ i.icon('alert-circle', 14) }}</div>
+      <div class="toast-body"><div class="toast-title">Couldn't save</div><div class="toast-message">{{ form_error }}</div></div>
+    </div>
+  {% endif %}
+
+  <form id="policy-edit-form"
+        hx-post="/database/policy/{{ policy.id }}/save"
+        hx-target="#tab-body"
+        hx-swap="innerHTML"
+        hx-indicator="#policy-save-spinner"
+        onsubmit="serializeReviewRows && serializeReviewRows(this)"
+        class="form-grid">
+
+    <input type="hidden" name="vehicles_json" id="vehicles_json">
+    <input type="hidden" name="drivers_json" id="drivers_json">
+    <input type="hidden" name="coverages_json" id="coverages_json">
+    <input type="hidden" name="additional_interests_json" id="additional_interests_json">
+
+    <div class="form-section">
+      <h4>Policy</h4>
+      <div class="form-grid cols-2">
+        <label>Policy #<input name="policy_number" value="{{ policy.policy_number or '' }}"></label>
+        <label>Carrier<input name="carrier_name" value="{{ policy.carrier_name or '' }}"></label>
+        <label>Insured<input name="insured_name" value="{{ policy.insured_name or '' }}"></label>
+        <label>Premium<input name="premium" value="{{ policy.premium or '' }}"></label>
+        <label>Effective Date<input name="effective_date" value="{{ policy.effective_date or '' }}"></label>
+        <label>Expiration Date<input name="expiration_date" value="{{ policy.expiration_date or '' }}"></label>
+      </div>
+    </div>
+
+    {# Vehicles #}
+    <div class="form-section">
+      <div class="panel-header" style="margin-bottom: var(--s-3);">
+        <h4 style="margin:0;">{{ i.icon('truck', 13) }} Vehicles <span class="muted" style="font-weight:500;">({{ policy.vehicles|length }})</span></h4>
+        <button type="button" class="sm ghost" data-add-row="vehicles">{{ i.icon('plus', 13) }} Add</button>
+      </div>
+      <div data-rows="vehicles">
+        {% for v in policy.vehicles %}
+          <div class="row-card" data-row>
+            <div class="row-card-head">
+              <span class="row-card-label">Vehicle {{ loop.index }}</span>
+              <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+            </div>
+            <div class="row-grid">
+              <label>Year<input data-field="year" value="{{ v.year if v.year is not none else '' }}"></label>
+              <label>Make<input data-field="make" value="{{ v.make or '' }}"></label>
+              <label>Model<input data-field="model" value="{{ v.model or '' }}"></label>
+              <label>VIN<input data-field="vin" value="{{ v.vin or '' }}" class="mono"></label>
+              <label>Type<input data-field="type" value="{{ v.vehicle_type or '' }}"></label>
+              <label>GVW<input data-field="gvw" value="{{ v.gvw if v.gvw is not none else '' }}"></label>
+              <label>Chassis<input data-field="chassis" value="{{ v.chassis or '' }}"></label>
+              <label>Body<input data-field="body" value="{{ v.body or '' }}"></label>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <template data-template="vehicles">
+        <div class="row-card" data-row>
+          <div class="row-card-head">
+            <span class="row-card-label">New vehicle</span>
+            <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+          </div>
+          <div class="row-grid">
+            <label>Year<input data-field="year"></label>
+            <label>Make<input data-field="make"></label>
+            <label>Model<input data-field="model"></label>
+            <label>VIN<input data-field="vin" class="mono"></label>
+            <label>Type<input data-field="type"></label>
+            <label>GVW<input data-field="gvw"></label>
+            <label>Chassis<input data-field="chassis"></label>
+            <label>Body<input data-field="body"></label>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    {# Drivers #}
+    <div class="form-section">
+      <div class="panel-header" style="margin-bottom: var(--s-3);">
+        <h4 style="margin:0;">{{ i.icon('users', 13) }} Drivers <span class="muted" style="font-weight:500;">({{ policy.drivers|length }})</span></h4>
+        <button type="button" class="sm ghost" data-add-row="drivers">{{ i.icon('plus', 13) }} Add</button>
+      </div>
+      <div data-rows="drivers">
+        {% for d in policy.drivers %}
+          <div class="row-card" data-row>
+            <div class="row-card-head">
+              <span class="row-card-label">Driver {{ loop.index }}</span>
+              <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+            </div>
+            <div class="row-grid">
+              <label>Full Name<input data-field="full_name" value="{{ d.full_name or '' }}"></label>
+              <label>License #<input data-field="license_number" value="{{ d.license_number or '' }}" class="mono"></label>
+              <label>Excluded?
+                <select data-field="is_excluded" data-bool="true">
+                  <option value="">—</option>
+                  <option value="true"  {% if d.is_excluded is sameas true %}selected{% endif %}>Yes</option>
+                  <option value="false" {% if d.is_excluded is sameas false %}selected{% endif %}>No</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <template data-template="drivers">
+        <div class="row-card" data-row>
+          <div class="row-card-head">
+            <span class="row-card-label">New driver</span>
+            <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+          </div>
+          <div class="row-grid">
+            <label>Full Name<input data-field="full_name"></label>
+            <label>License #<input data-field="license_number" class="mono"></label>
+            <label>Excluded?
+              <select data-field="is_excluded" data-bool="true">
+                <option value="">—</option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    {# Coverages #}
+    <div class="form-section">
+      <div class="panel-header" style="margin-bottom: var(--s-3);">
+        <h4 style="margin:0;">{{ i.icon('shield', 13) }} Coverages <span class="muted" style="font-weight:500;">({{ policy.coverages|length }})</span></h4>
+        <button type="button" class="sm ghost" data-add-row="coverages">{{ i.icon('plus', 13) }} Add</button>
+      </div>
+      <div data-rows="coverages">
+        {% for c in policy.coverages %}
+          <div class="row-card" data-row>
+            <div class="row-card-head">
+              <span class="row-card-label">{{ c.type or 'Coverage ' ~ loop.index }}</span>
+              <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+            </div>
+            <div class="row-grid">
+              <label>Type<input data-field="type" value="{{ c.type or '' }}"></label>
+              <label>Display Name<input data-field="display_name" value="{{ c.type or '' }}"></label>
+              <label>Code<input data-field="coverage_code" value="{{ c.coverage_code or '' }}"></label>
+              <label>Family<input data-field="family" value="{{ c.family or '' }}"></label>
+              <label>Vehicle VIN<input data-field="vehicle_vin" value="{{ c.vehicle.vin if c.vehicle else '' }}" class="mono"></label>
+              <label>Deductible<input data-field="deductible" value="{{ c.deductible if c.deductible is not none else '' }}"></label>
+              <label>Per Person<input data-field="limits.per_person" value="{{ c.per_person if c.per_person is not none else '' }}"></label>
+              <label>Per Accident<input data-field="limits.per_accident" value="{{ c.per_accident if c.per_accident is not none else '' }}"></label>
+              <label>Per Occurrence<input data-field="limits.per_occurrence" value="{{ c.per_occurrence if c.per_occurrence is not none else '' }}"></label>
+              <label>CSL<input data-field="limits.combined_single_limit" value="{{ c.combined_single_limit if c.combined_single_limit is not none else '' }}"></label>
+              <label>Aggregate<input data-field="limits.aggregate" value="{{ c.aggregate if c.aggregate is not none else '' }}"></label>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <template data-template="coverages">
+        <div class="row-card" data-row>
+          <div class="row-card-head">
+            <span class="row-card-label">New coverage</span>
+            <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+          </div>
+          <div class="row-grid">
+            <label>Type<input data-field="type"></label>
+            <label>Display Name<input data-field="display_name"></label>
+            <label>Code<input data-field="coverage_code"></label>
+            <label>Family<input data-field="family"></label>
+            <label>Vehicle VIN<input data-field="vehicle_vin" class="mono"></label>
+            <label>Deductible<input data-field="deductible"></label>
+            <label>Per Person<input data-field="limits.per_person"></label>
+            <label>Per Accident<input data-field="limits.per_accident"></label>
+            <label>Per Occurrence<input data-field="limits.per_occurrence"></label>
+            <label>CSL<input data-field="limits.combined_single_limit"></label>
+            <label>Aggregate<input data-field="limits.aggregate"></label>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    {# Additional Interests #}
+    <div class="form-section">
+      <div class="panel-header" style="margin-bottom: var(--s-3);">
+        <h4 style="margin:0;">{{ i.icon('building', 13) }} Additional Interests <span class="muted" style="font-weight:500;">({{ policy.additional_interests|length }})</span></h4>
+        <button type="button" class="sm ghost" data-add-row="additional_interests">{{ i.icon('plus', 13) }} Add</button>
+      </div>
+      <div data-rows="additional_interests">
+        {% for a in policy.additional_interests %}
+          <div class="row-card" data-row>
+            <div class="row-card-head">
+              <span class="row-card-label">{{ a.name or 'Interest ' ~ loop.index }}</span>
+              <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+            </div>
+            <div class="row-grid">
+              <label>Name<input data-field="name" value="{{ a.name or '' }}"></label>
+              <label>Address<input data-field="address" value="{{ a.address or '' }}"></label>
+              <label>Type<input data-field="interest_type" value="{{ a.interest_type or '' }}"></label>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <template data-template="additional_interests">
+        <div class="row-card" data-row>
+          <div class="row-card-head">
+            <span class="row-card-label">New interest</span>
+            <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+          </div>
+          <div class="row-grid">
+            <label>Name<input data-field="name"></label>
+            <label>Address<input data-field="address"></label>
+            <label>Type<input data-field="interest_type"></label>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <div class="sticky-actions">
+      <button type="submit" class="primary">{{ i.icon('save', 15) }} Save Policy</button>
+      <span class="spacer"></span>
+      <span id="policy-save-spinner" class="htmx-indicator"><span class="spinner"></span> Saving…</span>
+    </div>
+  </form>
+</section>
+
+<script src="{{ url_for('static', filename='row-editor.js') }}"></script>

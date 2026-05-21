@@ -1,0 +1,74 @@
+{% import "_icons.html" as i %}
+{# Renders a single timeline event card. `event` is a dict shaped like:
+   { kind, id, timestamp, source, event_type, version, changes, notes }
+#}
+{% set event_meta = {
+  'CREATED':         {'icon': 'plus',           'label': 'Created',          'tone': 'success'},
+  'UPDATED':         {'icon': 'pen',            'label': 'Updated',          'tone': 'info'},
+  'ENTITY_ADDED':    {'icon': 'plus',           'label': 'Entity added',     'tone': 'success'},
+  'ENTITY_REMOVED':  {'icon': 'minus',          'label': 'Entity removed',   'tone': 'warn'},
+  'MERGED_FROM':     {'icon': 'compare',        'label': 'Merged from',      'tone': 'info'},
+  'MERGED_INTO':     {'icon': 'compare',        'label': 'Merged into',      'tone': 'warn'},
+  'POLICY_LINKED':   {'icon': 'shield',         'label': 'Policy linked',    'tone': 'info'},
+  'POLICY_UNLINKED': {'icon': 'shield',         'label': 'Policy unlinked',  'tone': 'warn'},
+  'AI_EXTRACTION':   {'icon': 'sparkles',       'label': 'AI extraction',    'tone': 'info'},
+  'MANUAL_EDIT':     {'icon': 'pen',            'label': 'Manual edit',      'tone': 'info'},
+  'SYSTEM_REPROCESS':{'icon': 'retry',          'label': 'System reprocess', 'tone': 'info'},
+} %}
+{% set meta = event_meta[event.event_type] if event.event_type in event_meta else {'icon': 'clock', 'label': event.event_type, 'tone': 'info'} %}
+
+<li class="tl-event tone-{{ meta.tone }}">
+  <span class="tl-dot" aria-hidden="true">{{ i.icon(meta.icon, 13) }}</span>
+  <div class="tl-card">
+    <div class="tl-card-head">
+      <div class="tl-card-title">
+        <strong>{{ meta.label }}</strong>
+        {% if event.version is not none %}<span class="pill" style="font-size:10.5px;">v{{ event.version }}</span>{% endif %}
+        {% if event.source %}<span class="pill" style="font-size:10.5px;">{{ event.source }}</span>{% endif %}
+      </div>
+      <span class="muted" style="font-size:12px;" title="{{ event.timestamp }}">
+        {{ event.timestamp.strftime('%Y-%m-%d %H:%M') if event.timestamp else '—' }}
+      </span>
+    </div>
+    {% set summary_parts = [] %}
+    {% for ch in (event.changes or []) %}
+      {% if ch.field not in ('entity', 'policy_link', 'merged_from', 'merged_into') %}
+        {% set _ = summary_parts.append(ch.field ~ ': ' ~ (ch.old_value|string|truncate(40, True)) ~ ' → ' ~ (ch.new_value|string|truncate(40, True))) %}
+      {% elif ch.field == 'entity' %}
+        {% if ch.new_value %}
+          {% set _ = summary_parts.append('entity “' ~ ch.new_value.entity_name ~ '” (' ~ (ch.new_value.entity_type or 'unknown') ~ ')') %}
+        {% else %}
+          {% set _ = summary_parts.append('removed entity “' ~ ch.old_value.entity_name ~ '”') %}
+        {% endif %}
+      {% elif ch.field == 'policy_link' %}
+        {% set p = ch.new_value or ch.old_value %}
+        {% set _ = summary_parts.append('policy #' ~ p.policy_id ~ (' (' ~ p.policy_number ~ ')' if p.policy_number else '')) %}
+      {% elif ch.field == 'merged_from' %}
+        {% set _ = summary_parts.append('absorbed customer #' ~ ch.new_value.customer_id ~ ' (' ~ ch.new_value.full_name ~ ') — ' ~ ch.new_value.moved_policies ~ ' policy/policies, ' ~ ch.new_value.moved_entities ~ ' entity/entities moved') %}
+      {% endif %}
+    {% endfor %}
+    {% if summary_parts %}
+      <div class="tl-card-summary">{{ summary_parts|join(' · ') }}</div>
+    {% endif %}
+    {% if event.notes %}
+      <div class="muted tl-card-notes">{{ event.notes }}</div>
+    {% endif %}
+    {% if event.changes and event.changes|length > 0 %}
+      <details class="tl-card-details">
+        <summary>Show per-field changes ({{ event.changes|length }})</summary>
+        <table style="margin-top:8px;">
+          <thead><tr><th>Field</th><th>Old</th><th>New</th></tr></thead>
+          <tbody>
+            {% for ch in event.changes %}
+              <tr>
+                <td class="mono" style="white-space:nowrap;">{{ ch.field }}</td>
+                <td class="mono" style="color:var(--text-muted);">{{ ch.old_value|tojson if ch.old_value is mapping or ch.old_value is sequence and ch.old_value is not string else (ch.old_value if ch.old_value is not none else '—') }}</td>
+                <td class="mono">{{ ch.new_value|tojson if ch.new_value is mapping or ch.new_value is sequence and ch.new_value is not string else (ch.new_value if ch.new_value is not none else '—') }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </details>
+    {% endif %}
+  </div>
+</li>

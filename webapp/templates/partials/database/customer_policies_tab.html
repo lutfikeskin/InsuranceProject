@@ -1,0 +1,34 @@
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+<section class="panel flush">
+  <div class="panel-section">
+    <div class="panel-header">
+      <h3>{{ i.icon('file-text', 16) }} Policies for {{ customer.full_name }}</h3>
+      <span class="pill">{{ customer.policies|length }} total</span>
+    </div>
+  </div>
+  {% if customer.policies %}
+    <div class="table-wrap" style="border:0; border-top:1px solid var(--border-soft); border-radius:0;">
+      <table class="table-clickable">
+        <thead><tr><th>Policy #</th><th>Carrier</th><th>Type</th><th>Effective</th><th>Expiration</th><th class="right">Premium</th><th></th></tr></thead>
+        <tbody>
+          {% for policy in customer.policies %}
+            <tr onclick="window.location='/database/policy/{{ policy.id }}'">
+              <td class="mono">{{ policy.policy_number }}</td>
+              <td>{{ policy.carrier_name }}</td>
+              <td><span class="pill">{{ policy.policy_type or '—' }}</span></td>
+              <td class="muted nowrap">{{ policy.effective_date or '—' }}</td>
+              <td class="muted nowrap">{{ policy.expiration_date or '—' }}</td>
+              <td class="right mono">{{ policy.premium or '—' }}</td>
+              <td></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="panel-section">
+      {{ m.empty_state('No policies linked', 'When a policy is saved with this insured, it appears here.', 'file-text') }}
+    </div>
+  {% endif %}
+</section>

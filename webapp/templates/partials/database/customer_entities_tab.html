@@ -1,0 +1,80 @@
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+<section class="panel">
+  <div class="panel-header">
+    <h3>{{ i.icon('building', 16) }} Entities &amp; Aliases</h3>
+    {% if status_message %}<span class="pill success">{{ status_message }}</span>{% endif %}
+  </div>
+
+  {% if form_error %}
+    <div class="toast danger mb-3" data-toast style="position:static;">
+      <div class="toast-icon">{{ i.icon('alert-circle', 14) }}</div>
+      <div class="toast-body"><div class="toast-title">Couldn't update</div><div class="toast-message">{{ form_error }}</div></div>
+    </div>
+  {% endif %}
+
+  {% if customer.entities %}
+    <div class="form-section">
+      <h4>Current</h4>
+      <div class="form-grid">
+        {% for entity in customer.entities %}
+          <div class="row-card" data-row>
+            <div class="row-card-head">
+              <div class="flex gap-2">
+                <span class="row-card-label">
+                  {% if entity.is_primary %}{{ i.icon('check-circle', 12) }} Primary{% else %}{{ i.icon('building', 12) }} Alias{% endif %}
+                </span>
+                <span class="pill" style="font-size:10.5px;">{{ entity.entity_type or 'unknown' }}</span>
+                {% if entity.source %}<span class="pill" style="font-size:10.5px;">{{ entity.source }}</span>{% endif %}
+              </div>
+              {% if not entity.is_primary %}
+                <form method="post"
+                      action="/database/customer/{{ customer.id }}/entity/{{ entity.id }}/remove"
+                      hx-post="/database/customer/{{ customer.id }}/entity/{{ entity.id }}/remove"
+                      hx-target="#tab-body"
+                      hx-swap="innerHTML"
+                      hx-confirm="Remove this alias?"
+                      style="display:inline;">
+                  <button type="submit" class="row-card-remove">{{ i.icon('x', 12) }} Remove</button>
+                </form>
+              {% endif %}
+            </div>
+            <div class="flex-between gap-3">
+              <strong style="font-size:14px;">{{ entity.entity_name }}</strong>
+              <span class="muted" style="font-size:12px;">
+                First seen {{ entity.first_seen.strftime('%Y-%m-%d') if entity.first_seen else '—' }}
+              </span>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% else %}
+    {{ m.empty_state('No entities yet', 'Add a business name, DBA, or alias below.', 'building') }}
+  {% endif %}
+
+  <form hx-post="/database/customer/{{ customer.id }}/entity/add"
+        hx-target="#tab-body"
+        hx-swap="innerHTML"
+        hx-indicator="#entity-add-spinner"
+        class="form-grid mt-4">
+    <div class="form-section">
+      <h4>Add alias / entity</h4>
+      <div class="form-grid cols-2">
+        <label>Name<input name="entity_name" placeholder="e.g. ACME Trucking LLC" required></label>
+        <label>Type
+          <select name="entity_type">
+            <option value="business">business</option>
+            <option value="dba">dba</option>
+            <option value="maiden_name">maiden_name</option>
+            <option value="personal">personal</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="toolbar" style="margin:0;">
+      <button type="submit" class="primary">{{ i.icon('plus', 14) }} Add</button>
+      <span id="entity-add-spinner" class="htmx-indicator"><span class="spinner"></span></span>
+    </div>
+  </form>
+</section>

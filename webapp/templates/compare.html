@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% block title %}Compare Policies{% endblock %}
+{% block content %}
+  {% call m.page_header('Compare Policies', 'Pick two saved policies — usually a renewal and its prior version — to see what changed.') %}{% endcall %}
+
+  <section class="panel">
+    <form method="get" class="form-grid">
+      <div class="form-grid cols-2">
+        <label>Policy A
+          <select name="policy_a">
+            <option value="">Select policy A</option>
+            {% for policy_id, label in options.items() %}
+              <option value="{{ policy_id }}" {% if selected_a == policy_id %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Policy B
+          <select name="policy_b">
+            <option value="">Select policy B</option>
+            {% for policy_id, label in options.items() %}
+              <option value="{{ policy_id }}" {% if selected_b == policy_id %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <div class="toolbar" style="margin-bottom:0;">
+        <button type="submit" class="primary">{{ i.icon('compare', 15) }} Compare</button>
+        {% if suggested_policy_b and selected_a and not selected_b %}
+          <a class="btn ghost" href="/compare?policy_a={{ selected_a }}&policy_b={{ suggested_policy_b }}">
+            {{ i.icon('sparkles', 14) }} Auto-pair with suggested prior renewal
+          </a>
+        {% endif %}
+      </div>
+    </form>
+  </section>
+
+  {% if not result %}
+    <section class="panel mt-4">
+      {{ m.empty_state('Nothing to compare yet', 'Pick a policy on each side and press Compare. We\'ll surface scalar changes, vehicle/driver deltas, and premium movement.', 'compare') }}
+    </section>
+  {% else %}
+    {% set pdelta = result.summary.premium_delta %}
+    <section class="grid metrics mt-4">
+      {{ m.kpi_card('Scalar fields changed', result.summary.n_scalar_changed, icon_name='sliders', tone=('warn' if result.summary.n_scalar_changed else None)) }}
+      {{ m.kpi_card('Vehicles Δ',
+                    '+' ~ result.summary.n_vehicles_only_in_b ~ ' / −' ~ result.summary.n_vehicles_only_in_a,
+                    icon_name='truck') }}
+      {{ m.kpi_card('Drivers Δ',
+                    '+' ~ result.summary.n_drivers_only_in_b ~ ' / −' ~ result.summary.n_drivers_only_in_a,
+                    icon_name='users') }}
+      {% if pdelta is not none %}
+        {% set tone = ('success' if pdelta < 0 else ('danger' if pdelta > 0 else None)) %}
+        {{ m.kpi_card('Premium Δ',
+                      ('+' if pdelta >= 0 else '−') ~ '$' ~ '{:,.0f}'.format(pdelta|abs),
+                      icon_name='dollar',
+                      tone=tone) }}
+      {% else %}
+        {{ m.kpi_card('Premium Δ', '—', icon_name='dollar') }}
+      {% endif %}
+    </section>
+
+    <section class="grid cards-2">
+      <div class="panel">
+        <div class="panel-header"><h3>Policy A</h3><span class="pill primary">prior</span></div>
+        <div class="mono mb-2" style="font-size:14px;">{{ policy_a.policy_number }}</div>
+        <div class="muted">{{ policy_a.insured_name }}</div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h3>Policy B</h3><span class="pill primary">current</span></div>
+        <div class="mono mb-2" style="font-size:14px;">{{ policy_b.policy_number }}</div>
+        <div class="muted">{{ policy_b.insured_name }}</div>
+      </div>
+    </section>
+
+    {% if customer_mismatch %}
+      <div class="toast warn mt-4" data-toast style="position:static;">
+        <div class="toast-icon">{{ i.icon('alert-triangle', 14) }}</div>
+        <div class="toast-body">
+          <div class="toast-title">Different customers</div>
+          <div class="toast-message">These policies belong to different customers. Compare across customers only when intentional.</div>
+        </div>
+      </div>
+    {% endif %}
+
+    <section class="panel mt-5">
+      <div class="panel-header">
+        <h3>Scalar Differences</h3>
+        <span class="pill {% if result.summary.n_scalar_changed %}warn{% else %}success{% endif %}">
+          {{ result.summary.n_scalar_changed }} changed
+        </span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Field</th><th>Policy A</th><th>Policy B</th><th class="right">Status</th></tr></thead>
+          <tbody>
+            {% for diff in result.scalar_diffs %}
+              <tr {% if not diff.equal %}class="diff-row"{% endif %}>
+                <td>{% if not diff.equal %}<span class="diff-marker">●</span>{% endif %}{{ diff.label }}</td>
+                <td class="mono">{{ diff.value_a }}</td>
+                <td class="mono">{{ diff.value_b }}</td>
+                <td class="right">
+                  {% if diff.equal %}<span class="pill success">match</span>{% else %}<span class="pill warn">changed</span>{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="grid cards-2 mt-5">
+      <details open>
+        <summary>{{ i.icon('truck', 14) }} Vehicles</summary>
+        <div class="form-grid">
+          <div><strong>Only in A</strong>
+            <ul>{% for item in result.vehicles.only_in_a %}<li>{{ summarize_collection_item(item) }}</li>{% else %}<li class="muted">None</li>{% endfor %}</ul>
+          </div>
+          <div><strong>Only in B</strong>
+            <ul>{% for item in result.vehicles.only_in_b %}<li>{{ summarize_collection_item(item) }}</li>{% else %}<li class="muted">None</li>{% endfor %}</ul>
+          </div>
+        </div>
+      </details>
+
+      <details open>
+        <summary>{{ i.icon('users', 14) }} Drivers</summary>
+        <div class="form-grid">
+          <div><strong>Only in A</strong>
+            <ul>{% for item in result.drivers.only_in_a %}<li>{{ summarize_collection_item(item) }}</li>{% else %}<li class="muted">None</li>{% endfor %}</ul>
+          </div>
+          <div><strong>Only in B</strong>
+            <ul>{% for item in result.drivers.only_in_b %}<li>{{ summarize_collection_item(item) }}</li>{% else %}<li class="muted">None</li>{% endfor %}</ul>
+          </div>
+        </div>
+      </details>
+
+      <details open>
+        <summary>{{ i.icon('shield', 14) }} Coverages</summary>
+        <div class="form-grid">
+          <div><strong>Only in A</strong>
+            <ul>{% for item in result.coverages.only_in_a %}<li>{{ summarize_collection_item(item) }}</li>{% else %}<li class="muted">None</li>{% endfor %}</ul>
+          </div>
+          <div><strong>Only in B</strong>
+            <ul>{% for item in result.coverages.only_in_b %}<li>{{ summarize_collection_item(item) }}</li>{% else %}<li class="muted">None</li>{% endfor %}</ul>
+          </div>
+          <div><strong>Limit changed</strong>
+            <ul>{% for pair in result.coverages.limit_changed %}<li>{{ summarize_collection_item(pair[0]) }} → {{ summarize_collection_item(pair[1]) }}</li>{% else %}<li class="muted">None</li>{% endfor %}</ul>
+          </div>
+        </div>
+      </details>
+
+      <details open>
+        <summary>{{ i.icon('building', 14) }} Additional Interests</summary>
+        <div class="form-grid">
+          <div><strong>Only in A</strong>
+            <ul>{% for item in result.additional_interests.only_in_a %}<li>{{ summarize_collection_item(item) }}</li>{% else %}<li class="muted">None</li>{% endfor %}</ul>
+          </div>
+          <div><strong>Only in B</strong>
+            <ul>{% for item in result.additional_interests.only_in_b %}<li>{{ summarize_collection_item(item) }}</li>{% else %}<li class="muted">None</li>{% endfor %}</ul>
+          </div>
+        </div>
+      </details>
+    </section>
+  {% endif %}
+{% endblock %}

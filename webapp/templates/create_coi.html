@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% block title %}Create COI{% endblock %}
+{% block content %}
+  {% call m.page_header('Create COI', 'Generate a Certificate of Insurance using a saved policy.') %}{% endcall %}
+
+  <section class="grid cards-2">
+    <div class="panel step-card{% if selected_policy %} done{% endif %}">
+      <div class="step-num">1</div>
+      <h3>Pick a policy</h3>
+      <form method="get" class="toolbar mt-3">
+        <div class="search-wrap" style="flex:1;">
+          {{ i.icon('search', 16) }}
+          <input type="search" name="q" value="{{ query }}" placeholder="Policy # or insured…" autocomplete="off">
+        </div>
+        <button type="submit">Search</button>
+      </form>
+      {% if policies %}
+        <ul style="list-style:none; padding:0; margin:var(--s-3) 0 0; display:flex; flex-direction:column; gap:6px;">
+          {% for policy in policies %}
+            {% set is_selected = selected_policy and selected_policy.id == policy.id %}
+            <li>
+              <a href="/create-coi?q={{ query }}&policy_id={{ policy.id }}"
+                 class="flex-between"
+                 style="padding:10px 12px; border-radius:var(--radius-sm); text-decoration:none; color:inherit;
+                        border:1px solid {% if is_selected %}var(--primary){% else %}var(--border-soft){% endif %};
+                        background:{% if is_selected %}var(--primary-tint){% else %}var(--bg-subtle){% endif %};">
+                <span>
+                  <span class="mono" style="color:var(--primary-700);">{{ policy.policy_number }}</span>
+                  <span class="muted"> · </span>
+                  <span>{{ policy.insured_name }}</span>
+                </span>
+                {% if is_selected %}{{ i.icon('check', 16) }}{% else %}{{ i.icon('chevron-right', 16) }}{% endif %}
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% elif query %}
+        {{ m.empty_state('No policies found', 'Try a different search term.', 'file-text') }}
+      {% endif %}
+    </div>
+
+    <div class="panel step-card{% if not selected_policy %} muted{% endif %}">
+      <div class="step-num">2</div>
+      <h3>Certificate Holder</h3>
+
+      {% if form_error %}
+        <div class="toast danger mt-3" data-toast style="position:static;">
+          <div class="toast-icon">{{ i.icon('alert-circle', 14) }}</div>
+          <div class="toast-body"><div class="toast-title">Couldn't generate COI</div><div class="toast-message">{{ form_error }}</div></div>
+        </div>
+      {% endif %}
+
+      {% if not selected_policy %}
+        <div class="mt-3">
+          {{ m.empty_state('Pick a policy first', 'Once selected, fill in the holder details to generate.', 'file-text') }}
+        </div>
+      {% else %}
+        <div class="mt-3 mb-3 panel tinted" style="padding:12px 14px;">
+          <div class="mono" style="color:var(--primary-700);">{{ selected_policy.policy_number }}</div>
+          <div class="muted">{{ selected_policy.insured_name }}</div>
+        </div>
+
+        <form method="post" class="form-grid">
+          <input type="hidden" name="q" value="{{ query }}">
+          <input type="hidden" name="policy_id" value="{{ selected_policy.id }}">
+
+          <div class="form-section">
+            <h4>Mode</h4>
+            <div class="form-grid cols-2">
+              <label>COI Type
+                <select name="coi_type">
+                  {% for option in ["Additional Insured", "Certificate Holder", "Lienholder"] %}
+                    <option value="{{ option }}" {% if coi_type == option %}selected{% endif %}>{{ option }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label style="display:flex; align-items:center; gap:8px; align-self:end; padding-bottom:6px;">
+                <input type="checkbox" name="bulk_mode" {% if bulk_mode %}checked{% endif %}>
+                <span>Bulk mode (multiple companies → ZIP)</span>
+              </label>
+            </div>
+            {% if coi_type == "Lienholder" %}
+              <p class="muted mt-2">Lienholder COIs require at least one selected vehicle and will build a loss-payee clause automatically.</p>
+            {% endif %}
+          </div>
+
+          {% if selected_policy.vehicles %}
+            <div class="form-section">
+              <h4>Vehicles (Lienholder)</h4>
+              <div class="chip-group">
+                {% for vehicle in selected_policy.vehicles %}
+                  <label class="chip">
+                    <input type="checkbox" name="selected_vehicle_vins" value="{{ vehicle.vin }}" {% if vehicle.vin in selected_vehicle_vins %}checked{% endif %}>
+                    {{ i.icon('truck', 12) }}
+                    {{ vehicle.year }} {{ vehicle.make }} {{ vehicle.model }} · {{ vehicle.vin }}
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+          {% endif %}
+
+          {% if companies %}
+            <div class="form-section">
+              <h4>Saved Companies</h4>
+              <div class="form-grid cols-2">
+                <label>Prefill from saved
+                  <select name="selected_company">
+                    <option value="">None</option>
+                    {% for company in companies %}
+                      <option value="{{ company }}" {% if selected_company == company %}selected{% endif %}>{{ company }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label>Bulk companies (multi-select)
+                  <select name="selected_companies" multiple size="5">
+                    {% for company in companies %}
+                      <option value="{{ company }}" {% if company in selected_companies %}selected{% endif %}>{{ company }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+              </div>
+              {% if bulk_mode %}<p class="muted mt-2">Bulk mode uses each selected company record for holder identity.</p>{% endif %}
+            </div>
+          {% endif %}
+
+          <div class="form-section">
+            <h4>Holder Identity</h4>
+            <div class="form-grid cols-2">
+              <label>Holder Name<input type="text" name="holder_name" value="{{ form_values.holder_name if form_values else '' }}"></label>
+              <label>Address<input type="text" name="holder_address" value="{{ form_values.holder_address if form_values else '' }}"></label>
+              <label>City<input type="text" name="holder_city" value="{{ form_values.holder_city if form_values else '' }}"></label>
+              <label>State<input type="text" name="holder_state" value="{{ form_values.holder_state if form_values else '' }}"></label>
+              <label>ZIP<input type="text" name="holder_zip" value="{{ form_values.holder_zip if form_values else '' }}"></label>
+            </div>
+            <label class="mt-2">Description<textarea name="description" rows="5">{{ form_values.description if form_values else '' }}</textarea></label>
+          </div>
+
+          <div class="sticky-actions">
+            <button type="submit" class="primary lg">{{ i.icon('file-text', 15) }} Generate COI PDF / ZIP</button>
+            {{ m.indicator('Generating…') }}
+          </div>
+        </form>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% block title %}Database{% endblock %}
+{% block content %}
+  {% call m.page_header('Database', 'Browse and edit customers and policies. Every change is recorded with a per-field audit trail.') %}
+    <a class="btn ghost" href="/database/export?q={{ query }}">{{ i.icon('download', 15) }} Export XLSX</a>
+  {% endcall %}
+
+  <div class="subtab-bar">
+    <div class="subtabs">
+      <a href="#customers" class="{% if active_tab == 'customers' %}active{% endif %}">
+        {{ i.icon('users', 14) }} Customers
+        <span class="pill" style="margin-left:6px; font-size:10.5px;">{{ customers|length if customers else 0 }}</span>
+      </a>
+      <a href="#policies" class="{% if active_tab == 'policies' %}active{% endif %}">
+        {{ i.icon('file-text', 14) }} Policies
+        <span class="pill" style="margin-left:6px; font-size:10.5px;">{{ policies|length if policies else 0 }}</span>
+      </a>
+    </div>
+    <form method="get" class="toolbar" style="margin:0; flex:1; max-width:560px;">
+      <input type="hidden" name="tab" value="{{ active_tab }}">
+      <div class="search-wrap" style="flex:1;">
+        {{ i.icon('search', 16) }}
+        <input type="search" name="q" value="{{ query }}"
+               placeholder="Search customers and policies…"
+               hx-get="/database/customers/list"
+               hx-target="#customers-list"
+               hx-trigger="keyup changed delay:300ms, search"
+               hx-swap="innerHTML"
+               hx-include="this"
+               autocomplete="off"
+               oninput="htmx.ajax('GET', '/database/policies/list?q=' + encodeURIComponent(this.value), '#policies-list');">
+      </div>
+      <button type="submit" class="primary">Search</button>
+    </form>
+  </div>
+
+  <section id="customers" class="panel flush" style="margin-bottom: var(--s-5);">
+    <div class="panel-section" style="padding-bottom: var(--s-3);">
+      <div class="panel-header" style="margin-bottom:0;">
+        <h3>{{ i.icon('users', 16) }} Customers</h3>
+        <a class="btn sm ghost" href="/database?tab=customers">{{ i.icon('chevron-right', 13) }} Focus</a>
+      </div>
+    </div>
+    <div id="customers-list">
+      {% include "partials/database/customers_table.html" %}
+    </div>
+  </section>
+
+  <section id="policies" class="panel flush">
+    <div class="panel-section" style="padding-bottom: var(--s-3);">
+      <div class="panel-header" style="margin-bottom:0;">
+        <h3>{{ i.icon('file-text', 16) }} Policies</h3>
+        <a class="btn sm ghost" href="/database?tab=policies">{{ i.icon('chevron-right', 13) }} Focus</a>
+      </div>
+    </div>
+    <div id="policies-list">
+      {% include "partials/database/policies_table.html" %}
+    </div>
+  </section>
+{% endblock %}

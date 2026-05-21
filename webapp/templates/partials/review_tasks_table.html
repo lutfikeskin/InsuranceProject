@@ -1,0 +1,37 @@
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% if not tasks %}
+  {{ m.empty_state('Queue is clear', 'No review tasks match this filter.', 'inbox-empty') }}
+{% else %}
+<table class="task-rail-table" style="width:100%; border-collapse:collapse;" role="list" aria-label="Review tasks"><tbody>
+  {% for task in tasks %}
+    {% set summary = policy_summary(task.extraction_result) %}
+    <tr role="listitem"><td style="padding:0; border:0;">
+      <div class="task-row{% if selected_task and selected_task.id == task.id %} active{% endif %}"
+           hx-get="/review-queue/{{ task.id }}"
+           hx-target="#task-detail"
+           hx-trigger="click"
+           hx-indicator="#task-detail">
+        <div class="flex-between">
+          {{ m.status_badge(task.status) }}
+          <span class="mono muted" style="font-size:11.5px;">#{{ task.id }}</span>
+        </div>
+        <div class="filename" title="{{ task.upload.filename if task.upload else '' }}">
+          {{ i.icon('file-text', 13) }} {{ task.upload.filename if task.upload else '—' }}
+        </div>
+        <div class="meta">
+          <span class="mono">{{ summary.policy_number }}</span>
+          <span>·</span>
+          <span class="truncate" style="max-width:160px;">{{ summary.insured }}</span>
+        </div>
+        <div class="meta">
+          <span class="truncate" style="max-width:160px;">{{ summary.carrier }}</span>
+          <span>·</span>
+          <span class="pill" style="font-size:10.5px; padding:1px 7px;">{{ summary.policy_type }}</span>
+          <span class="muted" style="font-size:11px;">{{ task.created_at.strftime("%m-%d %H:%M") if task.created_at else "" }}</span>
+        </div>
+      </div>
+    </td></tr>
+  {% endfor %}
+</tbody></table>
+{% endif %}

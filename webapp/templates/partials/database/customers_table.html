@@ -1,0 +1,51 @@
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% if not customers %}
+  {{ m.empty_state('No customers found', 'Try a different search term, or process a policy to create one.', 'users') }}
+{% else %}
+  <div class="table-wrap" style="border:0; border-radius: var(--radius);">
+    <table class="table-clickable" aria-label="Customers">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Aliases</th>
+          <th class="right">Policies</th>
+          <th>Last activity</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for customer in customers %}
+          {% set last_ts = customer.updated_at or customer.created_at %}
+          <tr onclick="window.location='/database/customer/{{ customer.id }}'" role="link" tabindex="0">
+            <td>
+              <div class="flex gap-2">
+                {{ i.icon('user', 14) }}
+                <strong>{{ customer.full_name }}</strong>
+              </div>
+            </td>
+            <td>
+              {% if customer.entities %}
+                <div class="tag-list">
+                  {% for entity in customer.entities[:3] %}
+                    <span class="pill" style="font-size:11px;">{{ entity.entity_name }}{% if entity.entity_type %} · {{ entity.entity_type }}{% endif %}</span>
+                  {% endfor %}
+                  {% if customer.entities|length > 3 %}
+                    <span class="pill" style="font-size:11px;">+{{ customer.entities|length - 3 }} more</span>
+                  {% endif %}
+                </div>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+            <td class="right"><span class="pill primary">{{ customer.policies|length }}</span></td>
+            <td class="muted nowrap" style="font-size:12.5px;">
+              {{ last_ts.strftime('%Y-%m-%d %H:%M') if last_ts else '—' }}
+            </td>
+            <td></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}

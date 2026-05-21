@@ -1,0 +1,8 @@
+{% import "_macros.html" as m %}
+<div id="queue-table" hx-swap-oob="true">
+  {% include "partials/review_tasks_table.html" %}
+</div>
+<div id="task-detail">
+  {% include "partials/review_task_detail.html" %}
+</div>
+{{ m.toast('Task saved', 'Extraction stored and queue refreshed.', tone='success', out_of_band=true) }}

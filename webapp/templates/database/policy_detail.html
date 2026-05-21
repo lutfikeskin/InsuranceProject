@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% block title %}Policy {{ policy.policy_number }}{% endblock %}
+{% block content %}
+  <section class="detail-header">
+    <div>
+      <div class="crumb">
+        <a href="/database?tab=policies">{{ i.icon('chevron-right', 12) }} Database / Policies</a>
+        {% if policy.customer %}
+          · <a href="/database/customer/{{ policy.customer.id }}">{{ policy.customer.full_name }}</a>
+        {% endif %}
+      </div>
+      <h1>{{ i.icon('file-text', 22) }} Policy {{ policy.policy_number }}</h1>
+      <div class="header-meta">
+        {% if policy.carrier_name %}<span class="pill primary">{{ i.icon('building', 12) }} {{ policy.carrier_name }}</span>{% endif %}
+        {% if policy.insured_name %}<span class="pill">{{ i.icon('user', 12) }} {{ policy.insured_name }}</span>{% endif %}
+        {% if policy.policy_type %}<span class="pill">{{ policy.policy_type }}</span>{% endif %}
+        {% if policy.expiration_date %}<span class="pill">expires {{ policy.expiration_date }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="header-actions">
+      <a class="btn ghost" href="/create-coi?policy_id={{ policy.id }}">{{ i.icon('file-text', 14) }} Create COI</a>
+      <form method="post" action="/database/policy/{{ policy.id }}/delete"
+            hx-confirm="Permanently delete this policy? Its history will be removed too."
+            style="display:inline;">
+        <button type="submit" class="danger">{{ i.icon('trash', 14) }} Delete</button>
+      </form>
+    </div>
+  </section>
+
+  <nav class="subtab-bar" aria-label="Policy sections">
+    <div class="subtabs">
+      {% set labels = {'overview': 'Overview', 'edit': 'Edit', 'history': 'History', 'renewals': 'Renewals'} %}
+      {% set icons = {'overview': 'file-text', 'edit': 'pen', 'history': 'clock', 'renewals': 'calendar-clock'} %}
+      {% for tab_name in policy_tabs %}
+        <a href="/database/policy/{{ policy.id }}?tab={{ tab_name }}"
+           class="{% if active_tab == tab_name %}active{% endif %}"
+           hx-get="/database/policy/{{ policy.id }}/tab/{{ tab_name }}"
+           hx-target="#tab-body"
+           hx-push-url="/database/policy/{{ policy.id }}?tab={{ tab_name }}"
+           hx-indicator="#tab-loading">
+          {{ i.icon(icons[tab_name], 14) }} {{ labels[tab_name] }}
+        </a>
+      {% endfor %}
+    </div>
+    <div class="subtab-meta">
+      <span id="tab-loading" class="htmx-indicator"><span class="spinner"></span></span>
+    </div>
+  </nav>
+
+  <div id="tab-body">
+    {% include "partials/database/policy_" ~ active_tab ~ "_tab.html" %}
+  </div>
+{% endblock %}

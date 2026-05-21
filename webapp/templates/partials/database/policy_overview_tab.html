@@ -1,0 +1,121 @@
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+<section class="grid metrics">
+  {{ m.kpi_card('Premium', '$' ~ (policy.premium or '—'), icon_name='dollar', value_class='primary') }}
+  {{ m.kpi_card('Vehicles', policy.vehicles|length, icon_name='truck') }}
+  {{ m.kpi_card('Drivers', policy.drivers|length, icon_name='users') }}
+  {{ m.kpi_card('Coverages', policy.coverages|length, icon_name='shield') }}
+</section>
+
+<section class="grid cards-2">
+  <div class="panel">
+    <div class="panel-header"><h3>{{ i.icon('file-text', 16) }} Core</h3></div>
+    <dl>
+      <dt>Policy #</dt><dd class="mono">{{ policy.policy_number }}</dd>
+      <dt>Carrier</dt><dd>{{ policy.carrier_name or '—' }}</dd>
+      <dt>Underwriter</dt><dd>{{ policy.underwriter_name or '—' }}</dd>
+      <dt>NAIC #</dt><dd class="mono">{{ policy.naic_number or '—' }}</dd>
+      <dt>Type</dt><dd>{{ policy.policy_type or '—' }} <span class="muted">/ {{ policy.account_type or 'unknown' }}</span></dd>
+      <dt>Effective</dt><dd>{{ policy.effective_date or '—' }}</dd>
+      <dt>Expiration</dt><dd>{{ policy.expiration_date or '—' }}</dd>
+      <dt>Premium</dt><dd class="mono">{{ policy.premium or '—' }}</dd>
+    </dl>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><h3>{{ i.icon('user', 16) }} Insured</h3></div>
+    <dl>
+      <dt>Name</dt><dd>{{ policy.insured_name or '—' }}</dd>
+      <dt>Business</dt><dd>{{ policy.business_name or '—' }}</dd>
+      <dt>Address</dt><dd>{{ policy.insured_address or '—' }}</dd>
+      <dt>City</dt><dd>{{ policy.insured_city or '—' }}</dd>
+      <dt>State</dt><dd>{{ policy.insured_state_code or '—' }}</dd>
+      <dt>ZIP</dt><dd class="mono">{{ policy.insured_zip or '—' }}</dd>
+      {% if policy.customer %}
+        <dt>Customer</dt><dd><a href="/database/customer/{{ policy.customer.id }}">{{ policy.customer.full_name }}</a></dd>
+      {% endif %}
+    </dl>
+  </div>
+</section>
+
+{% if policy.vehicles %}
+  <section class="panel mt-4">
+    <div class="panel-header"><h3>{{ i.icon('truck', 16) }} Vehicles</h3><span class="pill">{{ policy.vehicles|length }}</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Year</th><th>Make</th><th>Model</th><th>VIN</th><th>Type</th><th class="right">GVW</th></tr></thead>
+        <tbody>
+          {% for v in policy.vehicles %}
+            <tr>
+              <td>{{ v.year or '—' }}</td>
+              <td>{{ v.make or '—' }}</td>
+              <td>{{ v.model or '—' }}</td>
+              <td class="mono">{{ v.vin or '—' }}</td>
+              <td>{{ v.vehicle_type or '—' }}</td>
+              <td class="right">{{ v.gvw or '—' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endif %}
+
+{% if policy.drivers %}
+  <section class="panel mt-4">
+    <div class="panel-header"><h3>{{ i.icon('users', 16) }} Drivers</h3><span class="pill">{{ policy.drivers|length }}</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Full name</th><th>License</th><th>Excluded</th></tr></thead>
+        <tbody>
+          {% for d in policy.drivers %}
+            <tr>
+              <td>{{ d.full_name or '—' }}</td>
+              <td class="mono">{{ d.license_number or '—' }}</td>
+              <td>{% if d.is_excluded %}<span class="pill warn">excluded</span>{% else %}<span class="muted">no</span>{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endif %}
+
+{% if policy.coverages %}
+  <section class="panel mt-4">
+    <div class="panel-header"><h3>{{ i.icon('shield', 16) }} Coverages</h3><span class="pill">{{ policy.coverages|length }}</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Type</th><th>Code</th><th>Per Person</th><th>Per Accident</th><th>CSL</th><th>Aggregate</th><th>Deductible</th></tr></thead>
+        <tbody>
+          {% for c in policy.coverages %}
+            <tr>
+              <td>{{ c.type or '—' }}</td>
+              <td class="mono">{{ c.coverage_code or '—' }}</td>
+              <td>{{ c.per_person or '—' }}</td>
+              <td>{{ c.per_accident or '—' }}</td>
+              <td>{{ c.combined_single_limit or '—' }}</td>
+              <td>{{ c.aggregate or '—' }}</td>
+              <td>{{ c.deductible or '—' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endif %}
+
+{% if policy.additional_interests %}
+  <section class="panel mt-4">
+    <div class="panel-header"><h3>{{ i.icon('building', 16) }} Additional Interests</h3><span class="pill">{{ policy.additional_interests|length }}</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Address</th><th>Type</th></tr></thead>
+        <tbody>
+          {% for a in policy.additional_interests %}
+            <tr><td>{{ a.name or '—' }}</td><td>{{ a.address or '—' }}</td><td>{{ a.interest_type or '—' }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endif %}

@@ -25,9 +25,16 @@ class Customer(Base):
     primary_phone = Column(String, nullable=True)
     needs_real_name_entry = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=True)
 
     entities = relationship("CustomerEntity", back_populates="customer", cascade="all, delete-orphan")
     policies = relationship("Policy", back_populates="customer")
+    history = relationship(
+        "CustomerHistory",
+        back_populates="customer",
+        cascade="all, delete-orphan",
+        order_by="desc(CustomerHistory.timestamp)",
+    )
 
 class CustomerEntity(Base):
     __tablename__ = 'customer_entities'
@@ -247,6 +254,8 @@ def init_db(db_name="insurance_data.db"):
                 conn.execute(text("ALTER TABLE customers ADD COLUMN primary_phone VARCHAR"))
             if "needs_real_name_entry" not in customer_cols:
                 conn.execute(text("ALTER TABLE customers ADD COLUMN needs_real_name_entry BOOLEAN DEFAULT 0"))
+            if "updated_at" not in customer_cols:
+                conn.execute(text("ALTER TABLE customers ADD COLUMN updated_at DATETIME"))
         entity_cols = {c["name"] for c in insp.get_columns("customer_entities")}
         with engine.begin() as conn:
             if "entity_name" not in entity_cols:
@@ -270,8 +279,19 @@ def get_session(engine):
 from core import history_model  # noqa: F401, E402
 PolicyHistory = history_model.PolicyHistory
 
+# Same pattern for CustomerHistory — register the audit-log table with
+# Base.metadata so create_all() and the Customer.history relationship resolve.
+from core import customer_history_model  # noqa: F401, E402
+CustomerHistory = customer_history_model.CustomerHistory
+
 # Same pattern for NotificationLog — register the table with Base.metadata
 # so create_all() and Alembic both see it without callers having to remember
 # the side-effect import.
 from core import notification_model  # noqa: F401, E402
 NotificationLog = notification_model.NotificationLog
+
+# Same pattern for durable review workflow tables.
+from core import review_model  # noqa: F401, E402
+UploadedDocument = review_model.UploadedDocument
+ExtractionRun = review_model.ExtractionRun
+ReviewTask = review_model.ReviewTask

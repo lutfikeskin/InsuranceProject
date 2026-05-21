@@ -55,10 +55,19 @@ pytest tests/test_accuracy.py -v
 ## Accuracy Test Notes
 
 - `test_accuracy.py` is skipped if `GEMINI_API_KEY` is missing.
-- It compares extracted vs expected JSON, with selective normalization and key exclusions.
+- It compares extracted vs expected JSON with selective normalization, including classification, critical scalar fields, vehicle signatures, and driver signatures as hard failures; coverage signature drift is reported as warnings for review.
+- Set `EXTRACTION_ACCURACY_FORCE_REFRESH=true` to bypass the local extraction cache during live drift checks.
 - Carrier/underwriter assertions:
   - Progressive fixtures treat `carrier_name` as brand (`Progressive`).
   - `underwriter_name` is a critical field for Progressive fixtures.
+
+
+Accuracy report for carrier/product onboarding:
+
+```bash
+python scripts/accuracy_report.py --force-refresh
+python scripts/accuracy_report.py --case progressive
+```
 
 ## Test Data
 

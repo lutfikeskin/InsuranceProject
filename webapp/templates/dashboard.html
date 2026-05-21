@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+  <section class="hero">
+    <h1>{{ app_display_name }}</h1>
+    <p>{{ app_display_tagline }}</p>
+    <div class="hero-meta">
+      <span class="hero-chip">{{ i.icon('shield', 14) }} Operational overview</span>
+      <span class="hero-chip">{{ i.icon('clock', 14) }} Live data</span>
+      <span class="hero-chip">{{ i.icon('sparkles', 14) }} Gemini-powered extraction</span>
+    </div>
+  </section>
+
+  <section class="grid metrics">
+    {{ m.kpi_card('Total Policies', total_policies, icon_name='file-text', value_class='primary') }}
+    {{ m.kpi_card('Total Vehicles', total_vehicles, icon_name='truck') }}
+    {{ m.kpi_card('Total Premium', '$' ~ '{:,.2f}'.format(total_premium), icon_name='dollar') }}
+    {{ m.kpi_card('Spend Today', '$' ~ '{:,.4f}'.format(daily_spend), icon_name='flame', foot='Budget $' ~ '{:,.2f}'.format(budget_limit)) }}
+  </section>
+
+  <section class="grid cards-2">
+    <div class="panel">
+      <div class="panel-header">
+        <h3>{{ i.icon('alert-triangle', 16) }} Expiring in 30 days</h3>
+        {% if expiring_30 %}<span class="pill warn">{{ expiring_30|length }}</span>{% endif %}
+      </div>
+      {% if expiring_30 %}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Policy #</th><th>Insured</th><th class="right">Expiration</th></tr></thead>
+            <tbody>
+              {% for policy in expiring_30 %}
+                <tr>
+                  <td class="mono">{{ policy.policy_number }}</td>
+                  <td>{{ policy.insured_name }}</td>
+                  <td class="right nowrap">{{ policy.expiration_date }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        {{ m.empty_state('All clear', 'No policies expiring in the next 30 days.', 'check-circle') }}
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h3>{{ i.icon('calendar-clock', 16) }} Expiring in 31–60 days</h3>
+        {% if expiring_31_60 %}<span class="pill">{{ expiring_31_60|length }}</span>{% endif %}
+      </div>
+      {% if expiring_31_60 %}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Policy #</th><th>Insured</th><th class="right">Expiration</th></tr></thead>
+            <tbody>
+              {% for policy in expiring_31_60 %}
+                <tr>
+                  <td class="mono">{{ policy.policy_number }}</td>
+                  <td>{{ policy.insured_name }}</td>
+                  <td class="right nowrap">{{ policy.expiration_date }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        {{ m.empty_state('Nothing scheduled', 'No policies expiring in the 31–60 day window.', 'calendar') }}
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="panel mt-5">
+    <div class="panel-header">
+      <h3>Quick Lookup</h3>
+      <span class="muted">Search by policy number or insured name</span>
+    </div>
+    <form method="get" class="toolbar">
+      <div class="search-wrap" style="flex:1; max-width: 520px;">
+        {{ i.icon('search', 16) }}
+        <input type="search" name="q" value="{{ lookup_query or '' }}" placeholder="Type to search policies…" class="search-icon-input" autocomplete="off">
+      </div>
+      <button type="submit" class="primary">{{ i.icon('search', 15) }} Search</button>
+    </form>
+
+    {% if lookup_policies %}
+      <div class="table-wrap mt-3">
+        <table>
+          <thead>
+            <tr><th>Policy #</th><th>Insured</th><th class="right">Actions</th></tr>
+          </thead>
+          <tbody>
+            {% for policy in lookup_policies %}
+              <tr>
+                <td class="mono">{{ policy.policy_number }}</td>
+                <td>{{ policy.insured_name }}</td>
+                <td class="right nowrap">
+                  <a class="btn sm ghost" href="/database?policy_id={{ policy.id }}">{{ i.icon('database', 14) }} Open</a>
+                  <a class="btn sm ghost" href="/create-coi?policy_id={{ policy.id }}">{{ i.icon('file-text', 14) }} COI</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% elif lookup_query %}
+      {{ m.empty_state('No matches', 'Try a different policy number, carrier name, or insured.', 'search') }}
+    {% endif %}
+  </section>
+
+  <section class="grid cards-2 mt-5">
+    <div class="panel">
+      <div class="panel-header">
+        <h3>{{ i.icon('building', 16) }} Carrier Distribution</h3>
+        {% if carrier_data %}<span class="pill">{{ carrier_data|length }} carriers</span>{% endif %}
+      </div>
+      {% if carrier_data %}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Carrier</th><th class="right">Policies</th></tr></thead>
+            <tbody>
+              {% for carrier, count in carrier_data.items() %}
+                <tr><td>{{ carrier }}</td><td class="right"><span class="pill primary">{{ count }}</span></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        {{ m.empty_state('No carriers yet', 'Process your first policy to populate carrier distribution.', 'building') }}
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h3>{{ i.icon('calendar', 16) }} Expiration Timeline</h3>
+        <span class="muted">Next 6 months</span>
+      </div>
+      {% if timeline_data %}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Month</th><th class="right">Expiring</th></tr></thead>
+            <tbody>
+              {% for month, count in timeline_data.items() %}
+                <tr><td>{{ month }}</td><td class="right"><span class="pill">{{ count }}</span></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        {{ m.empty_state('No timeline data', 'Once you save policies with expiration dates, they\'ll appear here.', 'calendar') }}
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="panel mt-5">
+    <div class="panel-header">
+      <h3>{{ i.icon('clock', 16) }} Recent Activity</h3>
+      <a class="btn sm ghost" href="/database">View all {{ i.icon('chevron-right', 14) }}</a>
+    </div>
+    {% if recent_policies %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Policy #</th><th>Insured</th><th>Carrier</th><th class="right">Created</th></tr></thead>
+          <tbody>
+            {% for policy in recent_policies %}
+              <tr>
+                <td class="mono">{{ policy.policy_number }}</td>
+                <td>{{ policy.insured_name }}</td>
+                <td>{{ policy.carrier_name }}</td>
+                <td class="right nowrap muted">{{ policy.created_at.strftime('%Y-%m-%d %H:%M') if policy.created_at else '—' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {{ m.empty_state('Nothing here yet', 'Upload a PDF on Process Policies to get started.', 'inbox-empty') }}
+    {% endif %}
+  </section>
+{% endblock %}

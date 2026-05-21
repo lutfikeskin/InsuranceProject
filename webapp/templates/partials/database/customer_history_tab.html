@@ -1,0 +1,18 @@
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+<section class="panel">
+  <div class="panel-header">
+    <h3>{{ i.icon('clock', 16) }} Activity Timeline</h3>
+    <span class="pill">{{ activity_feed|length }} event{{ '' if activity_feed|length == 1 else 's' }}</span>
+  </div>
+
+  {% if not activity_feed %}
+    {{ m.empty_state('No activity yet', 'This customer has no recorded events. Edits, alias additions, and policy links will appear here.', 'clock') }}
+  {% else %}
+    <ul class="tl-list">
+      {% for event in activity_feed %}
+        {% include "partials/database/_history_event.html" %}
+      {% endfor %}
+    </ul>
+  {% endif %}
+</section>

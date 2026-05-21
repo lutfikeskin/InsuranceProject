@@ -1,0 +1,42 @@
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+<section class="panel">
+  <div class="panel-header">
+    <h3>{{ i.icon('calendar-clock', 16) }} Renewal Chain</h3>
+    <span class="pill">{{ related_pairs|length }} link{{ '' if related_pairs|length == 1 else 's' }}</span>
+  </div>
+
+  {% if not related_pairs %}
+    {{ m.empty_state('No related policies', 'When a renewal or rewrite is saved, the link will appear here.', 'calendar-clock') }}
+  {% else %}
+    <div class="form-grid">
+      {% for pair in related_pairs %}
+        <div class="row-card" style="margin:0;">
+          <div class="row-card-head">
+            <div class="flex gap-2">
+              {{ i.icon('compare', 14) }}
+              <strong>{{ pair.relationship.relationship_type|replace('_', ' ')|title }}</strong>
+              <span class="pill {{ 'success' if pair.relationship.confidence == 'confirmed' else 'warn' }}">
+                {{ pair.relationship.confidence or 'unknown' }}
+              </span>
+            </div>
+            <a class="btn sm primary"
+               href="/compare?policy_a={{ policy.id }}&policy_b={{ pair.other.id }}">
+              {{ i.icon('compare', 13) }} Open in Compare
+            </a>
+          </div>
+          <div class="flex-between gap-3 mt-2">
+            <div>
+              <a href="/database/policy/{{ pair.other.id }}" class="mono" style="color:var(--primary-700);">{{ pair.other.policy_number }}</a>
+              <span class="muted"> · {{ pair.other.insured_name }}</span>
+            </div>
+            <div class="muted" style="font-size:12.5px;">
+              Linked {{ pair.relationship.created_at.strftime('%Y-%m-%d') if pair.relationship.created_at else '—' }}
+              · {{ pair.other.effective_date or '?' }} → {{ pair.other.expiration_date or '?' }}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</section>
