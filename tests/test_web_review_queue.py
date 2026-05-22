@@ -597,6 +597,19 @@ def test_dashboard_page_renders_metrics_and_recent_policy():
     assert "DASH-1" in body
     assert "Dash User" in body
     assert "Create COI" in body
+
+
+def test_dashboard_quick_lookup_actions_deep_link_to_policy_and_coi():
+    client = _dashboard_client()
+
+    response = client.get("/dashboard?q=DASH")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'href="/database/policy/1"' in body
+    assert 'href="/create-coi?policy_id=1"' in body
+
+
 def test_settings_page_updates_runtime_knobs():
     client = _dashboard_client()
 
