@@ -1,12 +1,7 @@
-import os
-import tempfile
-import uuid
-
 import streamlit as st
 import pandas as pd
 from datetime import date
 from sqlalchemy import or_
-from core.db_import import DbImportError, merge_database_from_file, validate_sqlite_db
 from core.services import PolicyService
 from core.database import Customer, CustomerEntity, Policy, PolicyRelationship, get_session
 from core.customer_resolver import CustomerResolver
@@ -528,7 +523,7 @@ def _render_policies_tab(api_key):
         selected = grid_response["selected_rows"]
 
         st.divider()
-        c_foot_1, c_foot_2, c_foot_3 = st.columns([1, 1, 2])
+        c_foot_1, c_foot_2 = st.columns([1, 2])
 
         with c_foot_1:
             excel_all = create_excel_report(export_data)
@@ -540,15 +535,6 @@ def _render_policies_tab(api_key):
             )
 
         with c_foot_2:
-            with open("insurance_data.db", "rb") as f:
-                st.download_button(
-                    "💾 Backup Database",
-                    data=f.read(),
-                    file_name="insurance_data.db",
-                    width="stretch",
-                )
-
-        with c_foot_3:
             has_selection = False
             sel_row = None
             if selected is not None:
@@ -597,68 +583,6 @@ def _render_policies_tab(api_key):
                     render_related_section(target_pol, session)
             else:
                 st.button("✏️ Select a policy above to edit", disabled=True, width="stretch")
-
-        with st.expander("Import / merge database"):
-            st.caption(
-                "Upload a backup insurance_data.db. New policies are merged in; "
-                "existing policy numbers are skipped. Customer match is by full name."
-            )
-            uploaded_db = st.file_uploader(
-                "Import database (.db)",
-                type=["db"],
-                key="db_import_upload",
-            )
-            if uploaded_db is not None:
-                preview = None
-                preview_path = None
-                try:
-                    os.makedirs(".cache", exist_ok=True)
-                    preview_path = os.path.join(
-                        ".cache", f"import_preview_{uuid.uuid4().hex}.db"
-                    )
-                    with open(preview_path, "wb") as tmp:
-                        tmp.write(uploaded_db.getvalue())
-                    preview = validate_sqlite_db(preview_path)
-                    st.caption(
-                        f"File has {preview.policy_count} policies and "
-                        f"{preview.customer_count} customers."
-                    )
-                except DbImportError as exc:
-                    st.error(str(exc))
-                finally:
-                    if preview_path and os.path.exists(preview_path):
-                        os.unlink(preview_path)
-
-                if st.button(
-                    "Merge imported database",
-                    type="primary",
-                    disabled=preview is None,
-                    key="db_import_merge_btn",
-                ):
-                    merge_path = None
-                    try:
-                        merge_path = os.path.join(
-                            ".cache", f"import_{uuid.uuid4().hex}.db"
-                        )
-                        with open(merge_path, "wb") as tmp:
-                            tmp.write(uploaded_db.getvalue())
-                        merge_result = merge_database_from_file(
-                            st.session_state.db_engine, merge_path
-                        )
-                        st.success(
-                            f"Imported {merge_result.imported_policies} policies, "
-                            f"skipped {merge_result.skipped_duplicates} duplicates, "
-                            f"added {merge_result.imported_customers} customers, "
-                            f"{merge_result.imported_relationships} relationships."
-                        )
-                        if merge_result.errors:
-                            st.warning("\n".join(merge_result.errors[:5]))
-                        st.rerun()
-                    except DbImportError as exc:
-                        st.error(str(exc))
-                    finally:
-                        if merge_path and os.path.exists(merge_path):
-                            os.unlink(merge_path)
 
         if not term:
             st.divider()

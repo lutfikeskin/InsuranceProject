@@ -13,7 +13,8 @@ This document covers Certificate of Insurance generation flow.
 ## Holder Library
 
 - Source file: `data/coi_holders.json` (loaded via `modules/coi/holders.py`)
-- Create COI quick-fill reads this file; new holders can be added from the **Add new certificate holder** expander on the Create COI page (saved back to the same JSON file).
+- Create COI quick-fill reads this file; new holders can be added from **Add new certificate holder** on the Create COI page (saved to `data/coi_holders.json` on disk).
+- Export, import/merge, and reload the holder library from **Settings** (sidebar) under **COI holder library**.
 
 ## User Flow
 

@@ -78,19 +78,18 @@ Fix:
 
 ## Backup Guidance
 
-- Back up `insurance_data.db` regularly.
+- Back up `insurance_data.db` and `data/coi_holders.json` regularly via **Settings** in the sidebar.
 - Preserve `data/` and any curated holder files.
 - Back up logs and cache only if needed for diagnostics.
 
-## Import / Merge Database
+## Settings: Database backup and restore
 
-On the Streamlit **Database** page, use **Import / merge database** (below the policy grid footer):
+Open **Settings** from the sidebar, section **Database backup and restore**:
 
-1. Download a backup first via **Backup Database** if you want a snapshot of the current file.
-2. Upload another `insurance_data.db` backup file.
-3. Click **Merge imported database**.
+1. **Backup database (.db)** — download the current `insurance_data.db`.
+2. Upload another `insurance_data.db` and click **Merge imported database**.
 
-Behavior:
+Merge behavior:
 
 - Imports policies whose `policy_number` is not already in the live database.
 - Skips duplicates by policy number (does not overwrite existing rows).
@@ -98,4 +97,12 @@ Behavior:
 - Matches customers by `full_name` (case-insensitive); creates a new customer when no match exists.
 - Does not import API usage/token history.
 
-After a successful merge, the page refreshes automatically. Restart Streamlit only if another session still shows stale data.
+## Settings: COI holder library
+
+In the same **Settings** dialog, section **COI holder library**:
+
+- **Export holder library (JSON)** — download `coi_holders.json`.
+- **Import holder library (.json)** + **Merge imported holder library** — append new holders; skip duplicate names.
+- **Reload holder library** — refresh in-memory quick-fill after external edits.
+
+New holders are still added on the **Create COI** page via **Add new certificate holder**; backup/import lives only in Settings.

@@ -11,6 +11,10 @@ from views.dashboard import page_dashboard
 from views.process_policies import page_process_policies
 from views.database_page import page_database
 from views.create_coi import page_create_coi
+from views.settings_backup import (
+    render_database_backup_section,
+    render_holder_library_section,
+)
 
 st.set_page_config(
     page_title="Insurance Doc Intelligence", 
@@ -96,6 +100,14 @@ def settings_modal():
             st.rerun()
         else:
             st.error(f"Error: {msg}")
+
+    st.divider()
+    st.markdown("##### Database backup and restore")
+    render_database_backup_section()
+
+    st.divider()
+    st.markdown("##### COI holder library")
+    render_holder_library_section()
 
 with st.sidebar:
     if os.path.exists("assets/logo.png"):
