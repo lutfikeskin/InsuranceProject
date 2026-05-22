@@ -3,29 +3,63 @@
 {% if not policies %}
   {{ m.empty_state('No policies found', 'Try a different search, or process a PDF first.', 'file-text') }}
 {% else %}
-  <div class="table-wrap" style="border:0; border-radius: var(--radius);">
-    <table class="table-clickable" aria-label="Policies">
+  <div class="db-table-wrap">
+    <table class="db-policy-table" aria-label="Policies">
       <thead>
         <tr>
-          <th>Policy #</th>
-          <th>Insured</th>
-          <th>Carrier</th>
-          <th>Type</th>
-          <th>Effective</th>
-          <th>Expiration</th>
-          <th></th>
+          <th class="db-check"><input id="db-select-all" type="checkbox" aria-label="Select all policies"></th>
+          <th data-col="policy">Policy ID</th>
+          <th data-col="insured">Insured</th>
+          <th data-col="carrier">Carrier</th>
+          <th data-col="type">Type</th>
+          <th data-col="vehicles" class="center">Vehicles</th>
+          <th data-col="premium" class="right">Premium</th>
+          <th data-col="expires">Expires</th>
+          <th data-col="status">Status</th>
+          <th data-col="effective" hidden>Effective</th>
+          <th data-col="account" hidden>Account</th>
+          <th data-col="state" hidden>State</th>
+          <th data-col="naic" hidden>NAIC</th>
+          <th data-col="liability" hidden>Liability Limit</th>
+          <th data-col="cargo" hidden>Cargo Limit</th>
+          <th data-col="gl" hidden>GL Limit</th>
+          <th data-col="created" hidden>Created</th>
         </tr>
       </thead>
       <tbody>
         {% for policy in policies %}
-          <tr onclick="window.location='/database/policy/{{ policy.id }}'" role="link" tabindex="0">
-            <td class="mono">{{ policy.policy_number }}</td>
-            <td>{{ policy.insured_name }}</td>
-            <td>{{ policy.carrier_name }}</td>
-            <td><span class="pill">{{ policy.policy_type or '—' }}</span></td>
-            <td class="muted nowrap">{{ policy.effective_date or '—' }}</td>
-            <td class="muted nowrap">{{ policy.expiration_date or '—' }}</td>
-            <td></td>
+          {% set days_remaining = (policy.expiration_date - today).days if today and policy.expiration_date else none %}
+          {% set raw_status = (policy.policy_status or policy.status or '')|lower %}
+          {% if raw_status in ['lapsed', 'cancelled', 'canceled', 'inactive'] or (days_remaining is not none and days_remaining < 0) %}
+            {% set row_status = 'lapsed' %}
+          {% elif days_remaining is not none and days_remaining <= 30 %}
+            {% set row_status = 'expiring' %}
+          {% else %}
+            {% set row_status = 'active' %}
+          {% endif %}
+          <tr onclick="if(event.target.tagName !== 'INPUT') window.location='/database/policy/{{ policy.id }}'" role="link" tabindex="0">
+            <td class="db-check"><input class="db-row-check" type="checkbox" value="{{ policy.id }}" aria-label="Select {{ policy.policy_number }}" onclick="event.stopPropagation();"></td>
+            <td data-col="policy" class="mono db-policy-id">{{ policy.policy_number }}</td>
+            <td data-col="insured" class="db-insured">{{ policy.insured_name or '—' }}</td>
+            <td data-col="carrier" class="db-carrier">{{ policy.carrier_name or '—' }}</td>
+            <td data-col="type"><span class="db-type-chip">{{ policy.policy_type or '—' }}</span></td>
+            <td data-col="vehicles" class="center">{{ policy.vehicles|length }}</td>
+            <td data-col="premium" class="right mono">{{ policy.premium or '—' }}</td>
+            <td data-col="expires" class="nowrap">
+              {{ policy.expiration_date or '—' }}
+              {% if days_remaining is not none %}
+                <span class="db-days {% if days_remaining < 0 %}late{% elif days_remaining <= 30 %}soon{% endif %}">· {{ days_remaining }} d</span>
+              {% endif %}
+            </td>
+            <td data-col="status"><span class="db-status {{ row_status }}">● {{ row_status|capitalize }}</span></td>
+            <td data-col="effective" class="nowrap" hidden>{{ policy.effective_date or '—' }}</td>
+            <td data-col="account" hidden>{{ policy.account_type or '—' }}</td>
+            <td data-col="state" hidden>{{ policy.state or policy.insured_state_code or '—' }}</td>
+            <td data-col="naic" class="mono" hidden>{{ policy.naic_number or '—' }}</td>
+            <td data-col="liability" class="mono" hidden>{{ policy.liability_limit or '—' }}</td>
+            <td data-col="cargo" class="mono" hidden>{{ policy.cargo_limit or '—' }}</td>
+            <td data-col="gl" class="mono" hidden>{{ policy.general_liability_limit or '—' }}</td>
+            <td data-col="created" class="nowrap" hidden>{{ policy.created_at.strftime('%Y-%m-%d') if policy.created_at else '—' }}</td>
           </tr>
         {% endfor %}
       </tbody>

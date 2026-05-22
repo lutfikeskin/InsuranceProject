@@ -55,6 +55,18 @@
     .coi-check-card input { margin-top:2px; flex:0 0 auto; }
     .coi-check-card span { color:var(--text-strong); font-weight:650; }
     .coi-check-card small { display:block; margin-top:2px; color:var(--text-muted); font-weight:400; }
+    .coi-form-pane .form-section h4 {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      margin-bottom: var(--s-3);
+      padding: 5px 10px;
+      color: var(--primary-700);
+      background: linear-gradient(180deg, #f3f8fd, #eaf3fb);
+      border: 1px solid var(--primary-tint-2);
+      border-radius: var(--radius-xs);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
   </style>
 {% endblock %}
 {% block content_class %}coi-wide{% endblock %}
@@ -149,7 +161,7 @@
             <h4>Certificate mode</h4>
             <div class="form-grid cols-2">
               <label>COI Type
-                <select name="coi_type">
+                <select name="coi_type" id="coi_type_select">
                   {% for option in ["Additional Insured", "Certificate Holder", "Lienholder"] %}
                     <option value="{{ option }}" {% if coi_type == option %}selected{% endif %}>{{ option }}</option>
                   {% endfor %}
@@ -163,7 +175,7 @@
           </div>
 
           {% if selected_policy.vehicles %}
-            <div class="form-section">
+            <div class="form-section" id="lienholder_vehicle_section" {% if coi_type != "Lienholder" %}hidden{% endif %}>
               <h4>Vehicles for Lienholder</h4>
               <div class="chip-group">
                 {% for vehicle in selected_policy.vehicles %}
@@ -231,7 +243,7 @@
             <h4>Coverages to include</h4>
             <div class="form-grid cols-3">
               <label class="coi-check-card">
-                <input type="checkbox" name="has_general_liability" {% if form_values.has_general_liability %}checked{% endif %}>
+                <input id="has_general_liability" type="checkbox" name="has_general_liability" {% if form_values.has_general_liability %}checked{% endif %}>
                 <span>General Liability <small>Include GL on certificate.</small></span>
               </label>
               <label class="coi-check-card">
@@ -243,7 +255,7 @@
                 <span>Motor Truck Cargo <small>{% if coi_type == "Lienholder" %}Disabled for lienholder COIs.{% else %}Include cargo coverage.{% endif %}</small></span>
               </label>
             </div>
-            <div class="mt-3">
+            <div class="mt-3" id="gl_aggregate_section" {% if not form_values.has_general_liability %}hidden{% endif %}>
               <label>General aggregate
                 <select name="gl_general_aggregate">
                   {% for option in ["$1,000,000", "$2,000,000"] %}
@@ -285,6 +297,28 @@
         var company = companies[select.value] || {};
         Object.keys(fieldMap).forEach(function(key){ setValue(fieldMap[key], company[key]); });
       });
+    })();
+
+    (function(){
+      var coiType = document.getElementById('coi_type_select');
+      var lienholderSection = document.getElementById('lienholder_vehicle_section');
+      if (!coiType || !lienholderSection) return;
+      function syncLienholderSection(){
+        lienholderSection.hidden = coiType.value !== 'Lienholder';
+      }
+      coiType.addEventListener('change', syncLienholderSection);
+      syncLienholderSection();
+    })();
+
+    (function(){
+      var glCheckbox = document.getElementById('has_general_liability');
+      var aggregateSection = document.getElementById('gl_aggregate_section');
+      if (!glCheckbox || !aggregateSection) return;
+      function syncAggregateSection(){
+        aggregateSection.hidden = !glCheckbox.checked;
+      }
+      glCheckbox.addEventListener('change', syncAggregateSection);
+      syncAggregateSection();
     })();
   </script>
 {% endblock %}

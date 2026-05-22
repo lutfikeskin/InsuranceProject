@@ -6,6 +6,7 @@ from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
+import csv
 import io
 import json
 import os
@@ -601,25 +602,75 @@ def create_app(
 
     # --- master list ---
 
+    def _database_policy_status(policy: Policy, today=None) -> str:
+        today = today or datetime.utcnow().date()
+        raw_status = (policy.policy_status or policy.status or "").strip().lower()
+        if raw_status in {"lapsed", "cancelled", "canceled", "inactive"}:
+            return "lapsed"
+        if policy.expiration_date and policy.expiration_date < today:
+            return "lapsed"
+        if policy.expiration_date and 0 <= (policy.expiration_date - today).days <= 30:
+            return "expiring"
+        return "active"
+
+    def _filter_database_policies(
+        policies: list[Policy],
+        *,
+        status_filter: str,
+        carrier_filter: str,
+        type_filter: str,
+    ) -> list[Policy]:
+        today = datetime.utcnow().date()
+        filtered = []
+        for policy in policies:
+            if status_filter != "all" and _database_policy_status(policy, today) != status_filter:
+                continue
+            if carrier_filter and (policy.carrier_name or "") != carrier_filter:
+                continue
+            if type_filter and (policy.policy_type or "") != type_filter:
+                continue
+            filtered.append(policy)
+        return filtered
+
     @app.get("/database")
     def database():
-        # `tab` controls which list the segmented control highlights; both
-        # tables always render on the master so the page is scannable in one
-        # glance and so HTMX live-search can swap either pane in place.
-        tab = (request.args.get("tab") or "customers").strip().lower()
+        # `tab` controls which directory is emphasized; both lists still render
+        # so the master database remains scannable from one page.
+        tab = (request.args.get("tab") or "policies").strip().lower()
         if tab not in ("customers", "policies"):
-            tab = "customers"
+            tab = "policies"
         query = (request.args.get("q") or "").strip()
+        status_filter = (request.args.get("status") or "all").strip().lower()
+        if status_filter not in {"all", "active", "expiring", "lapsed"}:
+            status_filter = "all"
+        carrier_filter = (request.args.get("carrier") or "").strip()
+        type_filter = (request.args.get("policy_type") or "").strip()
         with session_scope() as session:
             policy_service = PolicyService(session)
             customers = policy_service.search_customers(query or None, orphan_filter="all", limit=50)
-            policies = policy_service.search_policies(query or None, limit=50)
+            base_policies = policy_service.search_policies(query or None, limit=200)
+            policies = _filter_database_policies(
+                base_policies,
+                status_filter=status_filter,
+                carrier_filter=carrier_filter,
+                type_filter=type_filter,
+            )
+            option_source = policy_service.search_policies(None, limit=500)
+            carrier_options = sorted({policy.carrier_name for policy in option_source if policy.carrier_name})
+            type_options = sorted({policy.policy_type for policy in option_source if policy.policy_type})
             return render_template(
                 "database.html",
                 active_tab=tab,
                 query=query,
                 customers=customers,
                 policies=policies,
+                total_policy_matches=len(base_policies),
+                status_filter=status_filter,
+                carrier_filter=carrier_filter,
+                type_filter=type_filter,
+                carrier_options=carrier_options,
+                type_options=type_options,
+                today=datetime.utcnow().date(),
             )
 
     @app.get("/database/customers/list")
@@ -636,12 +687,24 @@ def create_app(
     @app.get("/database/policies/list")
     def database_policies_list():
         query = (request.args.get("q") or "").strip()
+        status_filter = (request.args.get("status") or "all").strip().lower()
+        if status_filter not in {"all", "active", "expiring", "lapsed"}:
+            status_filter = "all"
+        carrier_filter = (request.args.get("carrier") or "").strip()
+        type_filter = (request.args.get("policy_type") or "").strip()
         with session_scope() as session:
-            policies = PolicyService(session).search_policies(query or None, limit=50)
+            base_policies = PolicyService(session).search_policies(query or None, limit=200)
+            policies = _filter_database_policies(
+                base_policies,
+                status_filter=status_filter,
+                carrier_filter=carrier_filter,
+                type_filter=type_filter,
+            )
             return render_template(
                 "partials/database/policies_table.html",
                 policies=policies,
                 query=query,
+                today=datetime.utcnow().date(),
             )
 
     @app.get("/database/export")
@@ -657,6 +720,59 @@ def create_app(
                 workbook,
                 mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 headers={"Content-Disposition": f"attachment; filename={filename}"},
+            )
+
+    @app.get("/database/export.csv")
+    def database_export_csv():
+        query = (request.args.get("q") or "").strip()
+        raw_ids = request.args.get("policy_ids") or ""
+        policy_ids: list[int] = []
+        for part in raw_ids.split(","):
+            try:
+                if part.strip():
+                    policy_ids.append(int(part.strip()))
+            except ValueError:
+                continue
+        with session_scope() as session:
+            if policy_ids:
+                policies = (
+                    session.query(Policy)
+                    .filter(Policy.id.in_(policy_ids))
+                    .order_by(Policy.policy_number.asc())
+                    .all()
+                )
+            else:
+                policies = PolicyService(session).search_policies(query or None, limit=200)
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow([
+                "policy_number",
+                "insured_name",
+                "carrier_name",
+                "policy_type",
+                "effective_date",
+                "expiration_date",
+                "premium",
+                "vehicles",
+                "status",
+            ])
+            for policy in policies:
+                writer.writerow([
+                    policy.policy_number or "",
+                    policy.insured_name or "",
+                    policy.carrier_name or "",
+                    policy.policy_type or "",
+                    policy.effective_date.isoformat() if policy.effective_date else "",
+                    policy.expiration_date.isoformat() if policy.expiration_date else "",
+                    policy.premium or "",
+                    len(policy.vehicles or []),
+                    _database_policy_status(policy),
+                ])
+            suffix = "selected" if policy_ids else (query or "all")
+            return Response(
+                output.getvalue(),
+                mimetype="text/csv",
+                headers={"Content-Disposition": f"attachment; filename=policy-export-{suffix}.csv"},
             )
 
     # --- customer detail + sub-tabs ---
@@ -1115,6 +1231,16 @@ def create_app(
 
     def _default_coi_description(policy: Policy, coi_type: str, selected_vehicle_objs: list[Any], holder_name: str) -> str:
         _, desc_lines = COIService.prepare_coi_data(policy)
+        radius_line = "Radius of Operation: Unlimited"
+        if radius_line not in desc_lines:
+            driver_idx = next(
+                (idx for idx, line in enumerate(desc_lines) if str(line).startswith("Driver List:")),
+                None,
+            )
+            if driver_idx is None:
+                desc_lines.append(radius_line)
+            else:
+                desc_lines.insert(driver_idx + 1, radius_line)
         if coi_type == "Lienholder":
             desc_lines = [line for line in desc_lines if not line.startswith("Vehicle List:")]
             vehicle_bits = []

@@ -340,6 +340,7 @@ def test_create_coi_page_renders_policy_selection():
     body = response.get_data(as_text=True)
     assert "Create COI" in body
     assert "COI-1" in body
+    assert "Radius of Operation: Unlimited" in body
     assert "Generate COI PDF" in body
 
 
@@ -573,6 +574,20 @@ def test_database_export_returns_excel_workbook():
 
     assert response.status_code == 200
     assert response.mimetype == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def test_database_export_csv_returns_selected_policy_rows():
+    client, _Session = _database_client()
+
+    response = client.get("/database/export.csv?policy_ids=1")
+
+    assert response.status_code == 200
+    assert response.mimetype == "text/csv"
+    body = response.get_data(as_text=True)
+    assert "policy_number,insured_name,carrier_name" in body
+    assert "DB-1" in body
+    assert "Database User" in body
+
 
 def test_database_page_renders_policy_and_customer_tables():
     client, _Session = _database_client()
