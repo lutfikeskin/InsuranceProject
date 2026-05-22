@@ -6,8 +6,11 @@ from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
+import io
 import json
 import os
+import re
+import zipfile
 
 from flask import Flask, Response, redirect, render_template, request, url_for
 from sqlalchemy import create_engine
@@ -32,10 +35,12 @@ from modules.extraction import process_pdf
 from modules.extraction.pipeline import POLICY_TYPE_ENUM
 from modules.notifications import draft_renewal_email
 from utils.exporter import create_excel_report
+from utils.naic_utils import get_naic_for_carrier
 from views.ui_utils import build_confidence_map, gate_value
 SessionFactory = Callable[[], Session]
 STATUS_OPTIONS = ("pending", "saved", "skipped", "failed", "all")
 UPLOAD_CACHE_DIR = Path(".cache/web_uploads")
+COI_PREVIEW_DIR = Path(".cache/coi_previews")
 def create_app(
     *,
     db_url: str = "sqlite:///insurance_data.db",
@@ -875,6 +880,103 @@ def create_app(
             )
             return render_template("partials/database/policy_edit_tab.html", **ctx)
 
+    def _safe_coi_filename(insured_name: str, holder_name: str, *, bulk: bool = False) -> str:
+        safe_insured = (insured_name or "").strip() or "Unknown Insured"
+        if bulk:
+            filename = f"COIs - {safe_insured} - Bulk.zip"
+        else:
+            safe_holder = (holder_name or "").strip() or "Unknown Holder"
+            filename = f"COI - {safe_insured} - {safe_holder}.pdf"
+        filename = re.sub(r'[\\/:*?"<>|]+', " ", filename)
+        return re.sub(r"\s+", " ", filename).strip()
+
+    def _default_gl_aggregate(policy: Policy) -> str:
+        blob = " ".join(str(part or "") for part in (policy.general_liability_limit, policy.liability_limit)).lower()
+        compact = re.sub(r"[\s,$]", "", blob)
+        if "2000000" in compact or re.search(r"\b2m\b", blob):
+            return "$2,000,000"
+        return "$1,000,000"
+
+    def _coi_bool_arg(name: str, default: bool) -> bool:
+        if request.method == "POST" or name in request.values:
+            return request.values.get(name) == "on"
+        return bool(default)
+
+    def _int_form_arg(name: str, default: int, *, min_value: int, max_value: int) -> int:
+        try:
+            value = int(request.values.get(name) or default)
+        except (TypeError, ValueError):
+            return default
+        return max(min_value, min(max_value, value))
+
+    def _build_coi_policy_data(policy: Policy, form_values: dict[str, Any], coi_type: str) -> dict[str, Any]:
+        has_gl = _coi_bool_arg("has_general_liability", bool(policy.has_general_liability))
+        has_auto = _coi_bool_arg("has_auto_liability", bool(policy.has_auto_liability))
+        has_cargo = _coi_bool_arg("has_cargo", bool(policy.cargo_limit)) and coi_type != "Lienholder"
+        gl_aggregate = (request.values.get("gl_general_aggregate") or _default_gl_aggregate(policy)).strip()
+        return {
+            "carrier_name": policy.carrier_name,
+            "naic_number": form_values["insured_naic"],
+            "policy_number": policy.policy_number,
+            "effective_date": policy.effective_date,
+            "expiration_date": policy.expiration_date,
+            "liability_limit": policy.liability_limit,
+            "gl_general_aggregate": gl_aggregate if has_gl else None,
+            "cargo_limit": policy.cargo_limit,
+            "cargo_deductible": policy.cargo_deductible if policy.cargo_deductible else "1000",
+            "comp_deductible": policy.comp_deductible,
+            "coll_deductible": policy.coll_deductible,
+            "has_general_liability": has_gl,
+            "has_auto_liability": has_auto,
+            "has_cargo": has_cargo,
+            "coi_type": coi_type,
+            "insured_name": form_values["insured_name"],
+            "insured_address": form_values["insured_address"],
+            "insured_city": form_values["insured_city"],
+            "insured_state_code": form_values["insured_state"],
+            "insured_zip": form_values["insured_zip"],
+            "vehicle_list_str": "",
+            "driver_list_str": "",
+        }
+
+    def _store_coi_preview(pdf: bytes, filename: str) -> str:
+        COI_PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+        token = sha256(pdf + filename.encode("utf-8") + datetime.utcnow().isoformat().encode("ascii")).hexdigest()[:32]
+        (COI_PREVIEW_DIR / f"{token}.pdf").write_bytes(pdf)
+        (COI_PREVIEW_DIR / f"{token}.json").write_text(json.dumps({"filename": filename}), encoding="utf-8")
+        return token
+
+    def _coi_preview_response(token: str, *, attachment: bool) -> Response:
+        token = re.sub(r"[^a-f0-9]", "", token.lower())[:32]
+        pdf_path = COI_PREVIEW_DIR / f"{token}.pdf"
+        meta_path = COI_PREVIEW_DIR / f"{token}.json"
+        if not token or not pdf_path.exists():
+            return Response("COI preview not found", status=404)
+        filename = "coi-preview.pdf"
+        if meta_path.exists():
+            try:
+                filename = json.loads(meta_path.read_text(encoding="utf-8")).get("filename") or filename
+            except (OSError, json.JSONDecodeError):
+                pass
+        disposition = "attachment" if attachment else "inline"
+        return Response(
+            pdf_path.read_bytes(),
+            mimetype="application/pdf",
+            headers={
+                "Content-Disposition": f'{disposition}; filename="{filename}"',
+                "X-Content-Type-Options": "nosniff",
+                "Cache-Control": "private, max-age=3600",
+            },
+        )
+
+    @app.get("/create-coi/preview/<token>")
+    def create_coi_preview(token: str):
+        return _coi_preview_response(token, attachment=False)
+
+    @app.get("/create-coi/download/<token>")
+    def create_coi_download(token: str):
+        return _coi_preview_response(token, attachment=True)
+
     @app.route("/create-coi", methods=["GET", "POST"])
     def create_coi():
         query = (request.values.get("q") or "").strip()
@@ -883,28 +985,31 @@ def create_app(
             selected_id = int(selected_raw) if selected_raw else None
         except (TypeError, ValueError):
             selected_id = None
+
         with session_scope() as session:
             policy_service = PolicyService(session)
             policies = policy_service.search_policies(query or None, limit=50)
             selected_policy = session.get(Policy, selected_id) if selected_id else None
+            if selected_policy is not None and all(p.id != selected_policy.id for p in policies):
+                policies = [selected_policy] + policies[:49]
+
             companies = load_companies("data/Additionalinsuredcomps.xlsx")
             company_names = sorted(list(companies.keys()))
             coi_type = (request.values.get("coi_type") or "Additional Insured").strip()
+            if coi_type not in {"Additional Insured", "Certificate Holder", "Lienholder"}:
+                coi_type = "Additional Insured"
             bulk_mode = request.values.get("bulk_mode") == "on"
             selected_vins = request.values.getlist("selected_vehicle_vins")
             selected_companies = request.values.getlist("selected_companies")
             selected_company = (request.values.get("selected_company") or "").strip()
             holder_name = (request.values.get("holder_name") or "").strip()
-            selected_vehicle_objs = [
-                vehicle for vehicle in (selected_policy.vehicles or [])
-                if vehicle.vin in selected_vins
-            ] if selected_policy is not None else []
-            default_description = (
-                _default_coi_description(selected_policy, coi_type, selected_vehicle_objs, holder_name)
-                if selected_policy is not None
-                else ""
-            )
+            selected_vehicle_objs = [vehicle for vehicle in (selected_policy.vehicles or []) if vehicle.vin in selected_vins] if selected_policy is not None else []
+
+            default_description = _default_coi_description(selected_policy, coi_type, selected_vehicle_objs, holder_name) if selected_policy is not None else ""
             single_company = companies.get(selected_company or "", {}) if selected_company else {}
+            default_naic = ""
+            if selected_policy is not None:
+                default_naic = selected_policy.naic_number or get_naic_for_carrier(selected_policy.carrier_name)
             form_values = {
                 "holder_name": holder_name or single_company.get("name", ""),
                 "holder_address": (request.values.get("holder_address") or single_company.get("address", "")).strip(),
@@ -912,109 +1017,81 @@ def create_app(
                 "holder_state": (request.values.get("holder_state") or single_company.get("state", "")).strip(),
                 "holder_zip": (request.values.get("holder_zip") or single_company.get("zip", "")).strip(),
                 "description": (request.values.get("description") or default_description).strip(),
+                "desc_font_size": _int_form_arg("desc_font_size", 8, min_value=4, max_value=12),
+                "insured_name": (request.values.get("insured_name") or (selected_policy.insured_name if selected_policy else "") or "").strip(),
+                "insured_address": (request.values.get("insured_address") or (selected_policy.insured_address if selected_policy else "") or "").strip(),
+                "insured_city": (request.values.get("insured_city") or (selected_policy.insured_city if selected_policy else "") or "").strip(),
+                "insured_state": (request.values.get("insured_state") or (selected_policy.insured_state_code if selected_policy else "") or "").strip(),
+                "insured_zip": (request.values.get("insured_zip") or (selected_policy.insured_zip if selected_policy else "") or "").strip(),
+                "insured_naic": (request.values.get("insured_naic") or default_naic or "").strip(),
+                "has_general_liability": _coi_bool_arg("has_general_liability", bool(selected_policy.has_general_liability) if selected_policy else False),
+                "has_auto_liability": _coi_bool_arg("has_auto_liability", bool(selected_policy.has_auto_liability) if selected_policy else False),
+                "has_cargo": _coi_bool_arg("has_cargo", bool(selected_policy.cargo_limit) if selected_policy else False) and coi_type != "Lienholder",
+                "gl_general_aggregate": (request.values.get("gl_general_aggregate") or (_default_gl_aggregate(selected_policy) if selected_policy else "$1,000,000")).strip(),
             }
+
+            companies_data = {
+                name: {
+                    "name": str(data.get("name", name) or ""),
+                    "address": str(data.get("address", "") or ""),
+                    "city": str(data.get("city", "") or ""),
+                    "state": str(data.get("state", "") or ""),
+                    "zip": str(data.get("zip", "") or ""),
+                }
+                for name, data in companies.items()
+            }
+            context = {
+                "query": query, "policies": policies, "selected_policy": selected_policy,
+                "companies": company_names, "companies_data": companies_data, "form_error": None, "form_values": form_values,
+                "coi_type": coi_type, "bulk_mode": bulk_mode, "selected_vehicle_vins": selected_vins,
+                "selected_companies": selected_companies, "selected_company": selected_company,
+                "preview_token": None, "preview_filename": None,
+            }
+
             if request.method == "POST" and selected_policy is not None:
+                action = (request.form.get("action") or "download").strip()
                 if coi_type == "Lienholder" and not selected_vehicle_objs:
-                    return render_template(
-                        "create_coi.html",
-                        query=query,
-                        policies=policies,
-                        selected_policy=selected_policy,
-                        companies=company_names,
-                        form_error="Lienholder COIs require at least one selected vehicle.",
-                        form_values=form_values,
-                        coi_type=coi_type,
-                        bulk_mode=bulk_mode,
-                        selected_vehicle_vins=selected_vins,
-                        selected_companies=selected_companies,
-                        selected_company=selected_company,
-                    ), 400
+                    context["form_error"] = "Lienholder COIs require at least one selected vehicle."
+                    return render_template("create_coi.html", **context), 400
                 description = form_values["description"]
                 generator = COIGenerator()
-                policy_data, _desc_lines = COIService.prepare_coi_data(selected_policy)
+                policy_data = _build_coi_policy_data(selected_policy, form_values, coi_type)
                 if bulk_mode:
                     if not selected_companies:
-                        return render_template(
-                            "create_coi.html",
-                            query=query,
-                            policies=policies,
-                            selected_policy=selected_policy,
-                            companies=company_names,
-                            form_error="Select at least one company for bulk generation.",
-                            form_values=form_values,
-                            coi_type=coi_type,
-                            bulk_mode=bulk_mode,
-                            selected_vehicle_vins=selected_vins,
-                            selected_companies=selected_companies,
-                            selected_company=selected_company,
-                        ), 400
-                    import io, zipfile
+                        context["form_error"] = "Select at least one company for bulk generation."
+                        return render_template("create_coi.html", **context), 400
                     zip_buffer = io.BytesIO()
                     with zipfile.ZipFile(zip_buffer, "w") as zf:
                         for company_name in selected_companies:
                             comp = companies.get(company_name, {})
+                            generated_holder_name = comp.get("name", company_name)
                             holder = {
-                                "name": comp.get("name", company_name),
-                                "address": comp.get("address", ""),
-                                "city": comp.get("city", ""),
-                                "state": comp.get("state", ""),
-                                "zip": comp.get("zip", ""),
-                                "description": description.replace("[Certificate Holder Name]", comp.get("name", company_name)),
+                                "name": generated_holder_name, "address": comp.get("address", ""),
+                                "city": comp.get("city", ""), "state": comp.get("state", ""), "zip": comp.get("zip", ""),
+                                "description": description.replace("[Certificate Holder Name]", generated_holder_name),
                             }
-                            pdf = generator.generate_coi(policy_data, holder)
-                            zf.writestr(f"COI-{selected_policy.policy_number}-{company_name}.pdf", pdf)
-                    return Response(
-                        zip_buffer.getvalue(),
-                        mimetype="application/zip",
-                        headers={
-                            "Content-Disposition": f"attachment; filename=coi-bulk-{selected_policy.policy_number}.zip"
-                        },
-                    )
+                            pdf = generator.generate_coi(policy_data, holder, desc_font_size=form_values["desc_font_size"])
+                            zf.writestr(_safe_coi_filename(form_values["insured_name"], generated_holder_name), pdf)
+                    return Response(zip_buffer.getvalue(), mimetype="application/zip", headers={"Content-Disposition": f'attachment; filename="{_safe_coi_filename(form_values["insured_name"], "", bulk=True)}"'})
+
                 holder = {
-                    "name": form_values["holder_name"],
-                    "address": form_values["holder_address"],
-                    "city": form_values["holder_city"],
-                    "state": form_values["holder_state"],
-                    "zip": form_values["holder_zip"],
-                    "description": description,
+                    "name": form_values["holder_name"], "address": form_values["holder_address"],
+                    "city": form_values["holder_city"], "state": form_values["holder_state"], "zip": form_values["holder_zip"],
+                    "description": description.replace("[Certificate Holder Name]", form_values["holder_name"]),
                 }
                 if not holder["name"]:
-                    return render_template(
-                        "create_coi.html",
-                        query=query,
-                        policies=policies,
-                        selected_policy=selected_policy,
-                        companies=company_names,
-                        form_error="Certificate holder name is required.",
-                        form_values=form_values,
-                        coi_type=coi_type,
-                        bulk_mode=bulk_mode,
-                        selected_vehicle_vins=selected_vins,
-                        selected_companies=selected_companies,
-                        selected_company=selected_company,
-                    ), 400
-                pdf = generator.generate_coi(policy_data, holder)
-                return Response(
-                    pdf,
-                    mimetype="application/pdf",
-                    headers={
-                        "Content-Disposition": f"attachment; filename=coi-{selected_policy.policy_number}.pdf"
-                    },
-                )
-            return render_template(
-                "create_coi.html",
-                query=query,
-                policies=policies,
-                selected_policy=selected_policy,
-                companies=company_names,
-                form_error=None,
-                form_values=form_values,
-                coi_type=coi_type,
-                bulk_mode=bulk_mode,
-                selected_vehicle_vins=selected_vins,
-                selected_companies=selected_companies,
-                selected_company=selected_company,
-            )
+                    context["form_error"] = "Certificate holder name is required."
+                    return render_template("create_coi.html", **context), 400
+                pdf = generator.generate_coi(policy_data, holder, desc_font_size=form_values["desc_font_size"])
+                filename = _safe_coi_filename(form_values["insured_name"], holder["name"])
+                if action == "preview":
+                    token = _store_coi_preview(pdf, filename)
+                    context["preview_token"] = token
+                    context["preview_filename"] = filename
+                    return render_template("create_coi.html", **context)
+                return Response(pdf, mimetype="application/pdf", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+            return render_template("create_coi.html", **context)
 
     def _review_form_context(selected_task: ReviewTask | None, gate_threshold: str) -> dict[str, Any]:
         if selected_task is None:
