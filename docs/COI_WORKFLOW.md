@@ -10,10 +10,15 @@ This document covers Certificate of Insurance generation flow.
 - PDF mapping: `modules/coi/mapping.json`
 - Template: `data/COI Example.pdf`
 
+## Holder Library
+
+- Source file: `data/coi_holders.json` (loaded via `modules/coi/holders.py`)
+- Create COI quick-fill reads this file; new holders can be added from the **Add new certificate holder** expander on the Create COI page (saved back to the same JSON file).
+
 ## User Flow
 
 1. Search and select policy.
-2. Provide or quick-fill certificate holder details.
+2. Provide or quick-fill certificate holder details from the holder library.
 3. Toggle included coverage sections (GL, Auto, Cargo).
 4. Optionally customize operations description and font size.
 5. Generate PDF (single) or ZIP of PDFs (bulk mode).
@@ -22,7 +27,7 @@ This document covers Certificate of Insurance generation flow.
 
 `views/create_coi.py` constructs:
 - `policy_data` from selected policy + overrides
-- `holder_data` from manual entry or company list
+- `holder_data` from manual entry or holder library (`coi_holders.json`)
 
 `COIService.prepare_coi_data(...)` provides helper defaults.
 

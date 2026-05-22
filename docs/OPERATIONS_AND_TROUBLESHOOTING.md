@@ -81,3 +81,21 @@ Fix:
 - Back up `insurance_data.db` regularly.
 - Preserve `data/` and any curated holder files.
 - Back up logs and cache only if needed for diagnostics.
+
+## Import / Merge Database
+
+On the Streamlit **Database** page, use **Import / merge database** (below the policy grid footer):
+
+1. Download a backup first via **Backup Database** if you want a snapshot of the current file.
+2. Upload another `insurance_data.db` backup file.
+3. Click **Merge imported database**.
+
+Behavior:
+
+- Imports policies whose `policy_number` is not already in the live database.
+- Skips duplicates by policy number (does not overwrite existing rows).
+- Copies related vehicles, drivers, coverages, endorsements, and history for imported policies.
+- Matches customers by `full_name` (case-insensitive); creates a new customer when no match exists.
+- Does not import API usage/token history.
+
+After a successful merge, the page refreshes automatically. Restart Streamlit only if another session still shows stale data.

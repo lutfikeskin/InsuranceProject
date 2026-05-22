@@ -91,9 +91,9 @@
     },
     {
         "name": "Premium Logistics INC",
-        "full_address": "6000 Fairview Rd Ste 1271 \nCharlotte, N\u0421 28210",
+        "full_address": "6000 Fairview Rd Ste 1271 \nCharlotte, NС 28210",
         "address": "6000 Fairview Rd Ste 1271",
-        "city": "Charlotte, N\u0421 28210",
+        "city": "Charlotte, NС 28210",
         "state": "",
         "zip": "",
         "email": "hrdepartment@premiumlogisticsinc.com"
@@ -1428,6 +1428,24 @@
         "city": "Dallas",
         "state": "TX",
         "zip": "75240",
+        "email": ""
+    },
+    {
+        "name": "VELOAD INC.",
+        "full_address": "1809 JACKSON ST APT 817\nHOLLYWOOD, FL 33020",
+        "address": "1809 JACKSON ST APT 817",
+        "city": "HOLLYWOOD",
+        "state": "FL",
+        "zip": "33020",
+        "email": ""
+    },
+    {
+        "name": "Atlantic Expedited LLC",
+        "full_address": "1912 Duncans Mill Rd\nJefferson, GA 30549",
+        "address": "1912 Duncans Mill Rd",
+        "city": "Jefferson",
+        "state": "GA",
+        "zip": "30549",
         "email": ""
     }
 ]

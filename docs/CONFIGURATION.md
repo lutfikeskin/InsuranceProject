@@ -27,8 +27,8 @@
 
 - `modules/coi/mapping.json` - PDF field mapping
 - `data/carrier_hints.json` - carrier extraction hints
-- `data/coi_holders.json` - holder records
-- `data/Additionalinsuredcomps.xlsx` - holder/company source sheet
+- `data/coi_holders.json` - active certificate holder library (Create COI quick-fill + UI add form)
+- `data/Additionalinsuredcomps.xlsx` - legacy reference sheet (not loaded by the app at runtime)
 - `.streamlit/config.toml` - Streamlit UI/theming config (if present)
 
 ## Runtime Paths

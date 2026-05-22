@@ -4,7 +4,8 @@ import io
 import zipfile
 from core.services import PolicyService, COIService
 from core.database import get_session
-from modules.coi import COIGenerator, load_companies
+from modules.coi import COIGenerator, append_coi_holder, load_coi_holders
+from modules.coi.holders import COIHolderError
 from utils.naic_utils import get_naic_for_carrier
 from core.constants import POLICY_SEARCH_PAGE_LIMIT
 
@@ -228,7 +229,44 @@ def page_create_coi():
             selected_vehicle_objs = [veh_options[lbl] for lbl in selected_labels if lbl in veh_options]
 
         if "coi_companies" not in st.session_state:
-            st.session_state.coi_companies = load_companies("data/Additionalinsuredcomps.xlsx")
+            st.session_state.coi_companies = load_coi_holders()
+
+        def _apply_holder_to_session(holder: dict):
+            st.session_state["h_name"] = holder.get("name", "")
+            st.session_state["h_addr"] = holder.get("address", "")
+            st.session_state["h_city"] = holder.get("city", "")
+            st.session_state["h_state"] = holder.get("state", "")
+            st.session_state["h_zip"] = holder.get("zip", "")
+
+        with st.expander("Add new certificate holder"):
+            with st.form("add_coi_holder", clear_on_submit=True):
+                new_name = st.text_input("Holder Name *")
+                new_addr = st.text_input("Address")
+                nc1, nc2 = st.columns(2)
+                with nc1:
+                    new_city = st.text_input("City")
+                    new_state = st.text_input("State")
+                with nc2:
+                    new_zip = st.text_input("Zip")
+                    new_email = st.text_input("Email (optional)")
+                save_holder = st.form_submit_button("Save to holder library", type="primary")
+            if save_holder:
+                try:
+                    saved = append_coi_holder(
+                        name=new_name,
+                        address=new_addr,
+                        city=new_city,
+                        state=new_state,
+                        zip_code=new_zip,
+                        email=new_email,
+                    )
+                    st.session_state.coi_companies = load_coi_holders()
+                    st.session_state["selected_coi_company"] = saved["name"]
+                    _apply_holder_to_session(saved)
+                    st.success(f"Saved '{saved['name']}' to holder library.")
+                    st.rerun()
+                except COIHolderError as exc:
+                    st.error(str(exc))
 
         company_options = sorted(list(st.session_state.coi_companies.keys()))
 
@@ -239,14 +277,10 @@ def page_create_coi():
                 selected = st.session_state.get("selected_coi_company")
                 if selected and selected != "None":
                     comp_data = st.session_state.coi_companies.get(selected, {})
-                    st.session_state["h_name"] = comp_data.get("name", "")
-                    st.session_state["h_addr"] = comp_data.get("address", "")
-                    st.session_state["h_city"] = comp_data.get("city", "")
-                    st.session_state["h_state"] = comp_data.get("state", "")
-                    st.session_state["h_zip"] = comp_data.get("zip", "")
+                    _apply_holder_to_session(comp_data)
 
             st.selectbox(
-                "Quick Fill from Company List",
+                "Quick fill from holder library",
                 options=company_options_single,
                 key="selected_coi_company",
                 on_change=on_company_select,
