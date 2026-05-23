@@ -1509,6 +1509,16 @@ tr.diff-row td .diff-marker { color: var(--warn-fg); margin-right: 6px; font-wei
 .db-breadcrumb a { font-weight: 650; color: var(--primary-700); }
 .db-header h1 { font-size: 22px; letter-spacing: -0.03em; }
 .db-header-actions { display: flex; gap: var(--s-2); flex-wrap: wrap; justify-content: flex-end; }
+.db-header-actions > .btn,
+.db-header-actions > button,
+.db-columns-wrap > button {
+  min-height: 32px;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+}
 .db-columns-wrap { position: relative; }
 .db-column-menu {
   position: absolute;
@@ -1542,6 +1552,43 @@ tr.diff-row td .diff-marker { color: var(--warn-fg); margin-right: 6px; font-wei
   font-weight: 750;
   letter-spacing: .08em;
   text-transform: uppercase;
+}
+.db-view-toggle {
+  display: inline-flex;
+  gap: 4px;
+  margin: 0 26px var(--s-4);
+  padding: 4px;
+  background: #eaf0f7;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.db-view-toggle a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 132px;
+  min-height: 32px;
+  padding: 6px 12px;
+  color: var(--text-subtle);
+  border-radius: var(--radius-xs);
+  font-size: 13px;
+  font-weight: 700;
+}
+.db-view-toggle a:hover { text-decoration: none; background: rgba(255,255,255,.65); }
+.db-view-toggle a.active {
+  color: var(--primary-700);
+  background: #fff;
+  box-shadow: var(--shadow-xs);
+}
+.db-view-toggle span {
+  min-width: 20px;
+  padding: 1px 6px;
+  color: var(--text-muted);
+  background: var(--bg-sunken);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  text-align: center;
 }
 .db-shell {
   margin: 0 26px var(--s-5);
@@ -1600,8 +1647,10 @@ tr.diff-row td .diff-marker { color: var(--warn-fg); margin-right: 6px; font-wei
 .db-bulkbar strong { font-size: 12px; margin-right: var(--s-2); }
 .db-bulkbar button,
 .db-bulkbar .btn {
-  min-height: 26px;
-  padding: 4px 9px;
+  min-width: 94px;
+  min-height: 28px;
+  height: 28px;
+  padding: 0 10px;
   color: #fff;
   background: rgba(255,255,255,.10);
   border-color: rgba(255,255,255,.18);
@@ -1617,7 +1666,8 @@ tr.diff-row td .diff-marker { color: var(--warn-fg); margin-right: 6px; font-wei
   color: rgba(255,255,255,.72);
 }
 .db-bulkbar button[disabled]:hover { background: rgba(255,255,255,.06); }
-.db-bulk-actions { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.db-bulk-actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.db-bulkbar #db-clear-selection { min-width: 74px; }
 .db-table-wrap { overflow-x: auto; background: #fff; }
 .db-policy-table {
   width: 100%;

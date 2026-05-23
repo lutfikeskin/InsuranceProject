@@ -665,6 +665,7 @@ def create_app(
                 customers=customers,
                 policies=policies,
                 total_policy_matches=len(base_policies),
+                total_customer_matches=len(customers),
                 status_filter=status_filter,
                 carrier_filter=carrier_filter,
                 type_filter=type_filter,
@@ -682,6 +683,7 @@ def create_app(
                 "partials/database/customers_table.html",
                 customers=customers,
                 query=query,
+                today=datetime.utcnow().date(),
             )
 
     @app.get("/database/policies/list")
@@ -720,6 +722,61 @@ def create_app(
                 workbook,
                 mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 headers={"Content-Disposition": f"attachment; filename={filename}"},
+            )
+
+    @app.get("/database/customers/export.csv")
+    def database_customers_export_csv():
+        query = (request.args.get("q") or "").strip()
+        raw_ids = request.args.get("customer_ids") or ""
+        customer_ids: list[int] = []
+        for part in raw_ids.split(","):
+            try:
+                if part.strip():
+                    customer_ids.append(int(part.strip()))
+            except ValueError:
+                continue
+        with session_scope() as session:
+            if customer_ids:
+                customers = (
+                    session.query(Customer)
+                    .filter(Customer.id.in_(customer_ids))
+                    .order_by(Customer.full_name.asc())
+                    .all()
+                )
+            else:
+                customers = PolicyService(session).search_customers(query or None, orphan_filter="all", limit=200)
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow([
+                "customer_name",
+                "primary_email",
+                "primary_phone",
+                "aliases",
+                "policy_count",
+                "active_policies",
+                "expiring_policies",
+                "last_activity",
+                "created_at",
+            ])
+            today = datetime.utcnow().date()
+            for customer in customers:
+                policies = list(customer.policies or [])
+                writer.writerow([
+                    customer.full_name or "",
+                    customer.primary_email or "",
+                    customer.primary_phone or "",
+                    "; ".join(entity.entity_name for entity in (customer.entities or [])),
+                    len(policies),
+                    sum(1 for policy in policies if _database_policy_status(policy, today) == "active"),
+                    sum(1 for policy in policies if _database_policy_status(policy, today) == "expiring"),
+                    (customer.updated_at or customer.created_at).isoformat() if (customer.updated_at or customer.created_at) else "",
+                    customer.created_at.isoformat() if customer.created_at else "",
+                ])
+            suffix = "selected" if customer_ids else (query or "all")
+            return Response(
+                output.getvalue(),
+                mimetype="text/csv",
+                headers={"Content-Disposition": f"attachment; filename=customer-export-{suffix}.csv"},
             )
 
     @app.get("/database/export.csv")

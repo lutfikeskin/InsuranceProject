@@ -600,6 +600,24 @@ def test_database_page_renders_policy_and_customer_tables():
     assert "DB-1" in body
     assert "Database User" in body
 
+
+def test_database_customer_tab_and_csv_export_work():
+    client, _Session = _database_client()
+
+    response = client.get("/database?tab=customers&q=Customer")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Customer Database" in body
+    assert "Customer User" in body
+
+    response = client.get("/database/customers/export.csv?customer_ids=1")
+    assert response.status_code == 200
+    assert response.mimetype == "text/csv"
+    body = response.get_data(as_text=True)
+    assert "customer_name,primary_email,primary_phone" in body
+    assert "Customer User" in body
+
+
 def test_dashboard_page_renders_metrics_and_recent_policy():
     client = _dashboard_client()
 

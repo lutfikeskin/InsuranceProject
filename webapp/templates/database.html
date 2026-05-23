@@ -4,12 +4,13 @@
 {% block title %}Database{% endblock %}
 {% block content_class %}database-inner{% endblock %}
 {% block content %}
+  {% set is_customers = active_tab == 'customers' %}
   <section class="db-topbar">
     <div class="search-wrap db-global-search">
       {{ i.icon('search', 15) }}
       <form method="get" class="db-global-search-form">
         <input type="hidden" name="tab" value="{{ active_tab }}">
-        <input type="search" name="q" value="{{ query }}" placeholder="Search policies, insureds, VINs…" autocomplete="off">
+        <input type="search" name="q" value="{{ query }}" placeholder="Search {{ 'customers, emails, aliases' if is_customers else 'policies, insureds, VINs' }}…" autocomplete="off">
       </form>
       <span class="kbd">⌘K</span>
     </div>
@@ -22,15 +23,20 @@
   <section class="db-header">
     <div>
       <div class="db-breadcrumb"><a href="/dashboard">Workspace</a><span>/</span><span>Database</span></div>
-      <h1>Policy Database</h1>
+      <h1>{{ 'Customer Database' if is_customers else 'Policy Database' }}</h1>
     </div>
     <div class="db-header-actions">
-      <a class="btn" href="/database/export?q={{ query }}">{{ i.icon('download', 15) }} Export</a>
+      <a class="btn" href="{{ '/database/customers/export.csv' if is_customers else '/database/export' }}?q={{ query }}">{{ i.icon('download', 15) }} Export</a>
       <div class="db-columns-wrap">
         <button type="button" id="db-columns-button" aria-expanded="false">{{ i.icon('sliders', 15) }} Columns</button>
         <div class="db-column-menu" id="db-column-menu" hidden>
-          {% set default_columns = [('policy','Policy ID'), ('insured','Insured'), ('carrier','Carrier'), ('type','Type'), ('vehicles','Vehicles'), ('premium','Premium'), ('expires','Expires'), ('status','Status')] %}
-          {% set optional_columns = [('effective','Effective'), ('account','Account'), ('state','State'), ('naic','NAIC'), ('liability','Liability Limit'), ('cargo','Cargo Limit'), ('gl','GL Limit'), ('created','Created')] %}
+          {% if is_customers %}
+            {% set default_columns = [('customer','Customer'), ('aliases','Aliases'), ('policies','Policies'), ('last','Last activity')] %}
+            {% set optional_columns = [('email','Email'), ('phone','Phone'), ('active','Active policies'), ('expiring','Expiring policies'), ('created','Created')] %}
+          {% else %}
+            {% set default_columns = [('policy','Policy ID'), ('insured','Insured'), ('carrier','Carrier'), ('type','Type'), ('vehicles','Vehicles'), ('premium','Premium'), ('expires','Expires'), ('status','Status')] %}
+            {% set optional_columns = [('effective','Effective'), ('account','Account'), ('state','State'), ('naic','NAIC'), ('liability','Liability Limit'), ('cargo','Cargo Limit'), ('gl','GL Limit'), ('created','Created')] %}
+          {% endif %}
           {% for key, label in default_columns %}
             <label><input type="checkbox" data-db-column="{{ key }}" checked> {{ label }}</label>
           {% endfor %}
@@ -44,77 +50,99 @@
     </div>
   </section>
 
-  <section class="db-shell panel flush">
-    <form method="get" class="db-filterbar">
-      <input type="hidden" name="tab" value="policies">
-      <div class="search-wrap db-filter-search">
-        {{ i.icon('search', 14) }}
-        <input type="search" name="q" value="{{ query }}" placeholder="Search ID, insured, VIN…" autocomplete="off">
-      </div>
+  <nav class="db-view-toggle" aria-label="Database view">
+    <a href="/database?tab=policies&q={{ query }}" class="{% if not is_customers %}active{% endif %}">{{ i.icon('file-text', 14) }} Policies <span>{{ policies|length }}</span></a>
+    <a href="/database?tab=customers&q={{ query }}" class="{% if is_customers %}active{% endif %}">{{ i.icon('users', 14) }} Customers <span>{{ customers|length }}</span></a>
+  </nav>
 
-      <div class="db-filter-group">
-        <span class="db-filter-label">Status</span>
-        {% set statuses = [('all', 'All'), ('active', 'Active'), ('expiring', 'Expiring ≤30 d'), ('lapsed', 'Lapsed')] %}
-        <div class="db-status-tabs">
-          {% for value, label in statuses %}
-            <a class="{% if status_filter == value %}active{% endif %}"
-               href="/database?tab=policies&q={{ query }}&status={{ value }}&carrier={{ carrier_filter }}&policy_type={{ type_filter }}">{{ label }}</a>
-          {% endfor %}
+  {% if is_customers %}
+    <section class="db-shell panel flush" data-db-kind="customers">
+      <form method="get" class="db-filterbar">
+        <input type="hidden" name="tab" value="customers">
+        <div class="search-wrap db-filter-search">
+          {{ i.icon('search', 14) }}
+          <input type="search" name="q" value="{{ query }}" placeholder="Search customer, email, alias…" autocomplete="off">
         </div>
+        <button type="submit" class="db-filter-submit">Apply</button>
+        <span class="db-count">{{ customers|length }} customers</span>
+      </form>
+
+      <div class="db-bulkbar">
+        <strong id="db-selected-count">0 selected</strong>
+        <div class="db-bulk-actions">
+          <button type="button" id="db-export-csv">{{ i.icon('download', 13) }} Export CSV</button>
+          <button type="button" disabled title="Customer merge is available from the customer detail page for now.">{{ i.icon('compare', 13) }} Merge</button>
+          <button type="button" disabled title="Add aliases from the customer detail page for now.">{{ i.icon('plus', 13) }} Add alias</button>
+        </div>
+        <span class="spacer"></span>
+        <button type="button" class="danger" disabled title="Archive needs a backend customer lifecycle action first.">{{ i.icon('trash', 13) }} Archive</button>
+        <button type="button" class="ghost" id="db-clear-selection">{{ i.icon('x', 13) }} Clear</button>
       </div>
 
-      <label class="db-select-label">Carrier
-        <select name="carrier">
-          <option value="">All carriers</option>
-          {% for carrier in carrier_options %}
-            <option value="{{ carrier }}" {% if carrier_filter == carrier %}selected{% endif %}>{{ carrier }}</option>
-          {% endfor %}
-        </select>
-      </label>
-
-      <label class="db-select-label">Type
-        <select name="policy_type">
-          <option value="">All types</option>
-          {% for ptype in type_options %}
-            <option value="{{ ptype }}" {% if type_filter == ptype %}selected{% endif %}>{{ ptype }}</option>
-          {% endfor %}
-        </select>
-      </label>
-
-      <button type="submit" class="db-filter-submit">Apply</button>
-      <span class="db-count">{{ policies|length }} of {{ total_policy_matches or policies|length }} policies</span>
-    </form>
-
-    <div class="db-bulkbar">
-      <strong id="db-selected-count">0 selected</strong>
-      <div class="db-bulk-actions">
-        <button type="button" id="db-issue-coi">{{ i.icon('file-text', 13) }} Issue COI</button>
-        <button type="button" id="db-export-csv">{{ i.icon('download', 13) }} Export CSV</button>
-        <button type="button" disabled title="Tagging is not enabled yet.">{{ i.icon('tag', 13) }} Tag</button>
-        <button type="button" disabled title="Re-extraction from saved rows is not enabled yet.">{{ i.icon('retry', 13) }} Re-extract</button>
+      <div id="customers-list">
+        {% include "partials/database/customers_table.html" %}
       </div>
-      <span class="spacer"></span>
-      <button type="button" class="danger" disabled title="Archive needs a backend policy lifecycle action first.">{{ i.icon('trash', 13) }} Archive</button>
-      <button type="button" class="ghost" id="db-clear-selection">{{ i.icon('x', 13) }} Clear</button>
-    </div>
+    </section>
+  {% else %}
+    <section class="db-shell panel flush" data-db-kind="policies">
+      <form method="get" class="db-filterbar">
+        <input type="hidden" name="tab" value="policies">
+        <div class="search-wrap db-filter-search">
+          {{ i.icon('search', 14) }}
+          <input type="search" name="q" value="{{ query }}" placeholder="Search ID, insured, VIN…" autocomplete="off">
+        </div>
 
-    <div id="policies-list">
-      {% include "partials/database/policies_table.html" %}
-    </div>
-  </section>
+        <div class="db-filter-group">
+          <span class="db-filter-label">Status</span>
+          {% set statuses = [('all', 'All'), ('active', 'Active'), ('expiring', 'Expiring ≤30 d'), ('lapsed', 'Lapsed')] %}
+          <div class="db-status-tabs">
+            {% for value, label in statuses %}
+              <a class="{% if status_filter == value %}active{% endif %}"
+                 href="/database?tab=policies&q={{ query }}&status={{ value }}&carrier={{ carrier_filter }}&policy_type={{ type_filter }}">{{ label }}</a>
+            {% endfor %}
+          </div>
+        </div>
 
-  <section class="db-customers panel flush mt-5" id="customers">
-    <div class="panel-section db-secondary-head">
-      <div>
-        <div class="db-section-kicker">Customer directory</div>
-        <h3>{{ i.icon('users', 16) }} Customers</h3>
+        <label class="db-select-label">Carrier
+          <select name="carrier">
+            <option value="">All carriers</option>
+            {% for carrier in carrier_options %}
+              <option value="{{ carrier }}" {% if carrier_filter == carrier %}selected{% endif %}>{{ carrier }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label class="db-select-label">Type
+          <select name="policy_type">
+            <option value="">All types</option>
+            {% for ptype in type_options %}
+              <option value="{{ ptype }}" {% if type_filter == ptype %}selected{% endif %}>{{ ptype }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <button type="submit" class="db-filter-submit">Apply</button>
+        <span class="db-count">{{ policies|length }} of {{ total_policy_matches or policies|length }} policies</span>
+      </form>
+
+      <div class="db-bulkbar">
+        <strong id="db-selected-count">0 selected</strong>
+        <div class="db-bulk-actions">
+          <button type="button" id="db-issue-coi">{{ i.icon('file-text', 13) }} Issue COI</button>
+          <button type="button" id="db-export-csv">{{ i.icon('download', 13) }} Export CSV</button>
+          <button type="button" disabled title="Tagging is not enabled yet.">{{ i.icon('tag', 13) }} Tag</button>
+          <button type="button" disabled title="Re-extraction from saved rows is not enabled yet.">{{ i.icon('retry', 13) }} Re-extract</button>
+        </div>
+        <span class="spacer"></span>
+        <button type="button" class="danger" disabled title="Archive needs a backend policy lifecycle action first.">{{ i.icon('trash', 13) }} Archive</button>
+        <button type="button" class="ghost" id="db-clear-selection">{{ i.icon('x', 13) }} Clear</button>
       </div>
-      <a class="btn sm ghost" href="/database?tab=customers&q={{ query }}">{{ customers|length if customers else 0 }} shown</a>
-    </div>
-    <div id="customers-list">
-      {% include "partials/database/customers_table.html" %}
-    </div>
-  </section>
+
+      <div id="policies-list">
+        {% include "partials/database/policies_table.html" %}
+      </div>
+    </section>
+  {% endif %}
 
   <script>
     (function(){
@@ -162,8 +190,10 @@
         }
         if (e.target.closest && e.target.closest('#db-export-csv')) {
           var ids = selectedIds();
-          var url = '/database/export.csv';
-          if (ids.length) url += '?policy_ids=' + encodeURIComponent(ids.join(','));
+          var shell = document.querySelector('.db-shell');
+          var kind = shell ? shell.getAttribute('data-db-kind') : 'policies';
+          var url = kind === 'customers' ? '/database/customers/export.csv' : '/database/export.csv';
+          if (ids.length) url += '?' + (kind === 'customers' ? 'customer_ids=' : 'policy_ids=') + encodeURIComponent(ids.join(','));
           else url += '?q=' + encodeURIComponent('{{ query }}');
           window.location.href = url;
         }
