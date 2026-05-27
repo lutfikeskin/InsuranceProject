@@ -8,6 +8,7 @@ import uuid
 import streamlit as st
 
 from core.db_import import DbImportError, merge_database_from_file, validate_sqlite_db
+from core.telemetry import log_event
 from modules.coi.holders import (
     COIHolderError,
     export_coi_holders_bytes,
@@ -17,7 +18,7 @@ from modules.coi.holders import (
 )
 
 
-def render_database_backup_section() -> None:
+def render_database_backup_section(telemetry=None) -> None:
     st.caption(
         "Back up or merge policies from another insurance_data.db file. "
         "Merge skips policies whose policy number already exists."
@@ -83,15 +84,47 @@ def render_database_backup_section() -> None:
             )
             if merge_result.errors:
                 st.warning("\n".join(merge_result.errors[:5]))
+            if telemetry:
+                telemetry.record_event(
+                    "admin_database_merge",
+                    category="admin",
+                    status="success",
+                    count_value=merge_result.imported_policies,
+                    metadata={
+                        "skipped_duplicates": merge_result.skipped_duplicates,
+                        "imported_customers": merge_result.imported_customers,
+                        "imported_relationships": merge_result.imported_relationships,
+                        "error_count": len(merge_result.errors or []),
+                    },
+                )
+            log_event(
+                "admin_database_merge",
+                status="success",
+                metadata={
+                    "imported_policies": merge_result.imported_policies,
+                    "skipped_duplicates": merge_result.skipped_duplicates,
+                    "imported_customers": merge_result.imported_customers,
+                    "imported_relationships": merge_result.imported_relationships,
+                },
+            )
             st.rerun()
         except DbImportError as exc:
+            if telemetry:
+                telemetry.record_event(
+                    "admin_database_merge",
+                    category="admin",
+                    status="failure",
+                    message=str(exc),
+                    metadata={"action": "merge"},
+                )
+            log_event("admin_database_merge", level="error", status="failure", message=str(exc))
             st.error(str(exc))
         finally:
             if merge_path and os.path.exists(merge_path):
                 os.unlink(merge_path)
 
 
-def render_holder_library_section() -> None:
+def render_holder_library_section(telemetry=None) -> None:
     st.caption(
         f"Holder library file: {holder_library_path_display()}. "
         "Saves persist across restarts. Export before moving to another machine."
@@ -109,6 +142,13 @@ def render_holder_library_section() -> None:
     with col2:
         if st.button("Reload holder library", key="settings_holder_reload", width="stretch"):
             st.session_state.coi_companies = load_coi_holders()
+            if telemetry:
+                telemetry.record_event(
+                    "admin_holder_library_reload",
+                    category="admin",
+                    status="success",
+                )
+            log_event("admin_holder_library_reload", status="success")
             st.rerun()
 
     uploaded_json = st.file_uploader(
@@ -129,6 +169,33 @@ def render_holder_library_section() -> None:
             )
             if result.errors:
                 st.warning("\n".join(result.errors[:5]))
+            if telemetry:
+                telemetry.record_event(
+                    "admin_holder_library_merge",
+                    category="admin",
+                    status="success",
+                    count_value=result.imported,
+                    metadata={
+                        "skipped_duplicates": result.skipped_duplicates,
+                        "error_count": len(result.errors or []),
+                    },
+                )
+            log_event(
+                "admin_holder_library_merge",
+                status="success",
+                metadata={
+                    "imported": result.imported,
+                    "skipped_duplicates": result.skipped_duplicates,
+                },
+            )
             st.rerun()
         except COIHolderError as exc:
+            if telemetry:
+                telemetry.record_event(
+                    "admin_holder_library_merge",
+                    category="admin",
+                    status="failure",
+                    message=str(exc),
+                )
+            log_event("admin_holder_library_merge", level="error", status="failure", message=str(exc))
             st.error(str(exc))

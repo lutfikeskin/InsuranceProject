@@ -4,6 +4,7 @@ import hmac
 from core.database import init_db, get_session
 import core.history_model # Ensure model is registered
 from core.services import UsageService
+from core.telemetry import DEFAULT_EVENT_RETENTION_DAYS, TelemetryService, log_event
 from streamlit_option_menu import option_menu
 from core.constants import DEFAULT_DAILY_BUDGET, APP_DISPLAY_TAGLINE
 
@@ -11,6 +12,7 @@ from views.dashboard import page_dashboard
 from views.process_policies import page_process_policies
 from views.database_page import page_database
 from views.create_coi import page_create_coi
+from views.telemetry import page_telemetry
 from views.settings_backup import (
     render_database_backup_section,
     render_holder_library_section,
@@ -76,38 +78,73 @@ if not api_key:
 
 @st.dialog("⚙️ Application Settings")
 def settings_modal():
-    st.write("Configure your application settings below.")
-    current_key = st.session_state.get("GEMINI_API_KEY", "")
-    new_key = st.text_input("Gemini API Key", value=current_key if current_key else "", type="password", help="Enter your Google Gemini API Key for policy extraction.")
-    
-    if st.button("Save & Refresh", width='stretch', type="primary"):
-        if new_key:
-            st.session_state["GEMINI_API_KEY"] = new_key
-            st.success("Settings saved successfully!")
-            st.rerun()
-        else:
-            st.warning("Please enter a valid key.")
-    
-    st.divider()
-    st.markdown("##### 📊 Usage Management")
-    if st.button("Reset Daily Usage Meter", width='stretch', type="secondary"):
-        session = get_session(st.session_state.db_engine)
-        usage_svc = UsageService(session)
-        success, msg = usage_svc.clear_usage()
-        session.close()
-        if success:
-            st.success("Usage meter reset successfully!")
-            st.rerun()
-        else:
-            st.error(f"Error: {msg}")
+    admin_session = get_session(st.session_state.db_engine)
+    telemetry = TelemetryService(admin_session)
+    try:
+        st.write("Configure your application settings below.")
+        current_key = st.session_state.get("GEMINI_API_KEY", "")
+        new_key = st.text_input("Gemini API Key", value=current_key if current_key else "", type="password", help="Enter your Google Gemini API Key for policy extraction.")
 
-    st.divider()
-    st.markdown("##### Database backup and restore")
-    render_database_backup_section()
+        if st.button("Save & Refresh", width='stretch', type="primary"):
+            if new_key:
+                st.session_state["GEMINI_API_KEY"] = new_key
+                st.success("Settings saved successfully!")
+                st.rerun()
+            else:
+                st.warning("Please enter a valid key.")
 
-    st.divider()
-    st.markdown("##### COI holder library")
-    render_holder_library_section()
+        st.divider()
+        st.markdown("##### 📊 Usage Management")
+        if st.button("Reset Daily Usage Meter", width='stretch', type="secondary"):
+            usage_svc = UsageService(admin_session)
+            success, msg = usage_svc.clear_usage()
+            telemetry.record_event(
+                "admin_usage_reset",
+                category="admin",
+                status="success" if success else "failure",
+                metadata={"message": msg},
+            )
+            log_event(
+                "admin_usage_reset",
+                status="success" if success else "failure",
+                message=msg,
+            )
+            if success:
+                st.success("Usage meter reset successfully!")
+                st.rerun()
+            else:
+                st.error(f"Error: {msg}")
+
+        if st.button(
+            f"Clear telemetry events older than {DEFAULT_EVENT_RETENTION_DAYS} days",
+            width='stretch',
+            type="secondary",
+        ):
+            deleted = telemetry.purge_old_events(DEFAULT_EVENT_RETENTION_DAYS)
+            telemetry.record_event(
+                "admin_telemetry_retention_cleanup",
+                category="admin",
+                status="success",
+                count_value=deleted,
+                metadata={"retention_days": DEFAULT_EVENT_RETENTION_DAYS},
+            )
+            log_event(
+                "admin_telemetry_retention_cleanup",
+                status="success",
+                metadata={"deleted": deleted, "retention_days": DEFAULT_EVENT_RETENTION_DAYS},
+            )
+            st.success(f"Deleted {deleted} old telemetry events.")
+            st.rerun()
+
+        st.divider()
+        st.markdown("##### Database backup and restore")
+        render_database_backup_section(telemetry=telemetry)
+
+        st.divider()
+        st.markdown("##### COI holder library")
+        render_holder_library_section(telemetry=telemetry)
+    finally:
+        admin_session.close()
 
 with st.sidebar:
     if os.path.exists("assets/logo.png"):
@@ -119,7 +156,7 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
     
-    MENU_OPTIONS = ["Dashboard", "Process Policies", "Database", "Create COI"]
+    MENU_OPTIONS = ["Dashboard", "Process Policies", "Database", "Create COI", "Telemetry"]
     manual_nav = None
     if st.session_state.get("nav_request"):
         req = st.session_state.pop("nav_request", None)
@@ -129,7 +166,7 @@ with st.sidebar:
     selected = option_menu(
         menu_title=None,
         options=MENU_OPTIONS,
-        icons=["house-fill", "cloud-arrow-up-fill", "database-fill", "file-earmark-pdf-fill"],
+        icons=["house-fill", "cloud-arrow-up-fill", "database-fill", "file-earmark-pdf-fill", "bar-chart-line-fill"],
         menu_icon="cast",
         default_index=0,
         manual_select=manual_nav,
@@ -214,3 +251,5 @@ elif selected == "Database":
     page_database(api_key)
 elif selected == "Create COI":
     page_create_coi()
+elif selected == "Telemetry":
+    page_telemetry()

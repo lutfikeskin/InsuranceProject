@@ -1,8 +1,10 @@
 import re
+import time
 import streamlit as st
 import io
 import zipfile
 from core.services import PolicyService, COIService
+from core.telemetry import TelemetryService, log_event, new_correlation_id
 from core.database import get_session
 from modules.coi import COIGenerator, append_coi_holder, load_coi_holders
 from modules.coi.holders import COIHolderError
@@ -122,6 +124,7 @@ def page_create_coi():
 
     session = get_session(st.session_state.db_engine)
     service = PolicyService(session)
+    telemetry = TelemetryService(session)
     coi_service = COIService()
 
     try:
@@ -486,9 +489,12 @@ def page_create_coi():
                         "zip": h_zip,
                         "description": final_desc,
                     }
+                    run_id = new_correlation_id("coi")
+                    started_at = time.perf_counter()
 
                     try:
                         pdf = gen.generate_coi(p_data, h_data, desc_font_size=h_desc_font_size)
+                        duration_ms = int((time.perf_counter() - started_at) * 1000)
                         if pdf:
                             st.success("Successfully generated COI!")
                             st.download_button(
@@ -497,7 +503,63 @@ def page_create_coi():
                                 file_name=_safe_coi_pdf_filename(i_name, h_name),
                                 mime="application/pdf",
                             )
+                            telemetry.record_event(
+                                "coi_generated_single",
+                                category="coi",
+                                status="success",
+                                correlation_id=run_id,
+                                object_type="policy",
+                                object_id=p.id,
+                                duration_ms=duration_ms,
+                                count_value=1,
+                                metadata={
+                                    "coi_type": coi_type,
+                                    "vehicle_count": len(selected_vehicle_objs),
+                                    "output_bytes": len(pdf),
+                                },
+                            )
+                            log_event(
+                                "coi_generated_single",
+                                correlation_id=run_id,
+                                status="success",
+                                duration_ms=duration_ms,
+                                metadata={
+                                    "policy_id": p.id,
+                                    "coi_type": coi_type,
+                                    "vehicle_count": len(selected_vehicle_objs),
+                                    "output_bytes": len(pdf),
+                                },
+                            )
                     except Exception as e:
+                        duration_ms = int((time.perf_counter() - started_at) * 1000)
+                        telemetry.record_event(
+                            "coi_generated_single",
+                            category="coi",
+                            status="failure",
+                            correlation_id=run_id,
+                            object_type="policy",
+                            object_id=p.id,
+                            duration_ms=duration_ms,
+                            count_value=0,
+                            metadata={
+                                "coi_type": coi_type,
+                                "vehicle_count": len(selected_vehicle_objs),
+                                "error": str(e),
+                            },
+                        )
+                        log_event(
+                            "coi_generated_single",
+                            correlation_id=run_id,
+                            status="failure",
+                            duration_ms=duration_ms,
+                            level="error",
+                            message=str(e),
+                            metadata={
+                                "policy_id": p.id,
+                                "coi_type": coi_type,
+                                "vehicle_count": len(selected_vehicle_objs),
+                            },
+                        )
                         st.error(f"Generation failed: {e}")
         else:
             if st.button("Generate Bulk COIs", type="primary"):
@@ -508,8 +570,12 @@ def page_create_coi():
                 else:
                     gen = COIGenerator()
                     p_data = prepare_p_data()
+                    run_id = new_correlation_id("coi")
+                    started_at = time.perf_counter()
 
                     zip_buffer = io.BytesIO()
+                    generated_count = 0
+                    failed_count = 0
                     try:
                         with zipfile.ZipFile(zip_buffer, "w") as zf:
                             for comp_name in selected_companies:
@@ -530,19 +596,90 @@ def page_create_coi():
                                 }
                                 pdf = gen.generate_coi(p_data, h_data, desc_font_size=h_desc_font_size)
                                 if pdf:
+                                    generated_count += 1
                                     zf.writestr(
                                         _safe_coi_pdf_filename(i_name, comp_data.get("name", "")),
                                         pdf,
                                     )
+                                else:
+                                    failed_count += 1
 
-                        st.success(f"Successfully generated {len(selected_companies)} COIs!")
+                        duration_ms = int((time.perf_counter() - started_at) * 1000)
+                        zip_bytes = zip_buffer.getvalue()
+                        st.success(f"Successfully generated {generated_count} COIs!")
                         st.download_button(
                             "📥 Download All (ZIP)",
-                            data=zip_buffer.getvalue(),
+                            data=zip_bytes,
                             file_name=_safe_bulk_zip_filename(i_name),
                             mime="application/zip",
                         )
+                        telemetry.record_event(
+                            "coi_generated_bulk",
+                            category="coi",
+                            status="success",
+                            correlation_id=run_id,
+                            object_type="policy",
+                            object_id=p.id,
+                            duration_ms=duration_ms,
+                            count_value=generated_count,
+                            metadata={
+                                "coi_type": coi_type,
+                                "requested_count": len(selected_companies),
+                                "generated_count": generated_count,
+                                "failed_count": failed_count,
+                                "output_bytes": len(zip_bytes),
+                                "selected_vehicle_count": len(selected_vehicle_objs),
+                            },
+                        )
+                        log_event(
+                            "coi_generated_bulk",
+                            correlation_id=run_id,
+                            status="success",
+                            duration_ms=duration_ms,
+                            metadata={
+                                "policy_id": p.id,
+                                "coi_type": coi_type,
+                                "requested_count": len(selected_companies),
+                                "generated_count": generated_count,
+                                "failed_count": failed_count,
+                                "output_bytes": len(zip_bytes),
+                                "selected_vehicle_count": len(selected_vehicle_objs),
+                            },
+                        )
                     except Exception as e:
+                        duration_ms = int((time.perf_counter() - started_at) * 1000)
+                        telemetry.record_event(
+                            "coi_generated_bulk",
+                            category="coi",
+                            status="failure",
+                            correlation_id=run_id,
+                            object_type="policy",
+                            object_id=p.id,
+                            duration_ms=duration_ms,
+                            count_value=generated_count,
+                            metadata={
+                                "coi_type": coi_type,
+                                "requested_count": len(selected_companies),
+                                "generated_count": generated_count,
+                                "failed_count": failed_count,
+                                "error": str(e),
+                            },
+                        )
+                        log_event(
+                            "coi_generated_bulk",
+                            correlation_id=run_id,
+                            status="failure",
+                            duration_ms=duration_ms,
+                            level="error",
+                            message=str(e),
+                            metadata={
+                                "policy_id": p.id,
+                                "coi_type": coi_type,
+                                "requested_count": len(selected_companies),
+                                "generated_count": generated_count,
+                                "failed_count": failed_count,
+                            },
+                        )
                         st.error(f"Bulk generation failed: {e}")
     finally:
         session.close()

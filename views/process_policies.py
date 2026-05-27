@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import copy
+import time
 import streamlit as st
 import pandas as pd
 from core.constants import VEHICLE_TYPES, INTEREST_TYPES, VIN_REGEX
 import json
 from core.services import PolicyService
+from core.telemetry import TelemetryService, log_event, new_correlation_id
 from datetime import date
 from core.database import get_session, Policy, Vehicle, Driver, Coverage, AdditionalInterest, Customer
 from core.customer_resolver import CustomerResolver
@@ -192,6 +194,7 @@ def _process_one_pdf(
     api_key: str,
     force_refresh: bool,
     user_policy_type: str | None,
+    correlation_id: str,
 ):
     """Worker for parallel extraction; each call uses its own stack (process_pdf creates its own client)."""
     try:
@@ -201,6 +204,7 @@ def _process_one_pdf(
             status_callback=None,
             force_refresh=force_refresh,
             user_policy_type=user_policy_type,
+            correlation_id=correlation_id,
         )
         return fname, data, usage, error_msg, None
     except Exception as e:
@@ -408,6 +412,18 @@ def page_process_policies(api_key):
                 total_files = len(uploaded_files)
                 files_map = {f.name: f.getvalue() for f in uploaded_files}
                 batch_rows = []
+                batch_started = time.perf_counter()
+                batch_correlation_id = new_correlation_id("batch")
+                log_event(
+                    "extraction_batch_started",
+                    correlation_id=batch_correlation_id,
+                    status="started",
+                    metadata={
+                        "total_files": total_files,
+                        "parallel": bool(parallel_extract),
+                        "force_refresh": force_refresh,
+                    },
+                )
 
                 def _record_batch(fname, ok, detail, source="", retries=0, error_class=""):
                     batch_rows.append(
@@ -448,6 +464,7 @@ def page_process_policies(api_key):
                                 api_key,
                                 force_refresh,
                                 user_policy_type,
+                                new_correlation_id("extract"),
                             ): fn
                             for fn in files_map
                         }
@@ -522,6 +539,7 @@ def page_process_policies(api_key):
                                     status_callback=update_status,
                                     force_refresh=force_refresh,
                                     user_policy_type=user_policy_type,
+                                    correlation_id=new_correlation_id("extract"),
                                 )
 
                                 if usage and usage.get("source") == "cache":
@@ -619,6 +637,46 @@ def page_process_policies(api_key):
                             mime="text/csv",
                             key="batch_report_csv",
                         )
+
+                    duration_ms = int((time.perf_counter() - batch_started) * 1000)
+                    successes = int((rep["status"] == "ok").sum()) if "status" in rep else 0
+                    failures = int((rep["status"] == "error").sum()) if "status" in rep else 0
+                    cache_hits = int((rep["source"] == "cache").sum()) if "source" in rep else 0
+                    retries = int(rep["retries"].sum()) if "retries" in rep else 0
+                    telemetry_session = get_session(st.session_state.db_engine)
+                    try:
+                        TelemetryService(telemetry_session).record_event(
+                            "extraction_batch_summary",
+                            category="batch",
+                            status="success",
+                            correlation_id=batch_correlation_id,
+                            duration_ms=duration_ms,
+                            count_value=len(rep),
+                            metadata={
+                                "total_files": total_files,
+                                "successes": successes,
+                                "failures": failures,
+                                "cache_hits": cache_hits,
+                                "retries": retries,
+                                "parallel": bool(parallel_extract),
+                            },
+                        )
+                    finally:
+                        telemetry_session.close()
+                    log_event(
+                        "extraction_batch_summary",
+                        correlation_id=batch_correlation_id,
+                        status="success",
+                        duration_ms=duration_ms,
+                        metadata={
+                            "total_files": total_files,
+                            "successes": successes,
+                            "failures": failures,
+                            "cache_hits": cache_hits,
+                            "retries": retries,
+                            "parallel": bool(parallel_extract),
+                        },
+                    )
 
         if st.session_state["temp_extracted"]:
             st.divider()

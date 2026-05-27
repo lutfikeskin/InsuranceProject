@@ -9,13 +9,35 @@ class ApiUsage(Base):
     __tablename__ = 'api_usage'
     
     id = Column(Integer, primary_key=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    model_name = Column(String)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    model_name = Column(String, index=True)
     input_tokens = Column(Integer)
     output_tokens = Column(Integer)
     cost = Column(Float) # Estimated USD
-    status = Column(String) # success/failure
-    request_type = Column(String) # e.g. "scout", "extraction", "query"
+    status = Column(String, index=True) # success/failure/budget_blocked
+    request_type = Column(String, index=True) # e.g. "scout", "extraction", "query"
+    correlation_id = Column(String, index=True, nullable=True)
+    error_message = Column(Text, nullable=True)
+    latency_ms = Column(Integer, nullable=True)
+
+
+class AppEvent(Base):
+    __tablename__ = 'app_events'
+
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    event_name = Column(String, nullable=False, index=True)
+    category = Column(String, nullable=True, index=True)
+    status = Column(String, nullable=True, index=True)
+    correlation_id = Column(String, nullable=True, index=True)
+    object_type = Column(String, nullable=True, index=True)
+    object_id = Column(String, nullable=True, index=True)
+    duration_ms = Column(Integer, nullable=True)
+    count_value = Column(Integer, nullable=True)
+    value_float = Column(Float, nullable=True)
+    message = Column(Text, nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+
 
 class Customer(Base):
     __tablename__ = 'customers'
@@ -240,6 +262,14 @@ def init_db(db_name="insurance_data.db"):
         if "underwriter_name" not in policy_cols:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE policies ADD COLUMN underwriter_name VARCHAR"))
+        usage_cols = {c["name"] for c in insp.get_columns("api_usage")}
+        with engine.begin() as conn:
+            if "correlation_id" not in usage_cols:
+                conn.execute(text("ALTER TABLE api_usage ADD COLUMN correlation_id VARCHAR"))
+            if "error_message" not in usage_cols:
+                conn.execute(text("ALTER TABLE api_usage ADD COLUMN error_message TEXT"))
+            if "latency_ms" not in usage_cols:
+                conn.execute(text("ALTER TABLE api_usage ADD COLUMN latency_ms INTEGER"))
         customer_cols = {c["name"] for c in insp.get_columns("customers")}
         with engine.begin() as conn:
             if "primary_email" not in customer_cols:

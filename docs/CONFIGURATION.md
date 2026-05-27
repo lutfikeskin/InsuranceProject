@@ -11,6 +11,15 @@
     - process environment
     - `st.secrets`
 
+### Optional telemetry/privacy controls
+
+- `APP_EVENT_RETENTION_DAYS`
+  - Number of days to keep durable `app_events` when cleanup is run from Settings.
+  - Default: `90`.
+- `TELEMETRY_HASH_SALT`
+  - Optional salt for hashing policy numbers, VINs, names, and addresses in telemetry.
+  - Recommended for shared or deployed environments.
+
 ## In-Code Configuration
 
 - `core/constants.py`
@@ -36,6 +45,7 @@
 - DB: `insurance_data.db`
 - Cache: `.cache/extraction_cache/`
 - Logs: `logs/app.log`
+- Durable events/metrics: `app_events` table in the database
 
 ## Deployment Configuration
 
@@ -46,4 +56,5 @@
 
 - Never commit real API keys.
 - Prefer environment variables or `st.secrets` for secrets.
-- Review logs and cache content before sharing environments.
+- Review logs, metrics, and cache content before sharing environments.
+- Treat logs and `app_events` as operational telemetry; avoid storing raw customer content.

@@ -2,6 +2,7 @@ import io
 import textwrap
 import pypdf
 from datetime import datetime, date
+from core.logger import logger
 
 class COIGenerator:
     def __init__(self, template_path="data/COI Example.pdf"):
@@ -23,7 +24,7 @@ class COIGenerator:
                     mapping_config = json.load(f)
                     field_map = mapping_config.get("mappings", {})
             except FileNotFoundError:
-                print("Warning: mapping.json not found in module, using empty map.")
+                logger.warning("mapping.json not found in module, using empty map.")
                 field_map = {}
 
             reader = pypdf.PdfReader(self.template_path)
@@ -214,14 +215,14 @@ class COIGenerator:
                 doc.close()
                 return flattened_buffer.getvalue()
             except ImportError:
-                print("Warning: PyMuPDF (fitz) not found. PDF will not be flattened/baked.")
+                logger.warning("PyMuPDF (fitz) not found. PDF will not be flattened/baked.")
                 return filled_pdf_bytes
             except Exception as e:
-                print(f"Error flattening PDF: {e}")
+                logger.error(f"Error flattening PDF: {e}")
                 return filled_pdf_bytes
 
         except Exception as e:
-            print(f"Error generating COI: {e}")
+            logger.error(f"Error generating COI: {e}")
             raise e
 
 if __name__ == "__main__":
@@ -244,4 +245,4 @@ if __name__ == "__main__":
     if pdf_bytes:
         with open("test_filled_coi.pdf", "wb") as f:
             f.write(pdf_bytes)
-        print("Generated test_filled_coi.pdf")
+        logger.info("Generated test_filled_coi.pdf")

@@ -35,6 +35,7 @@ from .customer_resolver import CustomerResolver
 from .duplicate_detection import DuplicateDetectionService
 from core.logger import logger
 from utils.vehicle_utils import refine_vehicle_type
+from core.telemetry import TelemetryService, private_hash
 import pandas as pd
 import json
 import re
@@ -314,6 +315,15 @@ class PolicyService:
 
         if existing:
             if duplicate_action == "create_new":
+                self._record_policy_event(
+                    "policy_save_skipped_duplicate",
+                    status="skipped",
+                    policy=existing,
+                    metadata={
+                        "reason": "create_new_conflict",
+                        "duplicate_action": duplicate_action,
+                    },
+                )
                 return (
                     False,
                     "Cannot create a new policy with the same policy number. Edit the policy number or update the existing policy.",
@@ -340,6 +350,16 @@ class PolicyService:
                     resolver.add_entity(customer, insured_name, entity_type, source="manual")
                 self.session.commit()
                 self._record_carrier_profile_if_high_confidence(extraction_result, new_policy)
+                self._record_policy_event(
+                    "policy_saved",
+                    policy=new_policy,
+                    metadata={
+                        "source": "override_customer",
+                        "vehicles": len(extraction_result.get("vehicles") or []),
+                        "drivers": len(extraction_result.get("drivers") or []),
+                        "coverages": len(extraction_result.get("coverages") or []),
+                    },
+                )
                 return True, "Saved successfully"
 
         resolution = resolver.resolve(extraction_result)
@@ -403,6 +423,16 @@ class PolicyService:
 
         self.session.commit()
         self._record_carrier_profile_if_high_confidence(extraction_result, new_policy)
+        self._record_policy_event(
+            "policy_saved",
+            policy=new_policy,
+            metadata={
+                "source": "extraction",
+                "vehicles": len(extraction_result.get("vehicles") or []),
+                "drivers": len(extraction_result.get("drivers") or []),
+                "coverages": len(extraction_result.get("coverages") or []),
+            },
+        )
         return True, "Saved successfully"
 
     def _classify_update(self, existing, new_policy) -> str:
@@ -689,10 +719,44 @@ class PolicyService:
 
         self.session.commit()
         self._record_carrier_profile_if_high_confidence(extraction_result, existing)
+        self._record_policy_event(
+            "policy_updated",
+            policy=existing,
+            metadata={
+                "changes": len(changes),
+                "collection_changes": collection_changes,
+                "source": "ai_re_extraction",
+            },
+        )
         return True, f"Updated existing policy. {len(changes)} changes logged (Version updated)."
 
     def __init__(self, session: Session):
         self.session = session
+        self.telemetry = TelemetryService(session)
+
+    def _record_policy_event(
+        self,
+        event_name: str,
+        *,
+        status: str = "success",
+        policy: Policy | None = None,
+        correlation_id: str | None = None,
+        metadata: dict | None = None,
+        duration_ms: int | None = None,
+        count_value: int | None = None,
+    ):
+        object_id = getattr(policy, "id", None) if policy is not None else None
+        self.telemetry.record_event(
+            event_name,
+            category="policy",
+            status=status,
+            correlation_id=correlation_id,
+            object_type="policy" if policy is not None else None,
+            object_id=object_id,
+            duration_ms=duration_ms,
+            count_value=count_value,
+            metadata=metadata or {},
+        )
 
     def get_dashboard_metrics(self):
         total_policies = self.session.query(Policy).count()
@@ -981,6 +1045,14 @@ class PolicyService:
         )
         self.session.add(endorsement_row)
         self.session.commit()
+        self._record_policy_event(
+            "endorsement_saved",
+            metadata={
+                "has_parent": bool(parent),
+                "parent_policy_id": parent.id if parent else None,
+                "parent_policy_hash": private_hash(parent_policy_number, length=8),
+            },
+        )
         if parent:
             return True, f"Saved endorsement linked to {parent.policy_number}."
         return True, "Saved endorsement without parent match (manual reconciliation needed)."
@@ -1118,6 +1190,15 @@ class PolicyService:
             else:
                 skipped_count += 1
 
+        self._record_policy_event(
+            "policy_coi_summary_saved",
+            metadata={
+                "saved_count": saved_count,
+                "updated_count": updated_count,
+                "skipped_count": skipped_count,
+            },
+            count_value=saved_count + updated_count,
+        )
         if saved_count == 0 and updated_count == 0:
             return False, f"COI summary save skipped. {skipped_count} entries skipped."
         return True, (
@@ -1127,10 +1208,21 @@ class PolicyService:
     def save_policy_object(self, policy: Policy):
         existing = self.get_policy_by_number(policy.policy_number)
         if existing:
+            self._record_policy_event(
+                "policy_save_skipped_duplicate",
+                status="skipped",
+                policy=existing,
+                metadata={"source": "manual"},
+            )
             return False, "Skipped duplicate policy number."
         
         self.session.add(policy)
         self.session.commit()
+        self._record_policy_event(
+            "policy_saved",
+            policy=policy,
+            metadata={"source": "manual"},
+        )
         return True, "Saved policy manually."
 
     def confirm_customer_match(self, policy_id, customer_id):
@@ -1154,6 +1246,11 @@ class PolicyService:
             else "personal",
         )
         self.session.commit()
+        self._record_policy_event(
+            "policy_customer_match_confirmed",
+            policy=policy,
+            metadata={"customer_id": customer_id},
+        )
 
     def save_with_relationship(self, extraction_result, related_policy_id, relationship_type):
         """Save new policy and record explicit relationship to existing one."""
@@ -1175,6 +1272,14 @@ class PolicyService:
             old_policy.replaced_by_policy_id = new_policy.id
 
         self.session.commit()
+        self._record_policy_event(
+            "policy_relationship_saved",
+            policy=new_policy,
+            metadata={
+                "related_policy_id": related_policy_id,
+                "relationship_type": relationship_type,
+            },
+        )
         return saved_result
 
     def update_policy(self, policy: Policy, updated_data: dict):
@@ -1223,8 +1328,21 @@ class PolicyService:
                     ))
 
             self.session.commit()
+            self._record_policy_event(
+                "policy_manual_updated",
+                policy=policy,
+                metadata={
+                    "changes": len(changes),
+                    "collection_changes": collection_changes,
+                },
+            )
             return True, f"Updated ({len(changes)} changes logged)."
         else:
+            self._record_policy_event(
+                "policy_manual_update_noop",
+                status="skipped",
+                policy=policy,
+            )
             return True, "No changes detected."
 
     def create_policy_from_dict(self, data: dict) -> Policy:
@@ -1599,6 +1717,11 @@ class UsageService:
         output_tokens: int,
         request_type: str = "extraction",
         cached_input_tokens: int = 0,
+        *,
+        status: str = "success",
+        correlation_id: str | None = None,
+        error_message: str | None = None,
+        latency_ms: int | None = None,
     ):
         """Logs a single API request's token usage and estimated cost.
 
@@ -1608,6 +1731,10 @@ class UsageService:
             output_tokens: Generated tokens.
             request_type: Tag for the request (e.g. 'extraction', 'classification').
             cached_input_tokens: Number of input tokens from cached context.
+            status: success, failure, budget_blocked, or retry_exhausted.
+            correlation_id: Optional request/event correlation id.
+            error_message: Optional failure reason.
+            latency_ms: Optional elapsed duration for the call.
                 Cost = (input_tokens - cached_input_tokens) * input_rate
                       + cached_input_tokens * cached_input_rate
                       + output_tokens * output_rate
@@ -1618,7 +1745,7 @@ class UsageService:
         fresh_input = max(0, input_tokens - cached_input_tokens)
         cached_input = min(input_tokens, cached_input_tokens)
 
-        cost = (
+        cost = 0.0 if status != "success" else (
             fresh_input * pricing["input"]
             + cached_input * pricing.get("cached_input", pricing["input"])
             + output_tokens * pricing["output"]
@@ -1629,8 +1756,11 @@ class UsageService:
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cost=cost,
-            status="success",
+            status=status,
             request_type=request_type,
+            correlation_id=correlation_id,
+            error_message=error_message,
+            latency_ms=latency_ms,
             timestamp=datetime.utcnow(),
         )
         self.session.add(usage)

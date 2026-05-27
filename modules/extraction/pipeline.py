@@ -1,10 +1,12 @@
 import re
+import time
 from google import genai
 from google.genai import types
 from typing import Optional
 
 from core.logger import logger
-from core.database import get_session, create_engine
+from core.telemetry import log_event, new_correlation_id, short_hash
+from core.database import get_session, init_db
 from core.document_taxonomy import DOCUMENT_TYPES
 from core.services import UsageService
 from core.variant_tracker import VariantTracker
@@ -51,7 +53,7 @@ from .prompts import (
 class GeminiExtractionPipeline:
     def __init__(self, api_key: str):
         self.client = genai.Client(api_key=api_key)
-        self.engine = create_engine("sqlite:///insurance_data.db")
+        self.engine = init_db("insurance_data.db")
         self.session = get_session(self.engine)
         self.usage_service = UsageService(self.session)
         self.kb = CarrierKnowledgeBase()
@@ -63,6 +65,7 @@ class GeminiExtractionPipeline:
         status_callback=None,
         force_refresh: bool = False,
         user_policy_type: Optional[str] = None,
+        correlation_id: Optional[str] = None,
     ) -> tuple[Optional[dict], dict, Optional[str]]:
         """
         Main Entry Point.
@@ -78,18 +81,49 @@ class GeminiExtractionPipeline:
             file_bytes=file_bytes,
             file_hash=processor.get_hash(),
             user_selected_policy_type=user_policy_type,
+            correlation_id=correlation_id or new_correlation_id("extract"),
         )
+        ctx.usage_metadata["correlation_id"] = ctx.correlation_id
         if user_policy_type:
             ctx.usage_metadata["extraction_mode"] = "manual"
         else:
             ctx.usage_metadata["extraction_mode"] = "auto"
+
+        page_count = processor.get_page_count()
+        log_event(
+            "extraction_started",
+            correlation_id=ctx.correlation_id,
+            status="started",
+            metadata={
+                "file_hash": short_hash(ctx.file_hash, length=12),
+                "page_count": page_count,
+                "mode": ctx.usage_metadata["extraction_mode"],
+                "user_policy_type": user_policy_type,
+                "force_refresh": force_refresh,
+            },
+        )
+        started_at = time.perf_counter()
 
         cache_system = ExtractionCache()
         cached_result = cache_system.get(ctx.file_hash, cache_scope)
         if cached_result and not force_refresh:
             if isinstance(cached_result, dict):
                 cached_result.setdefault("variant_status", "known")
-            return cached_result, {"source": "cache", "cost": 0}, None
+            ctx.usage_metadata["source"] = "cache"
+            ctx.usage_metadata["duration_ms"] = int((time.perf_counter() - started_at) * 1000)
+            log_event(
+                "extraction_completed",
+                correlation_id=ctx.correlation_id,
+                status="cache_hit",
+                duration_ms=ctx.usage_metadata["duration_ms"],
+                metadata={
+                    "file_hash": short_hash(ctx.file_hash, length=12),
+                    "page_count": page_count,
+                    "source": "cache",
+                    "variant_status": cached_result.get("variant_status", "known") if isinstance(cached_result, dict) else "known",
+                },
+            )
+            return cached_result, {"source": "cache", "cost": 0, "correlation_id": ctx.correlation_id}, None
 
         uploaded_file = None
         active_cache = None
@@ -166,7 +200,7 @@ class GeminiExtractionPipeline:
                 if status_callback:
                     status_callback(" Classifying Policy Type...")
                 ctx.classification = self._classify_policy_input(
-                    active_cache, uploaded_file
+                    active_cache, uploaded_file, correlation_id=ctx.correlation_id
                 )
                 logger.info(
                     f"Routing classification: {ctx.policy_type} ({ctx.confidence})"
@@ -187,6 +221,8 @@ class GeminiExtractionPipeline:
             extraction_goal = doc_meta.get("extraction_goal")
             if doc_meta.get("extractable") is False:
                 ctx.variant_status = self._track_variant(processor, ctx)
+                duration_ms = int((time.perf_counter() - started_at) * 1000)
+                ctx.usage_metadata["duration_ms"] = duration_ms
                 non_extractable_result = {
                     "document_type": doc_type,
                     "extractable": False,
@@ -197,6 +233,18 @@ class GeminiExtractionPipeline:
                     "classification": ctx.classification,
                     "variant_status": ctx.variant_status,
                 }
+                log_event(
+                    "extraction_completed",
+                    correlation_id=ctx.correlation_id,
+                    status="non_extractable",
+                    duration_ms=duration_ms,
+                    metadata={
+                        "file_hash": short_hash(ctx.file_hash, length=12),
+                        "document_type": doc_type,
+                        "policy_type": ctx.policy_type,
+                        "variant_status": ctx.variant_status,
+                    },
+                )
                 return non_extractable_result, ctx.usage_metadata, None
 
             if status_callback:
@@ -233,6 +281,7 @@ class GeminiExtractionPipeline:
                     uploaded_file=uploaded_file,
                     user_policy_type=user_policy_type,
                     carrier_hint_block=carrier_hint_block,
+                    correlation_id=ctx.correlation_id,
                 )
             elif extraction_goal == "endorsement_summary":
                 logger.info("Document taxonomy route: endorsement_summary")
@@ -241,6 +290,7 @@ class GeminiExtractionPipeline:
                     uploaded_file=uploaded_file,
                     user_policy_type=user_policy_type,
                     carrier_hint_block=carrier_hint_block,
+                    correlation_id=ctx.correlation_id,
                 )
             else:
                 response = self._run_full_extraction(
@@ -251,6 +301,7 @@ class GeminiExtractionPipeline:
                     carrier_hint_block=carrier_hint_block,
                     registry_json=registry_json,
                     unreliable_fields=unreliable_fields,
+                    correlation_id=ctx.correlation_id,
                 )
             ctx.usage_metadata["llm_retries"] = ctx.usage_metadata.get(
                 "llm_retries", 0
@@ -271,6 +322,20 @@ class GeminiExtractionPipeline:
 
             raw_data = parse_json_response(response.text, ctx)
             if not raw_data:
+                duration_ms = int((time.perf_counter() - started_at) * 1000)
+                ctx.usage_metadata["duration_ms"] = duration_ms
+                log_event(
+                    "extraction_failed",
+                    correlation_id=ctx.correlation_id,
+                    status="parse_error",
+                    duration_ms=duration_ms,
+                    level="error",
+                    metadata={
+                        "file_hash": short_hash(ctx.file_hash, length=12),
+                        "document_type": doc_type,
+                        "policy_type": ctx.policy_type,
+                    },
+                )
                 return None, ctx.usage_metadata, "Extraction Parse Error"
             if extraction_goal == "coi_summary":
                 raw_data = normalize_coi_result(raw_data, ctx.classification)
@@ -324,10 +389,39 @@ class GeminiExtractionPipeline:
             logger.info(f"Policy Classified: {ctx.policy_type} ({ctx.confidence})")
 
             if extraction_goal != "endorsement_summary" and ctx.policy_type == "unknown":
+                duration_ms = int((time.perf_counter() - started_at) * 1000)
+                ctx.usage_metadata["duration_ms"] = duration_ms
+                log_event(
+                    "extraction_failed",
+                    correlation_id=ctx.correlation_id,
+                    status="unknown_policy_type",
+                    duration_ms=duration_ms,
+                    level="warning",
+                    metadata={
+                        "file_hash": short_hash(ctx.file_hash, length=12),
+                        "document_type": doc_type,
+                        "confidence": ctx.confidence,
+                    },
+                )
                 return None, None, "Unknown Policy Type"
             ctx.variant_status = self._track_variant(processor, ctx)
 
         except Exception as e:
+            duration_ms = int((time.perf_counter() - started_at) * 1000)
+            ctx.usage_metadata["duration_ms"] = duration_ms
+            log_event(
+                "extraction_failed",
+                correlation_id=ctx.correlation_id,
+                status="exception",
+                duration_ms=duration_ms,
+                level="error",
+                message=str(e),
+                metadata={
+                    "file_hash": short_hash(ctx.file_hash, length=12),
+                    "document_type": ctx.classification.get("document_type", "unknown"),
+                    "policy_type": ctx.policy_type,
+                },
+            )
             return None, None, f"Extraction Error: {str(e)}"
 
         finally:
@@ -356,7 +450,23 @@ class GeminiExtractionPipeline:
         except Exception as e:
             logger.error(f"Failed to save cache: {e}")
 
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
         ctx.usage_metadata["source"] = "api"
+        ctx.usage_metadata["duration_ms"] = duration_ms
+        log_event(
+            "extraction_completed",
+            correlation_id=ctx.correlation_id,
+            status="success",
+            duration_ms=duration_ms,
+            metadata={
+                "file_hash": short_hash(ctx.file_hash, length=12),
+                "document_type": ctx.classification.get("document_type", "unknown"),
+                "policy_type": ctx.policy_type,
+                "confidence": ctx.confidence,
+                "variant_status": ctx.variant_status,
+                "source": "api",
+            },
+        )
         return final_result, ctx.usage_metadata, None
 
     def _track_variant(self, processor: PdfProcessor, ctx: ExtractionContext) -> str:
@@ -504,7 +614,7 @@ class GeminiExtractionPipeline:
             return "renewal_declarations"
         return None
 
-    def _classify_policy(self, uploaded_file) -> dict:
+    def _classify_policy(self, uploaded_file, correlation_id: Optional[str] = None) -> dict:
         response = self._transport.call_gemini(
             model=ROUTING_MODEL,
             contents=[uploaded_file, CLASSIFY_POLICY_PROMPT],
@@ -514,10 +624,11 @@ class GeminiExtractionPipeline:
                 thinking_config=types.ThinkingConfig(thinking_budget=0),
             ),
             request_type="classification",
+            correlation_id=correlation_id,
         )
         return parse_json_response(response.text)
 
-    def _classify_policy_input(self, active_cache, uploaded_file) -> dict:
+    def _classify_policy_input(self, active_cache, uploaded_file, correlation_id: Optional[str] = None) -> dict:
         """Runs a lightweight classification pass using cache when available."""
         config = types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -535,6 +646,7 @@ class GeminiExtractionPipeline:
             contents=contents,
             config=config,
             request_type="classification",
+            correlation_id=correlation_id,
         )
         return parse_json_response(response.text)
 
@@ -567,6 +679,7 @@ class GeminiExtractionPipeline:
         carrier_hint_block: str,
         registry_json: str,
         unreliable_fields: Optional[list[str]] = None,
+        correlation_id: Optional[str] = None,
     ):
         prompt = get_extract_all_prompt(
             registry_json,
@@ -590,6 +703,7 @@ class GeminiExtractionPipeline:
             contents=contents,
             config=config,
             request_type="universal_one_shot",
+            correlation_id=correlation_id,
         )
 
     def _run_coi_extraction(
@@ -598,6 +712,7 @@ class GeminiExtractionPipeline:
         uploaded_file,
         user_policy_type: Optional[str],
         carrier_hint_block: str,
+        correlation_id: Optional[str] = None,
     ):
         prompt = get_extract_coi_prompt(
             user_policy_type=user_policy_type,
@@ -618,6 +733,7 @@ class GeminiExtractionPipeline:
             contents=contents,
             config=config,
             request_type="coi_summary",
+            correlation_id=correlation_id,
         )
 
     def _run_endorsement_extraction(
@@ -626,6 +742,7 @@ class GeminiExtractionPipeline:
         uploaded_file,
         user_policy_type: Optional[str],
         carrier_hint_block: str,
+        correlation_id: Optional[str] = None,
     ):
         prompt = get_extract_endorsement_prompt(
             user_policy_type=user_policy_type,
@@ -646,6 +763,7 @@ class GeminiExtractionPipeline:
             contents=contents,
             config=config,
             request_type="endorsement_summary",
+            correlation_id=correlation_id,
         )
 
     def _normalize_coi_result(self, raw_data: dict, fallback_classification: dict) -> dict:
@@ -663,6 +781,7 @@ def process_pdf(
     status_callback=None,
     force_refresh: bool = False,
     user_policy_type: Optional[str] = None,
+    correlation_id: Optional[str] = None,
 ):
     """
     Wrapper function that instantiates the Pipeline Class.
@@ -674,4 +793,5 @@ def process_pdf(
         status_callback,
         force_refresh=force_refresh,
         user_policy_type=user_policy_type,
+        correlation_id=correlation_id,
     )

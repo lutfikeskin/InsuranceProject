@@ -15,8 +15,27 @@
 ## Observability
 
 - Sidebar usage monitor reads from `api_usage` table through `UsageService`.
+- Durable business/ops events are stored in `app_events`.
 - Usage reset is available in Streamlit settings dialog.
 - Extraction cache hit/miss behavior is logged.
+- The **Telemetry** page in the sidebar shows extraction counts, failure rate, cache hits, COIs generated, LLM spend/tokens/latency, and retry activity.
+
+### Metric / event definitions
+
+- `extraction_started`, `extraction_completed`, `extraction_failed`
+- `llm_usage`, `llm_failed`, `llm_budget_blocked`, `llm_retry`
+- `policy_saved`, `policy_updated`, `policy_save_skipped_duplicate`, `policy_relationship_saved`
+- `endorsement_saved`, `policy_coi_summary_saved`
+- `coi_generated_single`, `coi_generated_bulk`
+- `admin_usage_reset`, `admin_database_merge`, `admin_holder_library_merge`, `admin_holder_library_reload`, `admin_telemetry_retention_cleanup`
+
+Privacy rules:
+
+- Do not log raw PDF text, full prompts, or full model responses.
+- Mask or hash policy numbers, VINs, holder names, addresses, emails, and phone numbers.
+- Use `TELEMETRY_HASH_SALT` in deployed environments to make identifier hashes environment-specific.
+- Use Settings to clear telemetry events older than `APP_EVENT_RETENTION_DAYS` (default: 90).
+- Treat logs as operational metadata, not as an export channel for customer data.
 
 ## Common Issues
 

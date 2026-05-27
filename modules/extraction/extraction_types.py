@@ -17,6 +17,7 @@ class ExtractionContext:
     file_bytes: bytes
     file_hash: str
     user_selected_policy_type: Optional[str] = None
+    correlation_id: Optional[str] = None
     classification_warnings: list = field(default_factory=list)
 
     classification: dict = field(default_factory=dict)
