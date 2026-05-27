@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from html import escape
 from typing import Any
 
 import pandas as pd
@@ -20,14 +19,6 @@ RANGE_OPTIONS = {
     "Last 90 days": 90,
     "All time": None,
 }
-
-STATUS_COLORS = {
-    "healthy": "#16a34a",
-    "watch": "#d97706",
-    "critical": "#dc2626",
-    "neutral": "#2563eb",
-}
-
 
 @dataclass
 class TelemetryWindow:
@@ -266,94 +257,6 @@ def _health_status(failure_rate: float, llm_issues: int, retries: int) -> tuple[
     return "Healthy", "healthy", "Telemetry within normal operating bounds"
 
 
-def _inject_css():
-    st.markdown(
-        """
-        <style>
-        .telemetry-hero {
-            background: linear-gradient(135deg, #0b1220 0%, #14315f 58%, #0f766e 100%);
-            border: 1px solid rgba(255,255,255,0.14);
-            border-radius: 22px;
-            padding: 26px 30px;
-            color: white;
-            box-shadow: 0 18px 45px rgba(11,18,32,0.22);
-            margin-bottom: 22px;
-            position: relative;
-            overflow: hidden;
-        }
-        .telemetry-hero:after {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background-image: linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px);
-            background-size: 34px 34px;
-            opacity: .16;
-            pointer-events: none;
-        }
-        .telemetry-title { font-size: 2.15rem; font-weight: 800; letter-spacing: -0.04em; margin: 0; }
-        .telemetry-subtitle { margin: 8px 0 0 0; opacity: .78; font-size: .95rem; max-width: 780px; }
-        .status-chip {
-            display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px;
-            border-radius: 999px; font-weight: 800; font-size: .78rem; text-transform: uppercase;
-            letter-spacing: .08em; background: rgba(255,255,255,.14); color: white;
-            border: 1px solid rgba(255,255,255,.2);
-        }
-        .status-dot { width: 9px; height: 9px; border-radius: 99px; display: inline-block; }
-        .metric-card {
-            background: #ffffff;
-            border: 1px solid #e5e7eb;
-            border-left: 5px solid var(--accent);
-            border-radius: 18px;
-            padding: 18px 18px 15px 18px;
-            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
-            min-height: 128px;
-        }
-        .metric-label { color: #64748b; font-size: .74rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
-        .metric-value { color: #0f172a; font-size: 2rem; line-height: 1.05; font-weight: 850; letter-spacing: -0.04em; margin-top: 8px; }
-        .metric-delta { margin-top: 10px; font-size: .78rem; font-weight: 750; color: var(--delta); }
-        .metric-note { margin-top: 4px; font-size: .75rem; color: #94a3b8; }
-        .section-shell {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 18px;
-            padding: 18px;
-            margin: 10px 0 16px 0;
-        }
-        .incident-row {
-            display: grid; grid-template-columns: 150px 120px 1fr 180px; gap: 10px;
-            padding: 11px 12px; border-bottom: 1px solid #e5e7eb; align-items: center;
-            font-size: .84rem;
-        }
-        .incident-row:last-child { border-bottom: 0; }
-        .incident-event { font-weight: 800; color: #0f172a; }
-        .muted { color: #64748b; }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def _status_chip(label: str, tone: str) -> str:
-    color = STATUS_COLORS.get(tone, STATUS_COLORS["neutral"])
-    return f'<span class="status-chip"><span class="status-dot" style="background:{color}"></span>{escape(label)}</span>'
-
-
-def _metric_card(label: str, value: str, delta: str, tone: str = "neutral", note: str = ""):
-    accent = STATUS_COLORS.get(tone, STATUS_COLORS["neutral"])
-    delta_color = STATUS_COLORS.get(tone, STATUS_COLORS["neutral"])
-    st.markdown(
-        f"""
-        <div class="metric-card" style="--accent:{accent}; --delta:{delta_color};">
-          <div class="metric-label">{escape(label)}</div>
-          <div class="metric-value">{escape(value)}</div>
-          <div class="metric-delta">{escape(delta)}</div>
-          <div class="metric-note">{escape(note)}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def _event_dataframe(session, window: TelemetryWindow) -> pd.DataFrame:
     rows = _apply_window(session.query(AppEvent), AppEvent, window).order_by(AppEvent.timestamp.desc()).limit(100).all()
     return pd.DataFrame(
@@ -440,13 +343,19 @@ def _incident_dataframe(session, window: TelemetryWindow) -> pd.DataFrame:
 
 
 def page_telemetry():
-    _inject_css()
-    range_label = st.selectbox(
-        "Time range",
-        options=list(RANGE_OPTIONS.keys()),
-        index=2,
-        help="Filters durable telemetry in app_events and api_usage.",
-    )
+    st.title("📡 Telemetry")
+    st.markdown("Operational view for document extraction, COI production, cache efficiency, and Gemini usage.")
+
+    range_col, refresh_col = st.columns([2, 3])
+    with range_col:
+        range_label = st.selectbox(
+            "Time range",
+            options=list(RANGE_OPTIONS.keys()),
+            index=2,
+            help="Filters durable telemetry in app_events and api_usage.",
+        )
+    with refresh_col:
+        st.caption(f"Last refresh: {datetime.now().strftime('%I:%M %p')}")
     window = _build_window(range_label)
 
     session = get_session(st.session_state.db_engine)
@@ -464,57 +373,56 @@ def page_telemetry():
             extraction["failure_rate"], usage.issues, retries
         )
 
-        st.markdown(
-            f"""
-            <div class="telemetry-hero">
-              <div style="display:flex; justify-content:space-between; gap:20px; align-items:flex-start; position:relative; z-index:1;">
-                <div>
-                  <h1 class="telemetry-title">Telemetry Command Center</h1>
-                  <p class="telemetry-subtitle">Operational view for document extraction, COI production, cache efficiency, and Gemini usage. Range: {escape(range_label)}.</p>
-                </div>
-                <div style="text-align:right; min-width:220px;">
-                  {_status_chip(health_label, health_tone)}
-                  <div style="font-size:.78rem; opacity:.75; margin-top:10px;">{escape(health_note)}</div>
-                  <div style="font-size:.72rem; opacity:.62; margin-top:6px;">Last refresh: {datetime.now().strftime('%I:%M %p')}</div>
-                </div>
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        if health_tone == "critical":
+            st.error(f"Status: {health_label} — {health_note}")
+        elif health_tone == "watch":
+            st.warning(f"Status: {health_label} — {health_note}")
+        else:
+            st.success(f"Status: {health_label} — {health_note}")
 
-        d_extractions, tone_extractions = _delta(extraction["total"], extraction_prev["total"])
-        d_failure, tone_failure = _delta(
+        d_extractions, _ = _delta(extraction["total"], extraction_prev["total"])
+        d_failure, _ = _delta(
             extraction["failure_rate"], extraction_prev["failure_rate"], inverse=True
         )
-        d_coi, tone_coi = _delta(coi["total"], coi_prev["total"])
-        d_spend, tone_spend = _delta(usage.spend, usage_prev.spend)
-        d_cache, tone_cache = _delta(extraction["cache_hits"], extraction_prev["cache_hits"])
-        d_retries, tone_retries = _delta(retries, retries_prev, inverse=True)
-        d_latency, tone_latency = _delta(
+        d_coi, _ = _delta(coi["total"], coi_prev["total"])
+        d_spend, _ = _delta(usage.spend, usage_prev.spend)
+        d_cache, _ = _delta(extraction["cache_hits"], extraction_prev["cache_hits"])
+        d_retries, _ = _delta(retries, retries_prev, inverse=True)
+        d_latency, _ = _delta(
             usage.avg_latency_ms, usage_prev.avg_latency_ms, inverse=True
         )
 
         c1, c2, c3, c4 = st.columns(4)
         with c1:
-            _metric_card("Extractions", f"{extraction['total']:,}", d_extractions, tone_extractions, "Started or completed jobs")
+            st.metric("Extractions", f"{extraction['total']:,}", delta=d_extractions, help="Started or completed jobs")
         with c2:
-            _metric_card("Failure Rate", f"{extraction['failure_rate']:.1f}%", d_failure, tone_failure, f"{extraction['failed']} failures")
+            st.metric(
+                "Failure Rate",
+                f"{extraction['failure_rate']:.1f}%",
+                delta=d_failure,
+                delta_color="inverse",
+                help=f"{extraction['failed']} failures",
+            )
         with c3:
-            _metric_card("COIs Generated", f"{coi['total']:,}", d_coi, tone_coi, f"{coi['single']} single · {coi['bulk']} bulk")
+            st.metric("COIs Generated", f"{coi['total']:,}", delta=d_coi, help=f"{coi['single']} single · {coi['bulk']} bulk")
         with c4:
-            _metric_card("LLM Spend", f"${usage.spend:.4f}", d_spend, tone_spend, f"{usage.calls} calls")
+            st.metric("LLM Spend", f"${usage.spend:.4f}", delta=d_spend, help=f"{usage.calls} calls")
 
         c5, c6, c7, c8 = st.columns(4)
         with c5:
-            _metric_card("Cache Hits", f"{extraction['cache_hits']:,}", d_cache, tone_cache, "Avoided API extraction calls")
+            st.metric("Cache Hits", f"{extraction['cache_hits']:,}", delta=d_cache, help="Avoided API extraction calls")
         with c6:
-            issue_tone = "critical" if usage.issues else "healthy"
-            _metric_card("LLM Calls", f"{usage.calls:,}", f"{usage.success} ok / {usage.issues} issue", issue_tone, "api_usage ledger")
+            st.metric("LLM Calls", f"{usage.calls:,}", delta=f"{usage.success} ok / {usage.issues} issue", help="api_usage ledger")
         with c7:
-            _metric_card("Retries", f"{retries:,}", d_retries, tone_retries, "Retry pressure")
+            st.metric("Retries", f"{retries:,}", delta=d_retries, delta_color="inverse", help="Retry pressure")
         with c8:
-            _metric_card("Avg LLM Latency", f"{usage.avg_latency_ms:,} ms", d_latency, tone_latency, "Mean generate_content latency")
+            st.metric(
+                "Avg LLM Latency",
+                f"{usage.avg_latency_ms:,} ms",
+                delta=d_latency,
+                delta_color="inverse",
+                help="Mean generate_content latency",
+            )
 
         st.divider()
         left, right = st.columns(2)
@@ -528,7 +436,7 @@ def page_telemetry():
                     {"Outcome": "Failed", "Count": extraction["failed"]},
                 ]
             ).set_index("Outcome")
-            st.bar_chart(extraction_df, color="#0f766e")
+            st.bar_chart(extraction_df, color="#005AA9")
             st.caption(f"Average successful extraction duration: {extraction['avg_duration_ms']:,} ms")
 
         with right:
@@ -540,7 +448,7 @@ def page_telemetry():
                     {"Type": "Failures", "Count": coi["failures"]},
                 ]
             ).set_index("Type")
-            st.bar_chart(coi_df, color="#2563eb")
+            st.bar_chart(coi_df, color="#005AA9")
             st.caption("Bulk COI count is summed from generated files.")
 
         st.divider()
