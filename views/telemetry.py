@@ -215,13 +215,49 @@ def _extraction_stats(session, window: TelemetryWindow, *, previous: bool = Fals
     }
 
 
+def _coi_success_count(session, event_name: str, window: TelemetryWindow, *, previous: bool = False) -> int:
+    """Return generated COI count, not just the number of telemetry events.
+
+    Single COI events count as one generated COI by default. Bulk COI events should
+    count every PDF inside the ZIP. Newer events store this in count_value, but this
+    also reads generated_count from metadata so older/buggy records do not show a
+    bulk run of 20 COIs as only 1 COI.
+    """
+    query = session.query(AppEvent).filter(
+        AppEvent.event_name == event_name,
+        AppEvent.status == "success",
+    )
+    query = _apply_previous_window(query, AppEvent, window) if previous else _apply_window(query, AppEvent, window)
+
+    total = 0
+    for event in query.all():
+        metadata = _metadata_dict(event.metadata_json)
+        count_candidates = [event.count_value]
+        if event_name == "coi_generated_bulk":
+            count_candidates.extend(
+                [
+                    metadata.get("generated_count"),
+                    metadata.get("requested_count"),
+                ]
+            )
+        else:
+            count_candidates.append(1)
+
+        counts: list[int] = []
+        for value in count_candidates:
+            try:
+                parsed = int(value)
+            except (TypeError, ValueError):
+                continue
+            if parsed > 0:
+                counts.append(parsed)
+        total += max(counts) if counts else 0
+    return total
+
+
 def _coi_stats(session, window: TelemetryWindow, *, previous: bool = False) -> dict[str, int]:
-    single = _event_sum_count_value(
-        session, ["coi_generated_single"], window=window, status="success", previous=previous
-    )
-    bulk = _event_sum_count_value(
-        session, ["coi_generated_bulk"], window=window, status="success", previous=previous
-    )
+    single = _coi_success_count(session, "coi_generated_single", window, previous=previous)
+    bulk = _coi_success_count(session, "coi_generated_bulk", window, previous=previous)
     failures = _event_count(
         session, "coi_generated_single", window=window, status="failure", previous=previous
     ) + _event_count(
@@ -404,7 +440,12 @@ def page_telemetry():
                 help=f"{extraction['failed']} failures",
             )
         with c3:
-            st.metric("COIs Generated", f"{coi['total']:,}", delta=d_coi, help=f"{coi['single']} single · {coi['bulk']} bulk")
+            st.metric(
+                "COIs Generated",
+                f"{coi['total']:,}",
+                delta=d_coi,
+                help=f"{coi['single']} single COIs · {coi['bulk']} COIs generated in bulk mode",
+            )
         with c4:
             st.metric("LLM Spend", f"${usage.spend:.4f}", delta=d_spend, help=f"{usage.calls} calls")
 
@@ -443,13 +484,13 @@ def page_telemetry():
             st.subheader("COI Production")
             coi_df = pd.DataFrame(
                 [
-                    {"Type": "Single", "Count": coi["single"]},
-                    {"Type": "Bulk", "Count": coi["bulk"]},
+                    {"Type": "Single COIs", "Count": coi["single"]},
+                    {"Type": "Bulk-generated COIs", "Count": coi["bulk"]},
                     {"Type": "Failures", "Count": coi["failures"]},
                 ]
             ).set_index("Type")
             st.bar_chart(coi_df, color="#005AA9")
-            st.caption("Bulk COI count is summed from generated files.")
+            st.caption("Bulk mode counts each generated COI inside the ZIP, not just the bulk run.")
 
         st.divider()
         st.subheader("LLM Usage")

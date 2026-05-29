@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from core.database import AppEvent, ApiUsage, get_session, init_db
 from core.services import UsageService
 from core.telemetry import TelemetryService, log_timing, private_hash, redact_payload
+from views.telemetry import _build_window, _coi_stats
 
 
 def test_redact_payload_masks_sensitive_fields(monkeypatch):
@@ -98,6 +99,34 @@ def test_telemetry_retention_and_summary(tmp_path):
     assert deleted == 1
     assert session.query(AppEvent).filter_by(event_name="old_event").count() == 0
     assert any(row["event_name"] == "new_event" and row["count_value"] == 3 for row in summary)
+    session.close()
+
+
+def test_telemetry_coi_stats_counts_bulk_generated_files(tmp_path):
+    db_path = tmp_path / "coi_counts.db"
+    engine = init_db(str(db_path))
+    session = get_session(engine)
+    telemetry = TelemetryService(session)
+
+    telemetry.record_event(
+        "coi_generated_single",
+        category="coi",
+        status="success",
+        count_value=1,
+    )
+    telemetry.record_event(
+        "coi_generated_bulk",
+        category="coi",
+        status="success",
+        count_value=1,
+        metadata={"generated_count": 20, "requested_count": 20},
+    )
+
+    stats = _coi_stats(session, _build_window("Last 30 days"))
+
+    assert stats["single"] == 1
+    assert stats["bulk"] == 20
+    assert stats["total"] == 21
     session.close()
 
 

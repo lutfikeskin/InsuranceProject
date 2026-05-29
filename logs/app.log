@@ -1,3 +1,17 @@
 2026-05-27 15:12:01 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_a1fef12b
 2026-05-27 15:12:02 | INFO     | core.telemetry:log_event:168 - {"duration_ms": 0, "event": "unit_test_timing", "status": "success"}
 2026-05-27 15:13:01 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_a1fef12b
+2026-05-27 16:58:22 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_a1fef12b
+2026-05-29 08:15:56 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_a1fef12b
+2026-05-29 08:18:34 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_a1fef12b
+2026-05-29 08:22:43 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_a1fef12b
+2026-05-29 08:22:54 | INFO     | core.telemetry:log_event:168 - {"correlation_id": "coi_3032b4ebc7df", "duration_ms": 339, "event": "coi_generated_single", "metadata": {"coi_type": "Additional Insured", "output_bytes": 306391, "policy_id": 5, "vehicle_count": 0}, "status": "success"}
+2026-05-29 08:24:51 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_a1fef12b
+2026-05-29 08:25:01 | INFO     | core.telemetry:log_event:168 - {"correlation_id": "coi_06344fb7e1d8", "duration_ms": 216, "event": "coi_generated_single", "metadata": {"coi_type": "Additional Insured", "output_bytes": 306391, "policy_id": 5, "vehicle_count": 0}, "status": "success"}
+2026-05-29 08:25:47 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_a1fef12b
+2026-05-29 08:26:07 | INFO     | core.telemetry:log_event:168 - {"correlation_id": "coi_c33196a2c616", "duration_ms": 209, "event": "coi_generated_single", "metadata": {"coi_type": "Additional Insured", "output_bytes": 306383, "policy_id": 5, "vehicle_count": 0}, "status": "success"}
+2026-05-29 08:27:09 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_a1fef12b
+2026-05-29 08:27:11 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_a1fef12b
+2026-05-29 08:27:13 | INFO     | modules.extraction.extraction_assembly:apply_auto_liability_rules:44 - Refactor: Pruning Split limits in favor of CSL.
+2026-05-29 08:27:15 | INFO     | core.telemetry:log_event:168 - {"duration_ms": 0, "event": "unit_test_timing", "status": "success"}
+2026-05-29 08:27:18 | INFO     | modules.extraction.cache_version:<module>:51 - Extraction cache version: v_auto_a1fef12b
