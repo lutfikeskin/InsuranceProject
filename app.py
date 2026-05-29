@@ -13,10 +13,7 @@ from views.process_policies import page_process_policies
 from views.database_page import page_database
 from views.create_coi import page_create_coi
 from views.telemetry import page_telemetry
-from views.settings_backup import (
-    render_database_backup_section,
-    render_holder_library_section,
-)
+from views.settings_backup import render_unified_backup_section
 
 st.set_page_config(
     page_title="Insurance Doc Intelligence", 
@@ -137,12 +134,8 @@ def settings_modal():
             st.rerun()
 
         st.divider()
-        st.markdown("##### Database backup and restore")
-        render_database_backup_section(telemetry=telemetry)
-
-        st.divider()
-        st.markdown("##### COI holder library")
-        render_holder_library_section(telemetry=telemetry)
+        st.markdown("##### Local backup and restore")
+        render_unified_backup_section(telemetry=telemetry)
     finally:
         admin_session.close()
 
