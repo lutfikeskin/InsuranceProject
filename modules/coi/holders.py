@@ -60,12 +60,14 @@ def _normalize_holder_record(raw: dict[str, Any]) -> dict[str, str]:
     city = str(raw.get("city", "")).strip()
     state = str(raw.get("state", "")).strip()
     zip_code = str(raw.get("zip", "")).strip()
+    email = str(raw.get("email", "")).strip()
     return {
         "name": name,
         "address": address,
         "city": city,
         "state": state,
         "zip": zip_code,
+        "email": email,
     }
 
 

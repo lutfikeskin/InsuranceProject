@@ -36,6 +36,7 @@ def test_load_coi_holders_parses_records(tmp_path):
                     "city": "Dallas",
                     "state": "TX",
                     "zip": "75001",
+                    "email": "certs@alpha.example",
                 }
             ]
         ),
@@ -44,6 +45,7 @@ def test_load_coi_holders_parses_records(tmp_path):
     loaded = load_coi_holders(path)
     assert loaded["Alpha LLC"]["city"] == "Dallas"
     assert loaded["Alpha LLC"]["zip"] == "75001"
+    assert loaded["Alpha LLC"]["email"] == "certs@alpha.example"
 
 
 def test_append_coi_holder_persists_record(tmp_path):
@@ -68,6 +70,7 @@ def test_append_coi_holder_persists_record(tmp_path):
 
     loaded = load_coi_holders(path)
     assert "Beta Transport" in loaded
+    assert loaded["Beta Transport"]["email"] == "ops@beta.com"
 
 
 def test_append_rejects_empty_name(tmp_path):

@@ -1,5 +1,7 @@
 import re
 import time
+from urllib.parse import urlencode
+
 import streamlit as st
 import io
 import zipfile
@@ -19,6 +21,7 @@ def _reset_coi_holder_session():
         "h_city",
         "h_state",
         "h_zip",
+        "h_email",
         "selected_coi_company",
     ):
         if k in st.session_state:
@@ -28,6 +31,39 @@ def _reset_coi_holder_session():
 GL_AGGREGATE_OPTIONS = ("$1,000,000", "$2,000,000")
 COI_TYPE_OPTIONS = ("Additional Insured", "Certificate Holder", "Lienholder")
 LIENHOLDER_HOLDER_PLACEHOLDER = "[Certificate Holder Name]"
+GMAIL_ATTACHMENT_WARNING = (
+    "Gmail opens without the PDF attached — download the COI first, then attach it manually before sending."
+)
+
+
+def _build_coi_email_subject(insured_name: str) -> str:
+    safe_insured = (insured_name or "").strip() or "Insured"
+    return f"COI for {safe_insured} - Truckers National Insurance 🚚📋"
+
+
+def _build_coi_email_body(insured_name: str) -> str:
+    safe_insured = (insured_name or "").strip() or "the insured"
+    return f"Good day,\n\nPlease see the attached COI for {safe_insured}.\n\nBest Regards,"
+
+
+def _build_gmail_compose_url(
+    insured_name: str,
+    recipient_email: str | None = None,
+) -> str:
+    """Build a Gmail compose URL with COI subject/body and optional recipient."""
+    params = {
+        "view": "cm",
+        "fs": "1",
+        "to": (recipient_email or "").strip(),
+        "su": _build_coi_email_subject(insured_name),
+        "body": _build_coi_email_body(insured_name),
+    }
+    return "https://mail.google.com/mail/?" + urlencode(params)
+
+
+def _render_gmail_compose_link(label: str, url: str) -> None:
+    """Render Gmail compose action using Streamlit button styling."""
+    st.link_button(label, url)
 
 
 def _format_vehicle_option(v) -> str:
@@ -240,6 +276,7 @@ def page_create_coi():
             st.session_state["h_city"] = holder.get("city", "")
             st.session_state["h_state"] = holder.get("state", "")
             st.session_state["h_zip"] = holder.get("zip", "")
+            st.session_state["h_email"] = holder.get("email", "")
 
         with st.expander("Add new certificate holder"):
             with st.form("add_coi_holder", clear_on_submit=True):
@@ -306,9 +343,12 @@ def page_create_coi():
                     st.session_state["h_state"] = ""
                 if "h_zip" not in st.session_state:
                     st.session_state["h_zip"] = ""
+                if "h_email" not in st.session_state:
+                    st.session_state["h_email"] = ""
 
                 h_state = st.text_input("State", key="h_state")
                 h_zip = st.text_input("Zip", key="h_zip")
+                h_email = st.text_input("Email (for Gmail draft)", key="h_email")
 
                 # Regenerate the default description whenever the COI type, selected
                 # vehicles, or holder name changes. User edits inside the textarea are
@@ -497,12 +537,20 @@ def page_create_coi():
                         duration_ms = int((time.perf_counter() - started_at) * 1000)
                         if pdf:
                             st.success("Successfully generated COI!")
-                            st.download_button(
-                                "📥 Download COI PDF",
-                                data=pdf,
-                                file_name=_safe_coi_pdf_filename(i_name, h_name),
-                                mime="application/pdf",
-                            )
+                            dl_col, email_col, _ = st.columns([1, 1, 4], gap="small")
+                            with dl_col:
+                                st.download_button(
+                                    "📥 Download COI PDF",
+                                    data=pdf,
+                                    file_name=_safe_coi_pdf_filename(i_name, h_name),
+                                    mime="application/pdf",
+                                )
+                            with email_col:
+                                _render_gmail_compose_link(
+                                    "✉️ Email COI",
+                                    _build_gmail_compose_url(i_name, h_email),
+                                )
+                            st.caption(GMAIL_ATTACHMENT_WARNING)
                             telemetry.record_event(
                                 "coi_generated_single",
                                 category="coi",
@@ -576,6 +624,7 @@ def page_create_coi():
                     zip_buffer = io.BytesIO()
                     generated_count = 0
                     failed_count = 0
+                    generated_email_links = []
                     try:
                         with zipfile.ZipFile(zip_buffer, "w") as zf:
                             for comp_name in selected_companies:
@@ -601,6 +650,12 @@ def page_create_coi():
                                         _safe_coi_pdf_filename(i_name, comp_data.get("name", "")),
                                         pdf,
                                     )
+                                    generated_email_links.append(
+                                        {
+                                            "name": holder_name,
+                                            "email": comp_data.get("email", ""),
+                                        }
+                                    )
                                 else:
                                     failed_count += 1
 
@@ -613,6 +668,20 @@ def page_create_coi():
                             file_name=_safe_bulk_zip_filename(i_name),
                             mime="application/zip",
                         )
+                        if generated_email_links:
+                            st.caption(GMAIL_ATTACHMENT_WARNING)
+                            st.markdown("**Email generated COIs:**")
+                            for idx, item in enumerate(generated_email_links, start=1):
+                                holder_display = item.get("name", "") or f"Holder {idx}"
+                                email_display = item.get("email", "").strip() or "No saved recipient"
+                                row_name, row_email, row_link = st.columns([2, 2, 1])
+                                row_name.write(holder_display)
+                                row_email.caption(email_display)
+                                with row_link:
+                                    _render_gmail_compose_link(
+                                        "✉️ Email COI",
+                                        _build_gmail_compose_url(i_name, item.get("email", "")),
+                                    )
                         telemetry.record_event(
                             "coi_generated_bulk",
                             category="coi",
