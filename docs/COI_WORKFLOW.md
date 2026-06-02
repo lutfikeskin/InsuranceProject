@@ -20,17 +20,18 @@ This document covers Certificate of Insurance generation flow.
 
 1. Search and select policy.
 2. Provide or quick-fill certificate holder details from the holder library.
-3. Toggle included coverage sections (GL, Auto, Cargo).
-4. Optionally customize operations description and font size.
-5. Generate PDF (single) or ZIP of PDFs (bulk mode).
+3. Review/edit insurer legal name, insured details, and selected coverage limits.
+4. Toggle included coverage sections (GL, Auto, Cargo; lienholder reuses Other Policy for Comp/Coll deductibles).
+5. Optionally customize operations description and font size, or reset it from policy data.
+6. Generate PDF (single) or ZIP of PDFs (bulk mode).
 
 ## Data Preparation
 
 `views/create_coi.py` constructs:
-- `policy_data` from selected policy + overrides
+- `policy_data` from selected policy + UI overrides via `COIService.build_generation_payload(...)`
 - `holder_data` from manual entry or holder library (`coi_holders.json`)
 
-`COIService.prepare_coi_data(...)` provides helper defaults.
+`COIService.prepare_coi_data(...)` provides default operations-description lines.
 
 ACORD insurer behavior:
 
@@ -48,15 +49,18 @@ ACORD insurer behavior:
 
 ## Coverage Behavior
 
-- GL and Auto sections are controlled by boolean flags and are no longer assumed enabled when extraction evidence is missing.
-- Cargo section is enabled when cargo data is present/selected.
-- GL aggregate can be selected in UI and passed into payload.
+- GL and Auto sections are controlled by stored booleans when available; null booleans fall back to limit evidence.
+- GL occurrence uses `general_liability_limit`/`gl_occurrence_limit` before falling back to auto liability.
+- Cargo section is enabled only when a meaningful cargo limit is present/selected.
+- GL aggregate supports standard values or a custom amount.
+- Certificate Holder COIs leave ADDL INSD columns blank; Additional Insured and Lienholder mark them with `Y`.
 
 ## Bulk Mode
 
 - Multi-select company list.
 - Generate one PDF per company.
-- Package files into ZIP for download.
+- Per-holder failures no longer abort the entire batch; the page shows generated/failed counts and issue rows.
+- ZIP download is suppressed if zero PDFs are generated.
 - Generated PDF names follow: `COI - Insured Name - Certificate Holder Name.pdf` in both single and bulk flows.
 
 ## Dependencies

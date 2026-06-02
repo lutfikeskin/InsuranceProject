@@ -67,9 +67,14 @@ class COIGenerator:
 
             has_gl = bool(policy_data.get('has_general_liability'))
             has_auto = bool(policy_data.get('has_auto_liability'))
-            gl_occ = clean_limit(policy_data.get('liability_limit', '')) if has_gl else ""
+            gl_occ_source = (
+                policy_data.get('gl_occurrence_limit')
+                or policy_data.get('general_liability_limit')
+                or policy_data.get('liability_limit', '')
+            )
+            gl_occ = clean_limit(gl_occ_source) if has_gl else ""
             gl_agg = (
-                clean_limit(policy_data.get('gl_general_aggregate') or policy_data.get('liability_limit', ''))
+                clean_limit(policy_data.get('gl_general_aggregate') or gl_occ_source)
                 if has_gl
                 else ""
             )
@@ -85,13 +90,12 @@ class COIGenerator:
             # COI type drives ADDL INSD column + Cargo/Comp-Coll swap.
             coi_type = policy_data.get("coi_type", "Additional Insured")
             is_lienholder = coi_type == "Lienholder"
-            # "Y" for Additional Insured and Lienholder, "N" for Certificate Holder.
-            if coi_type == "Additional Insured":
-                addl_y = "Y"
-            elif coi_type == "Certificate Holder":
-                addl_y = "N"
+            # Certificate Holder COIs leave the ADDL INSD columns blank. Additional
+            # Insured and Lienholder keep the current business rule of marking "Y".
+            if coi_type == "Certificate Holder":
+                addl_y = ""
             else:
-                addl_y = "Y"  # Lienholder also gets "Y"
+                addl_y = "Y"
 
             if is_lienholder:
                 # Lienholder COI repurposes the OtherPolicy box for Comp/Coll deductibles.
@@ -177,7 +181,7 @@ class COIGenerator:
                 "Cargo_Expires": fmt_date(policy_data.get('expiration_date')) if (has_cargo or has_comp_coll) else "",
                 "Cargo_PolicyNumber": policy_data.get('policy_number', '') if (has_cargo or has_comp_coll) else "",
 
-                # ADDL INSD column codes — "Y" only for Additional Insured COI type.
+                # ADDL INSD column codes — blank for Certificate Holder COI type.
                 "AddlInsd_GL": addl_y if has_gl else "",
                 "AddlInsd_Auto": addl_y if has_auto else "",
                 "AddlInsd_Other": addl_y if (has_cargo or has_comp_coll) else "",

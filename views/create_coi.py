@@ -44,7 +44,19 @@ def _build_coi_email_subject(insured_name: str) -> str:
 
 def _build_coi_email_body(insured_name: str) -> str:
     safe_insured = (insured_name or "").strip() or "the insured"
-    return f"Good day,\n\nPlease see the attached COI for {safe_insured}.\n\nBest Regards,"
+    return (
+        f"Good day,\n\nPlease see the COI for {safe_insured}. "
+        "I will attach the PDF before sending.\n\nBest Regards,"
+    )
+
+
+def _normalize_email_recipients(recipient_email: str | None = None) -> str:
+    """Normalize saved holder emails for Gmail's comma-separated `to` field."""
+    raw = (recipient_email or "").strip()
+    if not raw:
+        return ""
+    parts = [p.strip() for p in re.split(r"\s*(?:/|;|,)\s*", raw) if p.strip()]
+    return ",".join(parts)
 
 
 def _build_gmail_compose_url(
@@ -55,7 +67,7 @@ def _build_gmail_compose_url(
     params = {
         "view": "cm",
         "fs": "1",
-        "to": (recipient_email or "").strip(),
+        "to": _normalize_email_recipients(recipient_email),
         "su": _build_coi_email_subject(insured_name),
         "body": _build_coi_email_body(insured_name),
     }
@@ -159,6 +171,93 @@ def _default_gl_agg_display_value(policy) -> str:
     return GL_AGGREGATE_OPTIONS[0]
 
 
+def _clean_coi_text(value) -> str:
+    text = str(value or "").replace("\u200b", "").strip()
+    if text.lower() in {"", "null", "none", "n/a", "nan", "-"}:
+        return ""
+    return text
+
+
+def _has_meaningful_limit(value) -> bool:
+    text = _clean_coi_text(value)
+    return bool(text and re.search(r"\d", text))
+
+
+def _money_display(value, default: str = "") -> str:
+    text = _clean_coi_text(value) or default
+    if not text:
+        return ""
+    if "$" in text:
+        return text
+    if re.fullmatch(r"[\d,]+(?:\.\d+)?", text):
+        compact = text.replace(",", "")
+        try:
+            if "." in compact:
+                return f"${float(compact):,.2f}"
+            return f"${int(compact):,}"
+        except ValueError:
+            pass
+    if re.search(r"\d", text):
+        return f"${text}"
+    return text
+
+
+def _coverage_default(flag_value, *evidence_values) -> bool:
+    if flag_value is not None:
+        return bool(flag_value)
+    return any(_has_meaningful_limit(v) for v in evidence_values)
+
+
+def _validate_coi_generation(p_data: dict, h_data: dict, coi_type: str, selected_vehicle_objs) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    required = {
+        "Holder Name": h_data.get("name"),
+        "Insured Name": p_data.get("insured_name"),
+        "Insurer Legal Name": p_data.get("carrier_name"),
+        "Policy Number": p_data.get("policy_number"),
+        "Effective Date": p_data.get("effective_date"),
+        "Expiration Date": p_data.get("expiration_date"),
+    }
+    for label, value in required.items():
+        if not _clean_coi_text(value):
+            errors.append(f"{label} is required.")
+
+    if p_data.get("has_general_liability") and not _has_meaningful_limit(p_data.get("gl_occurrence_limit")):
+        errors.append("General Liability is selected but GL occurrence limit is missing.")
+    if p_data.get("has_auto_liability") and not _has_meaningful_limit(p_data.get("liability_limit")):
+        errors.append("Automobile Liability is selected but auto combined-single limit is missing.")
+    if p_data.get("has_cargo") and not _has_meaningful_limit(p_data.get("cargo_limit")):
+        errors.append("Motor Truck Cargo is selected but cargo limit is missing.")
+    if coi_type == "Lienholder":
+        if not selected_vehicle_objs:
+            errors.append("Lienholder COIs require at least one selected vehicle.")
+        if not _has_meaningful_limit(p_data.get("comp_deductible")):
+            warnings.append("Comp deductible is missing; the PDF will show a blank/placeholder value.")
+        if not _has_meaningful_limit(p_data.get("coll_deductible")):
+            warnings.append("Collision deductible is missing; the PDF will show a blank/placeholder value.")
+
+    for label, value in {
+        "NAIC number": p_data.get("naic_number"),
+        "Insured address": p_data.get("insured_address"),
+    }.items():
+        if not _clean_coi_text(value):
+            warnings.append(f"{label} is blank.")
+
+    if not (p_data.get("has_general_liability") or p_data.get("has_auto_liability") or p_data.get("has_cargo")):
+        warnings.append("No coverage sections are selected.")
+
+    return errors, warnings
+
+
+def _render_validation_summary(errors: list[str], warnings: list[str]) -> None:
+    if errors:
+        st.error("Cannot generate COI until required issues are fixed:\n" + "\n".join(f"- {e}" for e in errors))
+    if warnings:
+        st.warning("Review before generating:\n" + "\n".join(f"- {w}" for w in warnings))
+
+
 def page_create_coi():
     st.title("📝 Create COI")
     st.markdown("Generate a Certificate of Insurance using data from an existing policy.")
@@ -203,18 +302,19 @@ def page_create_coi():
         options = {f"{p.policy_number} - {p.insured_name}": p for p in policies}
         keys = list(options.keys())
 
-        col_sel, col_mode = st.columns([2, 1])
+        col_sel, col_mode = st.columns([4, 1], vertical_alignment="bottom")
         with col_sel:
             selected_key = st.selectbox(
                 "Select Policy",
                 options=keys,
                 key="coi_policy_pick",
             )
-        bulk_mode = col_mode.toggle(
-            "Bulk Mode",
-            value=False,
-            help="Generate COIs for multiple companies at once",
-        )
+        with col_mode:
+            bulk_mode = st.toggle(
+                "Bulk Mode",
+                value=False,
+                help="Generate COIs for multiple companies at once",
+            )
 
         if not selected_key:
             return
@@ -231,6 +331,13 @@ def page_create_coi():
                 "coi_lien_vehicles_",
                 "coi_desc_state_",
                 "coi_desc_state_bulk_",
+                "coi_gl_occ_",
+                "coi_gl_gen_agg_custom_",
+                "coi_auto_limit_",
+                "coi_cargo_limit_",
+                "coi_cargo_ded_",
+                "coi_comp_ded_",
+                "coi_coll_ded_",
             ):
                 old_key = f"{suffix}{prev_id}"
                 if old_key in st.session_state:
@@ -241,6 +348,7 @@ def page_create_coi():
         st.session_state["coi_last_policy_id"] = p.id
 
         st.info(f"Filling COI for: **{p.insured_name}** ({p.policy_number})")
+        base_p_data = coi_service.build_generation_payload(p)
 
         st.subheader("Certificate Holder Details")
 
@@ -273,7 +381,14 @@ def page_create_coi():
             selected_vehicle_objs = [veh_options[lbl] for lbl in selected_labels if lbl in veh_options]
 
         if "coi_companies" not in st.session_state:
-            st.session_state.coi_companies = load_coi_holders()
+            try:
+                st.session_state.coi_companies = load_coi_holders()
+            except COIHolderError as exc:
+                st.session_state.coi_companies = {}
+                st.error(f"Could not load COI holder library: {exc}")
+            except Exception as exc:
+                st.session_state.coi_companies = {}
+                st.error(f"Could not load COI holder library: {exc}")
 
         def _apply_holder_to_session(holder: dict):
             st.session_state["h_name"] = holder.get("name", "")
@@ -310,8 +425,10 @@ def page_create_coi():
                     _apply_holder_to_session(saved)
                     st.success(f"Saved '{saved['name']}' to holder library.")
                     st.rerun()
-                except COIHolderError as exc:
+                except (COIHolderError, ValueError) as exc:
                     st.error(str(exc))
+                except Exception as exc:
+                    st.error(f"Could not save holder: {exc}")
 
         company_options = sorted(list(st.session_state.coi_companies.keys()))
 
@@ -378,10 +495,26 @@ def page_create_coi():
                     )
                     st.session_state[desc_state_key] = current_desc_state
 
+                desc_label_col, desc_reset_col = st.columns([6, 1], vertical_alignment="bottom")
+                with desc_label_col:
+                    st.markdown("**Operations Description**")
+                with desc_reset_col:
+                    if st.button("🔄", key=f"reset_desc_{p.id}", help="Reset from policy"):
+                        st.session_state[desc_key] = _build_default_desc(
+                            coi_service,
+                            p,
+                            coi_type,
+                            selected_vehicle_objs,
+                            st.session_state.get("h_name", ""),
+                        )
+                        st.session_state[desc_state_key] = current_desc_state
+                        st.rerun()
+
                 h_desc = st.text_area(
                     "Operations Description",
                     height=150,
                     key=desc_key,
+                    label_visibility="collapsed",
                 )
                 h_desc_font_size = st.slider(
                     "Description Font Size (pt)",
@@ -417,10 +550,26 @@ def page_create_coi():
                     "with each company's name when generating."
                 )
 
+            desc_label_col, desc_reset_col = st.columns([6, 1], vertical_alignment="bottom")
+            with desc_label_col:
+                st.markdown("**Operations Description (applied to all)**")
+            with desc_reset_col:
+                if st.button("🔄", key=f"reset_desc_bulk_{p.id}", help="Reset from policy"):
+                    st.session_state[bulk_desc_key] = _build_default_desc(
+                        coi_service,
+                        p,
+                        coi_type,
+                        selected_vehicle_objs,
+                        holder_name="",
+                    )
+                    st.session_state[bulk_state_key] = bulk_state
+                    st.rerun()
+
             h_desc = st.text_area(
                 "Operations Description (applied to all)",
                 height=150,
                 key=bulk_desc_key,
+                label_visibility="collapsed",
             )
             h_desc_font_size = st.slider(
                 "Description Font Size (pt)",
@@ -447,6 +596,11 @@ def page_create_coi():
 
             default_naic = p.naic_number if p.naic_number else get_naic_for_carrier(p.carrier_name)
             i_naic = st.text_input("Insurer NAIC #", value=default_naic)
+            i_insurer_name = st.text_input(
+                "Insurer Legal Name",
+                value=base_p_data.get("carrier_name") or "",
+                help="Uses underwriter/legal entity when available; carrier brand remains searchable in the database.",
+            )
 
         st.divider()
         st.subheader("🛡️ Coverages to Include")
@@ -454,28 +608,53 @@ def page_create_coi():
         with gc1:
             ui_has_gl = st.checkbox(
                 "General Liability",
-                value=bool(p.has_general_liability),
+                value=_coverage_default(p.has_general_liability, p.general_liability_limit),
             )
-            gl_agg_key = f"coi_gl_gen_agg_{p.id}"
+            gl_occ_limit = ""
+            gl_agg_value = None
             if ui_has_gl:
+                gl_occ_limit = st.text_input(
+                    "GL occurrence limit",
+                    value=base_p_data.get("gl_occurrence_limit") or "",
+                    key=f"coi_gl_occ_{p.id}",
+                )
+                gl_agg_key = f"coi_gl_gen_agg_{p.id}"
+                custom_agg_key = f"coi_gl_gen_agg_custom_{p.id}"
                 if gl_agg_key not in st.session_state:
-                    st.session_state[gl_agg_key] = _default_gl_agg_display_value(p)
-                st.radio(
+                    default_agg = _default_gl_agg_display_value(p)
+                    st.session_state[gl_agg_key] = (
+                        default_agg if default_agg in GL_AGGREGATE_OPTIONS else "Custom"
+                    )
+                    st.session_state[custom_agg_key] = default_agg
+                gl_agg_choice = st.selectbox(
                     "General aggregate",
-                    options=GL_AGGREGATE_OPTIONS,
-                    horizontal=True,
+                    options=(*GL_AGGREGATE_OPTIONS, "Custom"),
                     key=gl_agg_key,
                 )
+                if gl_agg_choice == "Custom":
+                    gl_agg_value = st.text_input(
+                        "Custom aggregate",
+                        key=custom_agg_key,
+                    )
+                else:
+                    gl_agg_value = gl_agg_choice
         with gc2:
             ui_has_auto = st.checkbox(
                 "Automobile Liability",
-                value=bool(p.has_auto_liability),
+                value=_coverage_default(p.has_auto_liability, p.liability_limit),
             )
+            auto_limit = ""
+            if ui_has_auto:
+                auto_limit = st.text_input(
+                    "Auto combined-single limit",
+                    value=base_p_data.get("liability_limit") or "",
+                    key=f"coi_auto_limit_{p.id}",
+                )
         with gc3:
             cargo_disabled = coi_type == "Lienholder"
             ui_has_cargo = st.checkbox(
                 "Motor Truck Cargo",
-                value=bool(p.cargo_limit) and not cargo_disabled,
+                value=_has_meaningful_limit(p.cargo_limit) and not cargo_disabled,
                 disabled=cargo_disabled,
                 help=(
                     "Disabled for Lienholder COIs — the Other Policy box is reused for Comp/Coll deductibles."
@@ -483,25 +662,44 @@ def page_create_coi():
                     else None
                 ),
             )
+            cargo_limit = ""
+            cargo_deductible = _money_display(p.cargo_deductible, default="1000")
+            comp_deductible = _money_display(p.comp_deductible)
+            coll_deductible = _money_display(p.coll_deductible)
+            if ui_has_cargo and not cargo_disabled:
+                cargo_limit = st.text_input(
+                    "Cargo limit",
+                    value=_money_display(p.cargo_limit),
+                    key=f"coi_cargo_limit_{p.id}",
+                )
+                cargo_deductible = st.text_input(
+                    "Cargo deductible",
+                    value=cargo_deductible,
+                    key=f"coi_cargo_ded_{p.id}",
+                )
+            if coi_type == "Lienholder":
+                comp_deductible = st.text_input(
+                    "Comp deductible",
+                    value=comp_deductible,
+                    key=f"coi_comp_ded_{p.id}",
+                )
+                coll_deductible = st.text_input(
+                    "Collision deductible",
+                    value=coll_deductible,
+                    key=f"coi_coll_ded_{p.id}",
+                )
 
         def prepare_p_data():
-            gl_agg = None
-            if ui_has_gl:
-                gl_agg = st.session_state.get(
-                    gl_agg_key, _default_gl_agg_display_value(p)
-                )
-            return {
-                "carrier_name": p.carrier_name,
+            overrides = {
+                "carrier_name": i_insurer_name,
                 "naic_number": i_naic,
-                "policy_number": p.policy_number,
-                "effective_date": p.effective_date,
-                "expiration_date": p.expiration_date,
-                "liability_limit": p.liability_limit,
-                "gl_general_aggregate": gl_agg,
-                "cargo_limit": p.cargo_limit,
-                "cargo_deductible": p.cargo_deductible if p.cargo_deductible else "1000",
-                "comp_deductible": p.comp_deductible,
-                "coll_deductible": p.coll_deductible,
+                "liability_limit": auto_limit if ui_has_auto else "",
+                "gl_occurrence_limit": gl_occ_limit if ui_has_gl else "",
+                "gl_general_aggregate": gl_agg_value if ui_has_gl else None,
+                "cargo_limit": cargo_limit if (ui_has_cargo and coi_type != "Lienholder") else "",
+                "cargo_deductible": cargo_deductible,
+                "comp_deductible": comp_deductible,
+                "coll_deductible": coll_deductible,
                 "has_general_liability": ui_has_gl,
                 "has_auto_liability": ui_has_auto,
                 "has_cargo": ui_has_cargo and coi_type != "Lienholder",
@@ -511,29 +709,28 @@ def page_create_coi():
                 "insured_city": i_city,
                 "insured_state_code": i_state,
                 "insured_zip": i_zip,
-                "vehicle_list_str": "",
-                "driver_list_str": "",
             }
+            return coi_service.build_generation_payload(p, overrides)
 
         if not bulk_mode:
             if st.button("Generate & Download PDF", type="primary"):
-                if not h_name:
-                    st.error("Holder Name is required.")
-                elif coi_type == "Lienholder" and not selected_vehicle_objs:
-                    st.error("Lienholder COIs require at least one selected vehicle.")
-                else:
+                p_data = prepare_p_data()
+                # Substitute the placeholder in case the user kept it after switching back to a holder.
+                final_desc = (h_desc or "").replace(LIENHOLDER_HOLDER_PLACEHOLDER, h_name or "")
+                h_data = {
+                    "name": h_name,
+                    "address": h_addr,
+                    "city": h_city,
+                    "state": h_state,
+                    "zip": h_zip,
+                    "description": final_desc,
+                }
+                errors, warnings = _validate_coi_generation(
+                    p_data, h_data, coi_type, selected_vehicle_objs
+                )
+                _render_validation_summary(errors, warnings)
+                if not errors:
                     gen = COIGenerator()
-                    p_data = prepare_p_data()
-                    # Substitute the placeholder in case the user kept it after switching back to a holder.
-                    final_desc = (h_desc or "").replace(LIENHOLDER_HOLDER_PLACEHOLDER, h_name or "")
-                    h_data = {
-                        "name": h_name,
-                        "address": h_addr,
-                        "city": h_city,
-                        "state": h_state,
-                        "zip": h_zip,
-                        "description": final_desc,
-                    }
                     run_id = new_correlation_id("coi")
                     started_at = time.perf_counter()
 
@@ -618,8 +815,6 @@ def page_create_coi():
             if st.button("Generate Bulk COIs", type="primary"):
                 if not selected_companies:
                     st.error("Please select at least one company.")
-                elif coi_type == "Lienholder" and not selected_vehicle_objs:
-                    st.error("Lienholder COIs require at least one selected vehicle.")
                 else:
                     gen = COIGenerator()
                     p_data = prepare_p_data()
@@ -630,24 +825,33 @@ def page_create_coi():
                     generated_count = 0
                     failed_count = 0
                     generated_email_links = []
-                    try:
-                        with zipfile.ZipFile(zip_buffer, "w") as zf:
-                            for comp_name in selected_companies:
-                                comp_data = st.session_state.coi_companies.get(comp_name, {})
-                                holder_name = comp_data.get("name", "")
-                                # Substitute the holder placeholder per-company so each
-                                # bulk-generated COI carries the correct name.
-                                per_holder_desc = (h_desc or "").replace(
-                                    LIENHOLDER_HOLDER_PLACEHOLDER, holder_name
-                                )
-                                h_data = {
-                                    "name": holder_name,
-                                    "address": comp_data.get("address", ""),
-                                    "city": comp_data.get("city", ""),
-                                    "state": comp_data.get("state", ""),
-                                    "zip": comp_data.get("zip", ""),
-                                    "description": per_holder_desc,
-                                }
+                    failed_rows = []
+
+                    with zipfile.ZipFile(zip_buffer, "w") as zf:
+                        for comp_name in selected_companies:
+                            comp_data = st.session_state.coi_companies.get(comp_name, {})
+                            holder_name = comp_data.get("name", "")
+                            per_holder_desc = (h_desc or "").replace(
+                                LIENHOLDER_HOLDER_PLACEHOLDER, holder_name
+                            )
+                            h_data = {
+                                "name": holder_name,
+                                "address": comp_data.get("address", ""),
+                                "city": comp_data.get("city", ""),
+                                "state": comp_data.get("state", ""),
+                                "zip": comp_data.get("zip", ""),
+                                "description": per_holder_desc,
+                            }
+                            errors, warnings = _validate_coi_generation(
+                                p_data, h_data, coi_type, selected_vehicle_objs
+                            )
+                            if errors:
+                                failed_count += 1
+                                failed_rows.append({"holder": comp_name, "error": "; ".join(errors)})
+                                continue
+                            if warnings:
+                                failed_rows.append({"holder": comp_name, "warning": "; ".join(warnings)})
+                            try:
                                 pdf = gen.generate_coi(p_data, h_data, desc_font_size=h_desc_font_size)
                                 if pdf:
                                     generated_count += 1
@@ -663,97 +867,74 @@ def page_create_coi():
                                     )
                                 else:
                                     failed_count += 1
+                                    failed_rows.append({"holder": comp_name, "error": "Generator returned no PDF."})
+                            except Exception as exc:
+                                failed_count += 1
+                                failed_rows.append({"holder": comp_name, "error": str(exc)})
 
-                        duration_ms = int((time.perf_counter() - started_at) * 1000)
-                        zip_bytes = zip_buffer.getvalue()
-                        st.success(f"Successfully generated {generated_count} COIs!")
+                    duration_ms = int((time.perf_counter() - started_at) * 1000)
+                    zip_bytes = zip_buffer.getvalue()
+                    status = "success" if failed_count == 0 else ("partial_success" if generated_count else "failure")
+                    if generated_count:
+                        st.success(f"Generated {generated_count} COIs" + (f"; {failed_count} failed." if failed_count else "."))
                         st.download_button(
                             "📥 Download All (ZIP)",
                             data=zip_bytes,
                             file_name=_safe_bulk_zip_filename(i_name),
                             mime="application/zip",
                         )
-                        if generated_email_links:
-                            st.caption(GMAIL_ATTACHMENT_WARNING)
-                            st.markdown("**Email generated COIs:**")
-                            for idx, item in enumerate(generated_email_links, start=1):
-                                holder_display = item.get("name", "") or f"Holder {idx}"
-                                email_display = item.get("email", "").strip() or "No saved recipient"
-                                row_name, row_email, row_link = st.columns([2, 2, 1])
-                                row_name.write(holder_display)
-                                row_email.caption(email_display)
-                                with row_link:
-                                    _render_gmail_compose_link(
-                                        "✉️ Email COI",
-                                        _build_gmail_compose_url(i_name, item.get("email", "")),
-                                    )
-                        telemetry.record_event(
-                            "coi_generated_bulk",
-                            category="coi",
-                            status="success",
-                            correlation_id=run_id,
-                            object_type="policy",
-                            object_id=p.id,
-                            duration_ms=duration_ms,
-                            count_value=generated_count,
-                            metadata={
-                                "coi_type": coi_type,
-                                "requested_count": len(selected_companies),
-                                "generated_count": generated_count,
-                                "failed_count": failed_count,
-                                "output_bytes": len(zip_bytes),
-                                "selected_vehicle_count": len(selected_vehicle_objs),
-                            },
-                        )
-                        log_event(
-                            "coi_generated_bulk",
-                            correlation_id=run_id,
-                            status="success",
-                            duration_ms=duration_ms,
-                            metadata={
-                                "policy_id": p.id,
-                                "coi_type": coi_type,
-                                "requested_count": len(selected_companies),
-                                "generated_count": generated_count,
-                                "failed_count": failed_count,
-                                "output_bytes": len(zip_bytes),
-                                "selected_vehicle_count": len(selected_vehicle_objs),
-                            },
-                        )
-                    except Exception as e:
-                        duration_ms = int((time.perf_counter() - started_at) * 1000)
-                        telemetry.record_event(
-                            "coi_generated_bulk",
-                            category="coi",
-                            status="failure",
-                            correlation_id=run_id,
-                            object_type="policy",
-                            object_id=p.id,
-                            duration_ms=duration_ms,
-                            count_value=generated_count,
-                            metadata={
-                                "coi_type": coi_type,
-                                "requested_count": len(selected_companies),
-                                "generated_count": generated_count,
-                                "failed_count": failed_count,
-                                "error": str(e),
-                            },
-                        )
-                        log_event(
-                            "coi_generated_bulk",
-                            correlation_id=run_id,
-                            status="failure",
-                            duration_ms=duration_ms,
-                            level="error",
-                            message=str(e),
-                            metadata={
-                                "policy_id": p.id,
-                                "coi_type": coi_type,
-                                "requested_count": len(selected_companies),
-                                "generated_count": generated_count,
-                                "failed_count": failed_count,
-                            },
-                        )
-                        st.error(f"Bulk generation failed: {e}")
+                    else:
+                        st.error("No COIs were generated; ZIP download suppressed.")
+                    if failed_rows:
+                        st.warning("Bulk generation issues:")
+                        st.dataframe(failed_rows, hide_index=True, use_container_width=True)
+                    if generated_email_links:
+                        st.caption(GMAIL_ATTACHMENT_WARNING)
+                        st.markdown("**Email generated COIs:**")
+                        for idx, item in enumerate(generated_email_links, start=1):
+                            holder_display = item.get("name", "") or f"Holder {idx}"
+                            email_display = _normalize_email_recipients(item.get("email", "")) or "No saved recipient"
+                            row_name, row_email, row_link = st.columns([2, 2, 1])
+                            row_name.write(holder_display)
+                            row_email.caption(email_display)
+                            with row_link:
+                                _render_gmail_compose_link(
+                                    "✉️ Email COI",
+                                    _build_gmail_compose_url(i_name, item.get("email", "")),
+                                )
+                    telemetry.record_event(
+                        "coi_generated_bulk",
+                        category="coi",
+                        status=status,
+                        correlation_id=run_id,
+                        object_type="policy",
+                        object_id=p.id,
+                        duration_ms=duration_ms,
+                        count_value=generated_count,
+                        metadata={
+                            "coi_type": coi_type,
+                            "requested_count": len(selected_companies),
+                            "generated_count": generated_count,
+                            "failed_count": failed_count,
+                            "output_bytes": len(zip_bytes) if generated_count else 0,
+                            "selected_vehicle_count": len(selected_vehicle_objs),
+                        },
+                    )
+                    log_event(
+                        "coi_generated_bulk",
+                        correlation_id=run_id,
+                        status=status,
+                        duration_ms=duration_ms,
+                        level="error" if status == "failure" else "info",
+                        metadata={
+                            "policy_id": p.id,
+                            "coi_type": coi_type,
+                            "requested_count": len(selected_companies),
+                            "generated_count": generated_count,
+                            "failed_count": failed_count,
+                            "output_bytes": len(zip_bytes) if generated_count else 0,
+                            "selected_vehicle_count": len(selected_vehicle_objs),
+                        },
+                    )
     finally:
         session.close()

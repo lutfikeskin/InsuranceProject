@@ -1585,11 +1585,79 @@ class PolicyService:
         except Exception as e:
             return None, f"Error: {e}"
 class COIService:
+    @classmethod
+    def build_generation_payload(cls, p: Policy, overrides: dict | None = None) -> dict:
+        """Build the canonical payload consumed by COIGenerator.
+
+        The Create COI page may override user-editable fields, but insurer naming,
+        coverage defaults, and null-ish cleanup should live in one place to avoid
+        drift between the UI and PDF generation.
+        """
+        overrides = overrides or {}
+
+        def attr(name: str):
+            return getattr(p, name, None)
+
+        def clean_text(value):
+            if value is None:
+                return None
+            if not isinstance(value, str):
+                return value
+            compact = " ".join(value.replace("\u200b", "").split()).strip()
+            if not compact:
+                return None
+            if compact.lower() in {"null", "none", "n/a", "nan", "-"}:
+                return None
+            return compact
+
+        def bool_from_policy(flag_name: str, *evidence_fields: str) -> bool:
+            raw_flag = attr(flag_name)
+            if raw_flag is not None:
+                return bool(raw_flag)
+            return any(clean_text(attr(field)) is not None for field in evidence_fields)
+
+        insurer_name = (
+            clean_text(attr("underwriter_name"))
+            or clean_text(attr("carrier_name"))
+            or ""
+        )
+        naic_number = clean_text(attr("naic_number")) or get_naic_for_carrier(attr("carrier_name"))
+        gl_limit = clean_text(attr("general_liability_limit")) or clean_text(attr("liability_limit"))
+
+        payload = {
+            "carrier_name": insurer_name,
+            "display_carrier_name": attr("carrier_name"),
+            "underwriter_name": attr("underwriter_name"),
+            "naic_number": naic_number,
+            "policy_number": attr("policy_number"),
+            "effective_date": attr("effective_date"),
+            "expiration_date": attr("expiration_date"),
+            "liability_limit": attr("liability_limit"),
+            "general_liability_limit": attr("general_liability_limit"),
+            "gl_occurrence_limit": gl_limit,
+            "cargo_limit": attr("cargo_limit"),
+            "cargo_deductible": attr("cargo_deductible") if attr("cargo_deductible") else "$1,000",
+            "comp_deductible": attr("comp_deductible"),
+            "coll_deductible": attr("coll_deductible"),
+            "has_general_liability": bool_from_policy("has_general_liability", "general_liability_limit"),
+            "has_auto_liability": bool_from_policy("has_auto_liability", "liability_limit"),
+            "has_cargo": clean_text(attr("cargo_limit")) is not None,
+            "insured_name": attr("insured_name"),
+            "insured_address": attr("insured_address"),
+            "insured_city": attr("insured_city"),
+            "insured_state_code": attr("insured_state_code"),
+            "insured_zip": attr("insured_zip"),
+            "vehicle_list_str": "",
+            "driver_list_str": "",
+        }
+        payload.update({k: v for k, v in overrides.items() if v is not None})
+        return payload
+
     @staticmethod
     def prepare_coi_data(p: Policy):
         from reporting.acord_view import build_acord_view_from_orm_policy
 
-        cargo_ded_val = p.cargo_deductible if p.cargo_deductible else "1000"
+        cargo_ded_val = p.cargo_deductible if p.cargo_deductible else "$1,000"
         
         has_gl = bool(p.has_general_liability)
         has_auto = bool(p.has_auto_liability)
@@ -1646,9 +1714,6 @@ class COIService:
                     f"Drive Other Car / DOC: {fid or '—'}"
                     + (f" — named: {nms_s}" if nms_s else "")
                 )
-        st_disp = (av.get("policy_ontology") or {}).get("statutory_auto_liability_display")
-        if st_disp:
-            desc_lines.append(f"State minimum (reference): {st_disp}")
         for vrow in av.get("acord_127_vehicles") or []:
             sym = vrow.get("covered_auto_symbols")
             # Extraction stores absent values as the literal string "null"; treat both
