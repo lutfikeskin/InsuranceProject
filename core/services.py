@@ -34,7 +34,7 @@ from .coverage_ontology import summarize_auto_liability, format_liability_limit
 from .customer_resolver import CustomerResolver
 from .duplicate_detection import DuplicateDetectionService
 from core.logger import logger
-from utils.vehicle_utils import refine_vehicle_type
+from utils.vehicle_utils import refine_vehicle_type, get_vehicle_model_for_display
 from core.telemetry import TelemetryService, private_hash
 import pandas as pd
 import json
@@ -50,6 +50,16 @@ ACCOUNT_TYPE_BY_POLICY = {
     "motor_truck_cargo": "Commercial",
     "unknown": "Commercial" # Default to Commercial for unknown if we somehow get here
 }
+
+
+def _format_coi_vehicle_label(vehicle) -> str:
+    """Render vehicle for COI descriptions: '[Year Make Model VIN]'."""
+    year = str(getattr(vehicle, "year", "") or "").strip()
+    make = str(getattr(vehicle, "make", "") or "").strip()
+    model = get_vehicle_model_for_display(vehicle)
+    vin = str(getattr(vehicle, "vin", "") or "").strip()
+    parts = [p for p in (year, make, model, vin) if p]
+    return f"[{' '.join(parts)}]" if parts else "[Vehicle]"
 
 
 def build_extraction_extras_json(extraction_result: dict) -> str | None:
@@ -1609,7 +1619,7 @@ class COIService:
         
         desc_lines = []
         if p.vehicles:
-            v_str = " ".join([f"[{v.year} {v.make} {v.vin}]" for v in p.vehicles])
+            v_str = " ".join([_format_coi_vehicle_label(v) for v in p.vehicles])
             desc_lines.append(f"Vehicle List: {v_str}")
             p_data["vehicle_list_str"] = v_str
         if p.drivers:

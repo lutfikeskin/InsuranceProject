@@ -11,6 +11,7 @@ from core.database import get_session
 from modules.coi import COIGenerator, append_coi_holder, load_coi_holders
 from modules.coi.holders import COIHolderError
 from utils.naic_utils import get_naic_for_carrier
+from utils.vehicle_utils import get_vehicle_model_for_display
 from core.constants import POLICY_SEARCH_PAGE_LIMIT
 
 
@@ -75,7 +76,11 @@ def _format_vehicle_option(v) -> str:
 
 def _format_vehicle_for_description(v) -> str:
     """Render a vehicle inside the Loss Payee clause: 'Year Make Model (VIN: ...)'."""
-    parts = [str(v.year or "").strip(), (v.make or "").strip(), (v.model or "").strip()]
+    parts = [
+        str(v.year or "").strip(),
+        (v.make or "").strip(),
+        get_vehicle_model_for_display(v),
+    ]
     head = " ".join(p for p in parts if p) or "Vehicle"
     return f"{head} (VIN: {v.vin or 'N/A'})"
 

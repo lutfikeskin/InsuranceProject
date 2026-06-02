@@ -1,4 +1,6 @@
 import re
+from functools import lru_cache
+
 import requests
 
 # Comprehensive WMI Map (World Manufacturer Identifier)
@@ -59,6 +61,7 @@ CAB_CHASSIS_KEYWORDS = [
 # Regex for standalone "M2" (e.g. "M2" but not "PM2500" or "RAM2500")
 M2_PATTERN = re.compile(r'(?<![A-Z])M2(?!\d{3})', re.IGNORECASE)
 
+@lru_cache(maxsize=512)
 def decode_vin_nhtsa(vin):
     """
     Decodes VIN using the public NHTSA vPIC API.
@@ -89,6 +92,35 @@ def decode_vin_nhtsa(vin):
         return None
         
     return None
+
+def _vehicle_value(vehicle, field):
+    if isinstance(vehicle, dict):
+        return vehicle.get(field)
+    return getattr(vehicle, field, None)
+
+
+def format_vehicle_model_for_display(model):
+    """Format decoded/extracted model for COI descriptions."""
+    model_str = str(model or "").strip()
+    if not model_str or model_str.lower() in ("null", "none", "n/a"):
+        return ""
+    if model_str.isupper():
+        return model_str.title()
+    return model_str
+
+
+def get_vehicle_model_for_display(vehicle):
+    """Return stored model, or decode VIN via NHTSA when model is missing."""
+    model = format_vehicle_model_for_display(_vehicle_value(vehicle, "model"))
+    if model:
+        return model
+
+    vin = _vehicle_value(vehicle, "vin")
+    nhtsa_data = decode_vin_nhtsa(vin)
+    if not nhtsa_data:
+        return ""
+    return format_vehicle_model_for_display(nhtsa_data.get("Model"))
+
 
 def refine_vehicle_type(year, make, model, vin, extracted_type=None, extracted_chassis=None, extracted_body=None, gvw=None):
     """
