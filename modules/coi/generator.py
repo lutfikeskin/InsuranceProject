@@ -90,10 +90,10 @@ class COIGenerator:
             # COI type drives ADDL INSD column + Cargo/Comp-Coll swap.
             coi_type = policy_data.get("coi_type", "Additional Insured")
             is_lienholder = coi_type == "Lienholder"
-            # Certificate Holder COIs leave the ADDL INSD columns blank. Additional
-            # Insured and Lienholder keep the current business rule of marking "Y".
+            # Certificate Holder COIs mark existing coverage rows as "N" in the
+            # ADDL INSD column, matching ACORD boolean-code behavior.
             if coi_type == "Certificate Holder":
-                addl_y = ""
+                addl_y = "N"
             else:
                 addl_y = "Y"
 
@@ -181,7 +181,7 @@ class COIGenerator:
                 "Cargo_Expires": fmt_date(policy_data.get('expiration_date')) if (has_cargo or has_comp_coll) else "",
                 "Cargo_PolicyNumber": policy_data.get('policy_number', '') if (has_cargo or has_comp_coll) else "",
 
-                # ADDL INSD column codes — blank for Certificate Holder COI type.
+                # ADDL INSD column codes — "N" for Certificate Holder rows, "Y" otherwise.
                 "AddlInsd_GL": addl_y if has_gl else "",
                 "AddlInsd_Auto": addl_y if has_auto else "",
                 "AddlInsd_Other": addl_y if (has_cargo or has_comp_coll) else "",

@@ -85,7 +85,7 @@ def test_bulk_generation_logic_uses_safe_filenames():
         assert "COI - Test Insured - Comp B.pdf" in file_list
 
 
-def test_certificate_holder_clears_additional_insured_codes():
+def test_certificate_holder_marks_additional_insured_codes_no():
     gen = COIGenerator(template_path="data/COI Example.pdf")
 
     addl_pdf = gen.generate_coi(_base_policy(coi_type="Additional Insured"), _base_holder())
@@ -96,6 +96,7 @@ def test_certificate_holder_clears_additional_insured_codes():
 
     assert addl_lines.count("Y") >= 1
     assert holder_lines.count("Y") == 0
+    assert holder_lines.count("N") >= 1
 
 
 def test_gl_occurrence_prefers_general_liability_limit():

@@ -53,7 +53,7 @@ ACORD insurer behavior:
 - GL occurrence uses `general_liability_limit`/`gl_occurrence_limit` before falling back to auto liability.
 - Cargo section is enabled only when a meaningful cargo limit is present/selected.
 - GL aggregate supports standard values or a custom amount.
-- Certificate Holder COIs leave ADDL INSD columns blank; Additional Insured and Lienholder mark them with `Y`.
+- Certificate Holder COIs mark existing ADDL INSD coverage rows with `N`; Additional Insured and Lienholder mark them with `Y`.
 
 ## Bulk Mode
 
