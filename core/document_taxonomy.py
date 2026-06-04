@@ -25,15 +25,23 @@ DOCUMENT_TYPES = {
     },
     "quote": {
         "display": "Quote / Proposal",
+        # Not extractable by default — pre-bind, limits not yet final. The pipeline
+        # short-circuits with a non_extractable result so the broker has to opt in
+        # via "Try Extraction Anyway", which sets forced_extraction=True so the
+        # review/save flow flags it as pre-bind data instead of treating it as
+        # active coverage.
         "extractable": False,
-        "extraction_goal": None,
-        "description": "Not a bound policy, limits may change"
+        "extraction_goal": "full_policy",
+        "description": "Not a bound policy. Use 'Try Extraction Anyway' to extract for review only — saves will be flagged as pre-bind."
     },
     "application": {
         "display": "Application",
+        # Same reasoning as quote — pre-bind, coverage not yet active. Force-extract
+        # only flow tags forced_extraction=True so saves never land as live policies
+        # without a deliberate broker decision.
         "extractable": False,
-        "extraction_goal": None,
-        "description": "Pre-bind application, not actual coverage"
+        "extraction_goal": "full_policy",
+        "description": "Pre-bind application. Use 'Try Extraction Anyway' to extract for review only — saves will be flagged as pre-bind."
     },
     "endorsement": {
         "display": "Endorsement",
@@ -50,8 +58,8 @@ DOCUMENT_TYPES = {
 }
 
 EXTRACTION_GOAL_GROUPS = {
-    "full_policy": ["declarations_page", "renewal_declarations", "unknown"],
+    "full_policy": ["declarations_page", "renewal_declarations", "application", "quote", "unknown"],
     "coi_summary": ["certificate_of_insurance", "memorandum"],
     "endorsement_summary": ["endorsement"],
-    "skip": ["quote", "application"]
+    "skip": []
 }

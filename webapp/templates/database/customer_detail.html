@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% block title %}{{ customer.full_name }}{% endblock %}
+{% block content %}
+  <section class="detail-header">
+    <div>
+      <div class="crumb">
+        <a href="/database?tab=customers">{{ i.icon('chevron-right', 12) }} Database / Customers</a>
+      </div>
+      <h1>{{ i.icon('user', 22) }} {{ customer.full_name }}</h1>
+      <div class="header-meta">
+        <span class="pill primary">{{ policy_count }} polic{{ 'y' if policy_count == 1 else 'ies' }}</span>
+        <span class="pill">{{ entity_count }} entit{{ 'y' if entity_count == 1 else 'ies' }}</span>
+        {% if customer.needs_real_name_entry %}
+          <span class="pill warn">needs real name</span>
+        {% endif %}
+        <span class="muted" style="font-size:12.5px;">
+          Last activity {{ (customer.updated_at or customer.created_at).strftime('%Y-%m-%d %H:%M') if (customer.updated_at or customer.created_at) else '—' }}
+        </span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <a class="btn ghost"
+         href="/database/customer/{{ customer.id }}?tab=merge"
+         hx-get="/database/customer/{{ customer.id }}/tab/merge"
+         hx-target="#tab-body"
+         hx-push-url="/database/customer/{{ customer.id }}?tab=merge">
+        {{ i.icon('compare', 14) }} Merge
+      </a>
+    </div>
+  </section>
+
+  <nav class="subtab-bar" aria-label="Customer sections">
+    <div class="subtabs">
+      {% for tab_name in customer_tabs %}
+        {% set labels = {'profile': 'Profile', 'entities': 'Entities', 'policies': 'Policies', 'history': 'History', 'merge': 'Merge'} %}
+        {% set icons = {'profile': 'user', 'entities': 'building', 'policies': 'file-text', 'history': 'clock', 'merge': 'compare'} %}
+        <a href="/database/customer/{{ customer.id }}?tab={{ tab_name }}"
+           class="{% if active_tab == tab_name %}active{% endif %}"
+           hx-get="/database/customer/{{ customer.id }}/tab/{{ tab_name }}"
+           hx-target="#tab-body"
+           hx-push-url="/database/customer/{{ customer.id }}?tab={{ tab_name }}"
+           hx-indicator="#tab-loading">
+          {{ i.icon(icons[tab_name], 14) }} {{ labels[tab_name] }}
+        </a>
+      {% endfor %}
+    </div>
+    <div class="subtab-meta">
+      <span id="tab-loading" class="htmx-indicator"><span class="spinner"></span></span>
+    </div>
+  </nav>
+
+  <div id="tab-body">
+    {% include "partials/database/customer_" ~ active_tab ~ "_tab.html" %}
+  </div>
+{% endblock %}

@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% block title %}Review Queue{% endblock %}
+{% block head_extra %}
+  <style>
+    /* Review queue gets the full viewport width — it's a workstation page */
+    .main-inner.review-wide { max-width: none; padding-left: var(--s-6); padding-right: var(--s-6); }
+    .review-split {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1.05fr) minmax(360px, 0.95fr);
+      gap: var(--s-4);
+      align-items: stretch;
+    }
+    @media (max-width: 1400px) { .review-split { grid-template-columns: 280px minmax(0, 1fr) minmax(340px, 0.9fr); } }
+    @media (max-width: 1200px) { .review-split { grid-template-columns: 1fr; } }
+
+    .review-tasks-rail { max-height: calc(100vh - 280px); overflow:auto; padding: 0; }
+    .review-tasks-rail .task-row {
+      display: grid; gap: 4px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-soft);
+      cursor: pointer;
+      transition: background 120ms ease;
+    }
+    .review-tasks-rail .task-row:hover { background: var(--primary-tint); }
+    .review-tasks-rail .task-row.active { background: var(--primary-tint); box-shadow: inset 3px 0 0 var(--primary); }
+    .review-tasks-rail .task-row .filename {
+      font-weight: 600; color: var(--text-strong); font-size: 13px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .review-tasks-rail .task-row .meta { font-size: 12px; color: var(--text-muted); display: flex; gap: 6px; align-items: center; }
+
+    .review-pdf-pane {
+      position: sticky; top: var(--s-4);
+      height: calc(100vh - 220px);
+      display: flex; flex-direction: column;
+      padding: 0; overflow: hidden;
+    }
+    .review-pdf-pane iframe { flex: 1; width: 100%; border: 0; background: #2a2f3a; }
+    .review-pdf-toolbar {
+      display: flex; align-items: center; gap: var(--s-2);
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-soft);
+      background: var(--bg-subtle);
+      font-size: 12.5px;
+    }
+
+    .review-form-pane {
+      max-height: calc(100vh - 220px);
+      overflow-y: auto;
+      padding: var(--s-5);
+    }
+
+    /* Per-row editor cards */
+    .row-card {
+      position: relative;
+      padding: var(--s-3) var(--s-4) var(--s-3);
+      border: 1px solid var(--border-soft);
+      background: var(--bg-subtle);
+      border-radius: var(--radius-sm);
+      margin-bottom: var(--s-2);
+    }
+    .row-card .row-card-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: var(--s-2);
+    }
+    .row-card .row-card-label {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--text-muted); font-weight: 600;
+    }
+    .row-card .row-card-remove {
+      padding: 4px 8px; font-size: 12px;
+      background: transparent; border: 1px solid transparent;
+      color: var(--text-muted);
+    }
+    .row-card .row-card-remove:hover {
+      background: var(--danger-bg); color: var(--danger-fg);
+      border-color: var(--danger-br);
+    }
+    .row-card .row-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: var(--s-2);
+    }
+    .row-card label {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .row-card input, .row-card select {
+      padding: 6px 9px;
+      font-size: 12.5px;
+      margin-top: 2px;
+    }
+    .add-row-btn {
+      width: 100%;
+      padding: 8px;
+      background: var(--bg-elev);
+      border: 1.5px dashed var(--border-strong);
+      color: var(--text-subtle);
+      font-size: 12.5px;
+    }
+    .add-row-btn:hover { background: var(--primary-tint); border-color: var(--primary); color: var(--primary-700); border-style: solid; }
+    .section-empty {
+      padding: var(--s-3);
+      color: var(--text-muted);
+      font-size: 12.5px;
+      text-align: center;
+      background: var(--bg-subtle);
+      border-radius: var(--radius-sm);
+      border: 1px dashed var(--border);
+    }
+
+    .conf-pill {
+      display: inline-block;
+      font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-left: 6px;
+      vertical-align: 1px;
+    }
+    .conf-pill.high   { background: var(--success-bg); color: var(--success-fg); }
+    .conf-pill.medium { background: var(--warn-bg);    color: var(--warn-fg); }
+    .conf-pill.low    { background: var(--danger-bg);  color: var(--danger-fg); }
+  </style>
+{% endblock %}
+{% block content %}
+  <script>document.querySelector('.main-inner').classList.add('review-wide');</script>
+
+  {% call m.page_header('Review Queue', 'Side-by-side PDF preview and structured field review.') %}
+    <a class="btn ghost" href="/process-policies">{{ i.icon('upload', 15) }} Process more</a>
+  {% endcall %}
+
+  <section class="grid metrics">
+    {{ m.kpi_card('Pending', counts.pending, icon_name='clock',         tone='warn') }}
+    {{ m.kpi_card('Saved',   counts.saved,   icon_name='check-circle',  tone='success') }}
+    {{ m.kpi_card('Skipped', counts.skipped, icon_name='minus') }}
+    {{ m.kpi_card('Failed',  counts.failed,  icon_name='alert-circle',  tone='danger') }}
+  </section>
+
+  <div class="toolbar">
+    <label class="muted" for="status">Filter</label>
+    <select id="status" name="status"
+            hx-get="/review-queue/table" hx-target="#queue-table"
+            hx-trigger="change" hx-include="this"
+            hx-indicator="#queue-loading"
+            style="min-width:160px;">
+      {% for option in status_options %}
+        <option value="{{ option }}" {% if option == selected_status %}selected{% endif %}>{{ option|title }}</option>
+      {% endfor %}
+    </select>
+    <span id="queue-loading" class="htmx-indicator"><span class="spinner"></span></span>
+    <span class="spacer"></span>
+    <span class="muted">{{ tasks|length }} task{% if tasks|length != 1 %}s{% endif %}</span>
+  </div>
+
+  <section class="review-split">
+    <div class="panel flush review-tasks-rail" id="queue-table">
+      {% include "partials/review_tasks_table.html" %}
+    </div>
+
+    <div id="task-detail" style="display:contents;">
+      {% include "partials/review_task_detail.html" %}
+    </div>
+  </section>
+{% endblock %}

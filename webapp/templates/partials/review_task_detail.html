@@ -1,0 +1,409 @@
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% if not selected_task %}
+  <div class="panel" style="grid-column: 2 / span 2;">
+    {{ m.empty_state('No task selected', 'Pick a row from the queue to inspect the source PDF and review the extracted fields side-by-side.', 'inbox') }}
+  </div>
+{% else %}
+  {% set summary = policy_summary(selected_task.extraction_result) %}
+  {% set er = selected_task.extraction_result or {} %}
+  {% set policy = er.policy if er.policy is defined else {} %}
+  {% set vehicles = er.vehicles or [] %}
+  {% set drivers = er.drivers or [] %}
+  {% set coverages = er.coverages or [] %}
+  {% set ais = er.additional_interests or [] %}
+
+  {# -------- PDF pane (left) -------- #}
+  <aside class="panel review-pdf-pane">
+    <div class="review-pdf-toolbar">
+      {{ i.icon('file-text', 14) }}
+      <span class="truncate" style="flex:1;" title="{{ selected_task.upload.filename if selected_task.upload else '' }}">
+        <strong>{{ selected_task.upload.filename if selected_task.upload else 'No PDF on file' }}</strong>
+      </span>
+      {% if selected_task.upload and selected_task.upload.storage_uri %}
+        <a class="btn sm ghost" href="/review-queue/{{ selected_task.id }}/pdf" target="_blank" rel="noopener" title="Open PDF in a new tab">
+          {{ i.icon('download', 13) }} Open
+        </a>
+      {% endif %}
+    </div>
+    {% if selected_task.upload and selected_task.upload.storage_uri %}
+      <iframe src="/review-queue/{{ selected_task.id }}/pdf#view=FitH"
+              title="Uploaded PDF"
+              loading="lazy"></iframe>
+    {% else %}
+      <div style="flex:1; display:grid; place-items:center;">
+        {{ m.empty_state('PDF not available', 'This task has no stored source document.', 'file-x') }}
+      </div>
+    {% endif %}
+  </aside>
+
+  {# -------- Form pane (right) -------- #}
+  <aside class="panel review-form-pane" id="review-form-pane">
+    <div class="flex-between mb-3">
+      <div>
+        <div class="muted" style="font-size:11.5px; letter-spacing:0.04em; text-transform:uppercase; font-weight:600;">Task #{{ selected_task.id }}</div>
+        <h3 class="mt-2 mono">{{ summary.policy_number if summary.policy_number != '—' else 'Untitled policy' }}</h3>
+      </div>
+      {{ m.status_badge(selected_task.status) }}
+    </div>
+
+    <div class="tag-list mb-3">
+      <span class="pill">{{ i.icon('building', 12) }} {{ summary.carrier }}</span>
+      <span class="pill">{{ i.icon('user', 12) }} {{ summary.insured }}</span>
+      <span class="pill primary">{{ summary.document_type }} · {{ summary.policy_type }}</span>
+    </div>
+
+    {% if selected_task.notes %}
+      <p class="muted" style="font-size:12.5px;"><em>{{ selected_task.notes }}</em></p>
+    {% endif %}
+
+    {% if detail_error %}
+      <div class="toast danger mb-3" data-toast style="position:static;">
+        <div class="toast-icon">{{ i.icon('alert-circle', 14) }}</div>
+        <div class="toast-body"><div class="toast-title">Couldn't save</div><div class="toast-message">{{ detail_error }}</div></div>
+      </div>
+    {% endif %}
+
+    {% if selected_task.status == "pending" %}
+      {% if review_form and review_form.gated_fields %}
+        <div class="toast warn mb-3" data-toast style="position:static;">
+          <div class="toast-icon">{{ i.icon('alert-triangle', 14) }}</div>
+          <div class="toast-body">
+            <div class="toast-title">Confidence gate applied</div>
+            <div class="toast-message">{{ review_form.gated_fields|length }} field(s) were cleared by the confidence gate — fill them in below before saving.</div>
+          </div>
+        </div>
+      {% endif %}
+
+      <form id="review-form"
+            hx-post="/review-queue/{{ selected_task.id }}/save"
+            hx-target="#task-detail"
+            hx-swap="innerHTML"
+            hx-indicator="#review-save-spinner"
+            onsubmit="serializeReviewRows(this)"
+            class="form-grid">
+
+        {# Hidden JSON payloads — populated from structured rows on submit #}
+        <input type="hidden" name="vehicles_json" id="vehicles_json">
+        <input type="hidden" name="drivers_json" id="drivers_json">
+        <input type="hidden" name="coverages_json" id="coverages_json">
+        <input type="hidden" name="additional_interests_json" id="additional_interests_json">
+
+        {# ============ Policy core ============ #}
+        <div class="form-section">
+          <h4>{{ i.icon('file-text', 13) }} Policy</h4>
+          <div class="form-grid cols-2">
+            <label>Policy #
+              <input name="policy_number" value="{{ review_form.policy_number if review_form else (summary.policy_number if summary.policy_number != '—' else '') }}">
+            </label>
+            <label>Carrier
+              <input name="carrier_name" value="{{ review_form.carrier_name if review_form else (summary.carrier if summary.carrier != '—' else '') }}">
+            </label>
+            <label>Insured
+              <input name="insured_name" value="{{ review_form.insured_name if review_form else (summary.insured if summary.insured != '—' else '') }}">
+            </label>
+            <label>Premium
+              <input name="premium" value="{{ review_form.premium if review_form else (policy.premium if policy.premium is defined else '') }}">
+            </label>
+            <label>Effective Date
+              <input name="effective_date" value="{{ review_form.effective_date if review_form else (policy.effective_date if policy.effective_date is defined else '') }}">
+            </label>
+            <label>Expiration Date
+              <input name="expiration_date" value="{{ review_form.expiration_date if review_form else (policy.expiration_date if policy.expiration_date is defined else '') }}">
+            </label>
+          </div>
+        </div>
+
+        {# ============ Vehicles ============ #}
+        <div class="form-section">
+          <div class="panel-header" style="margin-bottom: var(--s-3);">
+            <h4 style="margin:0;">{{ i.icon('truck', 13) }} Vehicles <span class="muted" style="font-weight:500;">({{ vehicles|length }})</span></h4>
+            <button type="button" class="sm ghost" data-add-row="vehicles">{{ i.icon('plus', 13) }} Add vehicle</button>
+          </div>
+          <div data-rows="vehicles">
+            {% for v in vehicles %}
+              <div class="row-card" data-row>
+                <div class="row-card-head">
+                  <span class="row-card-label">Vehicle {{ loop.index }}</span>
+                  <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+                </div>
+                <div class="row-grid">
+                  <label>Year<input data-field="year" type="text" value="{{ v.year if v.year is not none else '' }}"></label>
+                  <label>Make<input data-field="make" type="text" value="{{ v.make or '' }}"></label>
+                  <label>Model<input data-field="model" type="text" value="{{ v.model or '' }}"></label>
+                  <label>VIN<input data-field="vin" type="text" value="{{ v.vin or '' }}" class="mono"></label>
+                  <label>Type<input data-field="type" type="text" value="{{ v.type or v.vehicle_type or '' }}"></label>
+                  <label>GVW<input data-field="gvw" type="text" value="{{ v.gvw if v.gvw is not none else '' }}"></label>
+                  <label>Chassis<input data-field="chassis" type="text" value="{{ v.chassis or '' }}"></label>
+                  <label>Body<input data-field="body" type="text" value="{{ v.body or '' }}"></label>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+          <template data-template="vehicles">
+            <div class="row-card" data-row>
+              <div class="row-card-head">
+                <span class="row-card-label">New vehicle</span>
+                <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+              </div>
+              <div class="row-grid">
+                <label>Year<input data-field="year" type="text"></label>
+                <label>Make<input data-field="make" type="text"></label>
+                <label>Model<input data-field="model" type="text"></label>
+                <label>VIN<input data-field="vin" type="text" class="mono"></label>
+                <label>Type<input data-field="type" type="text"></label>
+                <label>GVW<input data-field="gvw" type="text"></label>
+                <label>Chassis<input data-field="chassis" type="text"></label>
+                <label>Body<input data-field="body" type="text"></label>
+              </div>
+            </div>
+          </template>
+          {% if not vehicles %}<div class="section-empty" data-empty-for="vehicles">No vehicles on this policy — click "Add vehicle" to insert one.</div>{% endif %}
+        </div>
+
+        {# ============ Drivers ============ #}
+        <div class="form-section">
+          <div class="panel-header" style="margin-bottom: var(--s-3);">
+            <h4 style="margin:0;">{{ i.icon('users', 13) }} Drivers <span class="muted" style="font-weight:500;">({{ drivers|length }})</span></h4>
+            <button type="button" class="sm ghost" data-add-row="drivers">{{ i.icon('plus', 13) }} Add driver</button>
+          </div>
+          <div data-rows="drivers">
+            {% for d in drivers %}
+              <div class="row-card" data-row>
+                <div class="row-card-head">
+                  <span class="row-card-label">Driver {{ loop.index }}</span>
+                  <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+                </div>
+                <div class="row-grid">
+                  <label>Full Name<input data-field="full_name" type="text" value="{{ d.full_name or '' }}"></label>
+                  <label>License #<input data-field="license_number" type="text" value="{{ d.license_number or '' }}" class="mono"></label>
+                  <label>Excluded?
+                    <select data-field="is_excluded" data-bool="true">
+                      <option value="">—</option>
+                      <option value="true"  {% if d.is_excluded is sameas true %}selected{% endif %}>Yes</option>
+                      <option value="false" {% if d.is_excluded is sameas false %}selected{% endif %}>No</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+          <template data-template="drivers">
+            <div class="row-card" data-row>
+              <div class="row-card-head">
+                <span class="row-card-label">New driver</span>
+                <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+              </div>
+              <div class="row-grid">
+                <label>Full Name<input data-field="full_name" type="text"></label>
+                <label>License #<input data-field="license_number" type="text" class="mono"></label>
+                <label>Excluded?
+                  <select data-field="is_excluded" data-bool="true">
+                    <option value="">—</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </template>
+          {% if not drivers %}<div class="section-empty" data-empty-for="drivers">No drivers on this policy.</div>{% endif %}
+        </div>
+
+        {# ============ Coverages ============ #}
+        <div class="form-section">
+          <div class="panel-header" style="margin-bottom: var(--s-3);">
+            <h4 style="margin:0;">{{ i.icon('shield', 13) }} Coverages <span class="muted" style="font-weight:500;">({{ coverages|length }})</span></h4>
+            <button type="button" class="sm ghost" data-add-row="coverages">{{ i.icon('plus', 13) }} Add coverage</button>
+          </div>
+          <div data-rows="coverages">
+            {% for c in coverages %}
+              {% set limits = c.limits or {} %}
+              <div class="row-card" data-row>
+                <div class="row-card-head">
+                  <span class="row-card-label">{{ c.display_name or c.type or 'Coverage ' ~ loop.index }}</span>
+                  <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+                </div>
+                <div class="row-grid">
+                  <label>Type<input data-field="type" type="text" value="{{ c.type or '' }}"></label>
+                  <label>Display Name<input data-field="display_name" type="text" value="{{ c.display_name or c.type or '' }}"></label>
+                  <label>Code<input data-field="coverage_code" type="text" value="{{ c.coverage_code or '' }}"></label>
+                  <label>Family<input data-field="family" type="text" value="{{ c.family or '' }}"></label>
+                  <label>Vehicle VIN<input data-field="vehicle_vin" type="text" value="{{ c.vehicle_vin or '' }}" class="mono"></label>
+                  <label>Deductible<input data-field="deductible" type="text" value="{{ c.deductible if c.deductible is not none else '' }}"></label>
+                  <label>Per Person<input data-field="limits.per_person" type="text" value="{{ limits.per_person if limits.per_person is not none else '' }}"></label>
+                  <label>Per Accident<input data-field="limits.per_accident" type="text" value="{{ limits.per_accident if limits.per_accident is not none else '' }}"></label>
+                  <label>Per Occurrence<input data-field="limits.per_occurrence" type="text" value="{{ limits.per_occurrence if limits.per_occurrence is not none else '' }}"></label>
+                  <label>Combined Single Limit<input data-field="limits.combined_single_limit" type="text" value="{{ limits.combined_single_limit if limits.combined_single_limit is not none else '' }}"></label>
+                  <label>Aggregate<input data-field="limits.aggregate" type="text" value="{{ limits.aggregate if limits.aggregate is not none else '' }}"></label>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+          <template data-template="coverages">
+            <div class="row-card" data-row>
+              <div class="row-card-head">
+                <span class="row-card-label">New coverage</span>
+                <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+              </div>
+              <div class="row-grid">
+                <label>Type<input data-field="type" type="text"></label>
+                <label>Display Name<input data-field="display_name" type="text"></label>
+                <label>Code<input data-field="coverage_code" type="text"></label>
+                <label>Family<input data-field="family" type="text"></label>
+                <label>Vehicle VIN<input data-field="vehicle_vin" type="text" class="mono"></label>
+                <label>Deductible<input data-field="deductible" type="text"></label>
+                <label>Per Person<input data-field="limits.per_person" type="text"></label>
+                <label>Per Accident<input data-field="limits.per_accident" type="text"></label>
+                <label>Per Occurrence<input data-field="limits.per_occurrence" type="text"></label>
+                <label>Combined Single Limit<input data-field="limits.combined_single_limit" type="text"></label>
+                <label>Aggregate<input data-field="limits.aggregate" type="text"></label>
+              </div>
+            </div>
+          </template>
+          {% if not coverages %}<div class="section-empty" data-empty-for="coverages">No coverages extracted.</div>{% endif %}
+        </div>
+
+        {# ============ Additional Interests ============ #}
+        <div class="form-section">
+          <div class="panel-header" style="margin-bottom: var(--s-3);">
+            <h4 style="margin:0;">{{ i.icon('building', 13) }} Additional Interests <span class="muted" style="font-weight:500;">({{ ais|length }})</span></h4>
+            <button type="button" class="sm ghost" data-add-row="additional_interests">{{ i.icon('plus', 13) }} Add interest</button>
+          </div>
+          <div data-rows="additional_interests">
+            {% for a in ais %}
+              <div class="row-card" data-row>
+                <div class="row-card-head">
+                  <span class="row-card-label">{{ a.name or 'Interest ' ~ loop.index }}</span>
+                  <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+                </div>
+                <div class="row-grid">
+                  <label>Name<input data-field="name" type="text" value="{{ a.name or '' }}"></label>
+                  <label>Address<input data-field="address" type="text" value="{{ a.address or '' }}"></label>
+                  <label>Type<input data-field="interest_type" type="text" value="{{ a.interest_type or '' }}"></label>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+          <template data-template="additional_interests">
+            <div class="row-card" data-row>
+              <div class="row-card-head">
+                <span class="row-card-label">New interest</span>
+                <button type="button" class="row-card-remove" data-remove-row>{{ i.icon('x', 12) }} Remove</button>
+              </div>
+              <div class="row-grid">
+                <label>Name<input data-field="name" type="text"></label>
+                <label>Address<input data-field="address" type="text"></label>
+                <label>Type<input data-field="interest_type" type="text"></label>
+              </div>
+            </div>
+          </template>
+          {% if not ais %}<div class="section-empty" data-empty-for="additional_interests">No additional interests.</div>{% endif %}
+        </div>
+
+        <div class="sticky-actions">
+          <button type="submit" class="primary">{{ i.icon('save', 15) }} Save Extraction</button>
+          <button type="button" class="ghost"
+                  hx-post="/review-queue/{{ selected_task.id }}/skip"
+                  hx-target="#queue-table"
+                  hx-swap="innerHTML">
+            {{ i.icon('minus', 14) }} Skip
+          </button>
+          <button type="button" class="danger"
+                  hx-post="/review-queue/{{ selected_task.id }}/fail"
+                  hx-target="#queue-table"
+                  hx-swap="innerHTML">
+            {{ i.icon('x', 14) }} Mark Failed
+          </button>
+          <span class="spacer"></span>
+          <span id="review-save-spinner" class="htmx-indicator"><span class="spinner"></span> Saving…</span>
+        </div>
+      </form>
+    {% endif %}
+
+    <details class="mt-5">
+      <summary>{{ i.icon('file-text', 14) }} Stored extraction JSON</summary>
+      <pre>{{ selected_task.extraction_result | tojson(indent=2) }}</pre>
+    </details>
+  </aside>
+
+  <script>
+    // Add/remove rows
+    (function(){
+      const root = document.getElementById('review-form-pane');
+      if (!root) return;
+
+      function setNestedValue(obj, path, value) {
+        const parts = path.split('.');
+        let cur = obj;
+        for (let i = 0; i < parts.length - 1; i++) {
+          if (cur[parts[i]] == null) cur[parts[i]] = {};
+          cur = cur[parts[i]];
+        }
+        cur[parts[parts.length - 1]] = value;
+      }
+
+      function parseValue(input) {
+        let v = input.value;
+        if (v === '' || v == null) return null;
+        if (input.dataset.bool === 'true') {
+          if (v === 'true') return true;
+          if (v === 'false') return false;
+          return null;
+        }
+        const num = Number(v);
+        if (!isNaN(num) && v.trim() !== '' && /^-?\d+(\.\d+)?$/.test(v.trim())) return num;
+        return v;
+      }
+
+      function serializeSection(sectionName) {
+        const container = root.querySelector('[data-rows="' + sectionName + '"]');
+        if (!container) return [];
+        const rows = container.querySelectorAll('[data-row]');
+        const out = [];
+        rows.forEach(row => {
+          const obj = {};
+          row.querySelectorAll('[data-field]').forEach(input => {
+            const field = input.dataset.field;
+            setNestedValue(obj, field, parseValue(input));
+          });
+          out.push(obj);
+        });
+        return out;
+      }
+
+      window.serializeReviewRows = function(form) {
+        const sections = ['vehicles', 'drivers', 'coverages', 'additional_interests'];
+        sections.forEach(name => {
+          const target = form.querySelector('#' + name + '_json');
+          if (target) target.value = JSON.stringify(serializeSection(name));
+        });
+      };
+
+      // Add row handlers
+      root.addEventListener('click', function(e) {
+        const addBtn = e.target.closest('[data-add-row]');
+        if (addBtn) {
+          e.preventDefault();
+          const name = addBtn.dataset.addRow;
+          const tpl = root.querySelector('template[data-template="' + name + '"]');
+          const container = root.querySelector('[data-rows="' + name + '"]');
+          if (tpl && container) {
+            const frag = tpl.content.cloneNode(true);
+            container.appendChild(frag);
+            const empty = root.querySelector('[data-empty-for="' + name + '"]');
+            if (empty) empty.style.display = 'none';
+          }
+          return;
+        }
+        const rmBtn = e.target.closest('[data-remove-row]');
+        if (rmBtn) {
+          e.preventDefault();
+          const row = rmBtn.closest('[data-row]');
+          if (row) row.remove();
+          return;
+        }
+      });
+    })();
+  </script>
+{% endif %}

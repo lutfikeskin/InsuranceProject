@@ -72,18 +72,30 @@ class ExtractionCache:
         return index.get(f"{CACHE_VERSION}_{file_hash}")
 
     def save_gemini_cache_meta(
-        self, file_hash: str, cache_name: str, expire_time: Optional[str], model: str
+        self, file_hash: str, cache_name: str, expire_time, model: str
     ):
-        """Persists Gemini cache metadata so repeated runs can reuse active cache."""
+        """Persists Gemini cache metadata so repeated runs can reuse active cache.
+
+        expire_time may arrive as a datetime (from the Gemini SDK) or as an
+        ISO string. We normalize to ISO string here so JSON serialization
+        stays safe and get_reusable_cache can re-parse it consistently.
+        """
         try:
             with open(self.index_file, "r") as f:
                 index = json.load(f)
         except (OSError, json.JSONDecodeError) as exc:
             logger.debug(f"Gemini cache meta read failed before write: {exc}")
             index = {}
+        expire_time_str: Optional[str]
+        if expire_time is None:
+            expire_time_str = None
+        elif hasattr(expire_time, "isoformat"):
+            expire_time_str = expire_time.isoformat()
+        else:
+            expire_time_str = str(expire_time)
         index[f"{CACHE_VERSION}_{file_hash}"] = {
             "cache_name": cache_name,
-            "expire_time": expire_time,
+            "expire_time": expire_time_str,
             "model": model,
         }
         try:

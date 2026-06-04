@@ -58,6 +58,16 @@ class HistoryService:
         normalized = self.normalize(val)
         return "" if normalized is None else str(normalized)
 
+    def list_for_policy(self, policy_id: int, *, limit: int = 200):
+        """Reverse-chronological PolicyHistory rows for a single policy."""
+        return (
+            self.session.query(PolicyHistory)
+            .filter(PolicyHistory.policy_id == policy_id)
+            .order_by(PolicyHistory.timestamp.desc(), PolicyHistory.id.desc())
+            .limit(limit)
+            .all()
+        )
+
     def _get_next_version(self, policy_id: int) -> int:
         """Calculates next version number."""
         max_ver = self.session.query(func.max(PolicyHistory.policy_version)).filter(

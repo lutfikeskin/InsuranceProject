@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Insurance Platform{% endblock %} · Insurance Document Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;550;600;650;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  {% block head_extra %}{% endblock %}
+</head>
+{% import "_icons.html" as i %}
+{% set nav_items = [
+  ('dashboard',        'Dashboard',        '/dashboard'),
+  ('upload',           'Process Policies', '/process-policies'),
+  ('inbox',            'Review Queue',     '/review-queue'),
+  ('compare',          'Compare',          '/compare'),
+  ('database',         'Database',         '/database'),
+  ('calendar-clock',   'Renewals',         '/renewals'),
+  ('file-text',        'Create COI',       '/create-coi'),
+  ('settings',         'Settings',         '/settings'),
+] %}
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark">IP</div>
+        <div class="brand-text">
+          <span class="brand-name">Insurance Platform</span>
+          <span class="brand-sub">Broker workstation</span>
+        </div>
+      </div>
+      <nav>
+        <div class="nav-section-label">Workspace</div>
+        {% for icon_name, label, href in nav_items %}
+          {% set is_active = request.path == href or (href != '/dashboard' and request.path.startswith(href)) %}
+          <a href="{{ href }}"{% if is_active %} class="active" aria-current="page"{% endif %}>
+            {{ i.icon(icon_name, 18) }}
+            <span>{{ label }}</span>
+          </a>
+        {% endfor %}
+      </nav>
+      <div class="sidebar-footer">
+        <div>HTMX · Jinja · Flask</div>
+        <div class="mt-2">v1.0 · operational shell</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="main-inner {% block content_class %}{% endblock %}">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+
+  <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false">
+    {% block toasts %}{% endblock %}
+  </div>
+
+  {# Auto-dismiss toasts after 4.5s and remove gracefully #}
+  <script>
+    (function(){
+      function bindToasts(root){
+        (root || document).querySelectorAll('.toast[data-toast]:not([data-bound])').forEach(function(t){
+          t.setAttribute('data-bound','1');
+          setTimeout(function(){
+            t.classList.add('dismiss');
+            setTimeout(function(){ t.remove(); }, 220);
+          }, 4500);
+        });
+      }
+      document.addEventListener('DOMContentLoaded', function(){ bindToasts(); });
+      document.body.addEventListener('htmx:afterSwap', function(e){ bindToasts(); });
+      document.body.addEventListener('htmx:oobAfterSwap', function(e){ bindToasts(); });
+    })();
+  </script>
+</body>
+</html>

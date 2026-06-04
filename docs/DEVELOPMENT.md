@@ -23,15 +23,23 @@ Set API key (PowerShell):
 $env:GEMINI_API_KEY="your_key"
 ```
 
-Run Streamlit app:
+Run HTMX/Jinja shell:
+
+```bash
+flask --app webapp.app run --debug
+```
+
+Run legacy Streamlit shell:
 
 ```bash
 streamlit run app.py
 ```
 
+The HTMX shell now covers the operational review, database, COI, compare, renewals, and dashboard workflows. Streamlit remains only as a legacy reference shell.
+
 ## Development Workflow
 
-1. Run Streamlit app and verify targeted behavior.
+1. Run HTMX shell and verify targeted behavior.
 2. Run focused tests first, then `pytest`.
 3. Update docs alongside behavior changes.
 

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+  {% call m.page_header('Settings', 'Manage the HTMX shell\'s runtime knobs.') %}{% endcall %}
+
+  <section class="grid cards-2">
+    <div class="panel">
+      <div class="panel-header">
+        <h3>{{ i.icon('key', 16) }} Gemini API Key</h3>
+        {% if api_key_configured %}
+          <span class="pill success">{{ i.icon('check', 12) }} configured</span>
+        {% else %}
+          <span class="pill warn">not set</span>
+        {% endif %}
+      </div>
+      <p class="muted">Held in-memory only. Leave the input blank to keep the current key.</p>
+      <form method="post" class="form-grid">
+        <label>API Key
+          <div style="position:relative;">
+            <input id="api-key-input" type="password" name="gemini_api_key" placeholder="Paste a new key to replace the in-memory one" autocomplete="off">
+            <button type="button" class="ghost sm icon"
+                    style="position:absolute; right:6px; top:50%; transform:translateY(-50%);"
+                    aria-label="Toggle visibility"
+                    onclick="var el=document.getElementById('api-key-input'); el.type=el.type==='password'?'text':'password'; this.querySelector('svg').outerHTML = el.type==='password' ? this.dataset.eye : this.dataset.eyeoff;"
+                    data-eye='<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>'
+                    data-eyeoff='<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'>
+              {{ i.icon('eye', 15) }}
+            </button>
+          </div>
+        </label>
+        <input type="hidden" name="confidence_gate_threshold" value="{{ current_gate }}">
+        <div class="toolbar" style="margin:0;">
+          <button type="submit" name="action" value="save" class="primary">{{ i.icon('save', 15) }} Save Key</button>
+          <button type="submit" name="action" value="clear_key" class="danger">{{ i.icon('trash', 14) }} Clear API Key</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h3>{{ i.icon('sliders', 16) }} Confidence Gate</h3>
+        <span class="pill primary">{{ gate_options[current_gate] if gate_options[current_gate] else current_gate }}</span>
+      </div>
+      <p class="muted">Low-confidence fields are cleared on the review form. Save is never blocked.</p>
+      <form method="post" class="form-grid">
+        <div class="segmented" role="radiogroup" aria-label="Confidence gate">
+          {% for value, label in gate_options.items() %}
+            <label class="seg{% if value == current_gate %} active{% endif %}" style="cursor:pointer;">
+              <input type="radio" name="confidence_gate_threshold" value="{{ value }}" {% if value == current_gate %}checked{% endif %} style="display:none;">
+              {{ label }}
+            </label>
+          {% endfor %}
+        </div>
+        <div class="toolbar" style="margin:0;">
+          <button type="submit" name="action" value="save" class="primary">{{ i.icon('save', 15) }} Save Threshold</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="panel mt-5" style="max-width: 760px;">
+    <div class="panel-header">
+      <h3>{{ i.icon('flame', 16) }} Daily Usage</h3>
+      <span class="pill">reset anytime</span>
+    </div>
+    <p class="muted">The daily usage meter can be reset without leaving the HTMX shell.</p>
+    <div class="meter"><span style="width:35%"></span></div>
+    <div class="toolbar mt-3">
+      <button type="button" class="danger"
+              onclick="this.disabled=true; this.innerHTML='Resetting…'; fetch('/settings/reset-usage', {method:'POST'}).then(() => location.reload());">
+        {{ i.icon('retry', 14) }} Reset Daily Usage Meter
+      </button>
+      <span class="muted">This zeroes today's spend counter.</span>
+    </div>
+  </section>
+
+  <script>
+    // Segmented control: clicking a label submits its radio + visually activates.
+    document.querySelectorAll('.segmented .seg').forEach(function(seg){
+      seg.addEventListener('click', function(){
+        var group = this.closest('.segmented');
+        group.querySelectorAll('.seg').forEach(s => s.classList.remove('active'));
+        this.classList.add('active');
+        var input = this.querySelector('input[type=radio]');
+        if (input) input.checked = true;
+      });
+    });
+  </script>
+{% endblock %}

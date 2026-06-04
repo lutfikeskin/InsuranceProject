@@ -1,0 +1,56 @@
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% if not customer %}
+  {{ m.empty_state('No customer selected', 'Click a customer row to inspect or edit it.', 'user') }}
+{% else %}
+  <div class="flex-between mb-3">
+    <div>
+      <div class="muted" style="font-size:12px; letter-spacing:0.04em; text-transform:uppercase; font-weight:600;">Customer</div>
+      <h3 class="mt-2">{{ customer.full_name }}</h3>
+    </div>
+    {% if customer_status %}<span class="pill success">saved</span>{% endif %}
+  </div>
+
+  {% if customer_error %}
+    <div class="toast danger mb-3" data-toast style="position:static;">
+      <div class="toast-icon">{{ i.icon('alert-circle', 14) }}</div>
+      <div class="toast-body"><div class="toast-title">Update failed</div><div class="toast-message">{{ customer_error }}</div></div>
+    </div>
+  {% endif %}
+  {% if customer_status %}<p class="muted mb-3">{{ customer_status }}</p>{% endif %}
+
+  <form hx-post="/database/customer/{{ customer.id }}/save" hx-target="#customer-detail" hx-indicator="#cust-save-spinner" class="form-grid">
+    <div class="form-section">
+      <h4>Identity</h4>
+      <label>Full Name<input name="full_name" value="{{ customer.full_name or '' }}"></label>
+    </div>
+    <div class="form-section">
+      <h4>Add Alias / Entity</h4>
+      <div class="form-grid cols-2">
+        <label>Name<input name="entity_name" value="" placeholder="e.g. ACME Trucking LLC"></label>
+        <label>Type
+          <select name="entity_type">
+            <option value="business">business</option>
+            <option value="dba">dba</option>
+            <option value="maiden_name">maiden_name</option>
+            <option value="personal">personal</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="sticky-actions">
+      <button type="submit" class="primary">{{ i.icon('save', 15) }} Save Customer</button>
+      <span class="spacer"></span>
+      <span id="cust-save-spinner" class="htmx-indicator"><span class="spinner"></span> Saving…</span>
+    </div>
+  </form>
+
+  {% if customer.entities %}
+    <h4 class="mt-5 mb-2">Known Entities</h4>
+    <div class="tag-list">
+      {% for entity in customer.entities %}
+        <span class="pill">{{ i.icon('building', 12) }} {{ entity.entity_name }}{% if entity.entity_type %} · {{ entity.entity_type }}{% endif %}</span>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endif %}

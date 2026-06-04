@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% block title %}Create COI{% endblock %}
+{% block head_extra %}
+  <style>
+    .main-inner.coi-wide { max-width: none; padding-left: var(--s-6); padding-right: var(--s-6); }
+    .coi-workspace {
+      display: grid;
+      grid-template-columns: minmax(560px, 1.05fr) minmax(460px, 0.95fr);
+      gap: var(--s-4);
+      align-items: start;
+    }
+    @media (max-width: 1180px) { .coi-workspace { grid-template-columns: minmax(0, 1fr); } }
+    .coi-pdf-pane {
+      position: sticky;
+      top: var(--s-4);
+      height: calc(100vh - 185px);
+      min-height: 620px;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      overflow: hidden;
+    }
+    .coi-pdf-toolbar {
+      display: flex;
+      align-items: center;
+      gap: var(--s-2);
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-soft);
+      background: var(--bg-subtle);
+      font-size: 12.5px;
+    }
+    .coi-pdf-pane iframe { flex: 1; width: 100%; border: 0; background: #2a2f3a; }
+    .coi-form-pane { max-height: calc(100vh - 185px); overflow-y: auto; padding: var(--s-5); }
+    @media (max-width: 1180px) {
+      .coi-pdf-pane { position: static; height: 640px; min-height: 520px; }
+      .coi-form-pane { max-height: none; }
+    }
+    .coi-policy-list { list-style:none; padding:0; margin:var(--s-3) 0 0; display:flex; flex-direction:column; gap:6px; }
+    .coi-policy-link {
+      padding:10px 12px;
+      border-radius:var(--radius-sm);
+      text-decoration:none;
+      color:inherit;
+      border:1px solid var(--border-soft);
+      background:var(--bg-subtle);
+    }
+    .coi-policy-link.active { border-color: var(--primary); background: var(--primary-tint); }
+    .coi-summary-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:8px; }
+    .coi-summary-item { padding:9px 10px; border:1px solid var(--border-soft); border-radius:var(--radius-sm); background:var(--bg-subtle); }
+    .coi-summary-label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; font-weight:650; }
+    .coi-summary-value { margin-top:3px; color:var(--text-strong); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .coi-check-card { display:flex; align-items:flex-start; gap:8px; padding:10px 12px; border:1px solid var(--border-soft); border-radius:var(--radius-sm); background:var(--bg-subtle); }
+    .coi-check-card input { margin-top:2px; flex:0 0 auto; }
+    .coi-check-card span { color:var(--text-strong); font-weight:650; }
+    .coi-check-card small { display:block; margin-top:2px; color:var(--text-muted); font-weight:400; }
+    .coi-form-pane .form-section h4 {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      margin-bottom: var(--s-3);
+      padding: 5px 10px;
+      color: var(--primary-700);
+      background: linear-gradient(180deg, #f3f8fd, #eaf3fb);
+      border: 1px solid var(--primary-tint-2);
+      border-radius: var(--radius-xs);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+  </style>
+{% endblock %}
+{% block content_class %}coi-wide{% endblock %}
+{% block content %}
+  {% call m.page_header('Create COI', 'Build, preview, and download certificates from saved policy data.') %}{% endcall %}
+
+  <section class="coi-workspace">
+    <aside class="panel coi-pdf-pane">
+      <div class="coi-pdf-toolbar">
+        {{ i.icon('file-text', 14) }}
+        <span class="truncate" style="flex:1;">
+          <strong>{% if preview_filename %}{{ preview_filename }}{% else %}COI preview{% endif %}</strong>
+        </span>
+        {% if preview_token %}
+          <a class="btn sm ghost" href="/create-coi/preview/{{ preview_token }}" target="_blank" rel="noopener">{{ i.icon('external-link', 13) }} Open</a>
+          <a class="btn sm primary" href="/create-coi/download/{{ preview_token }}">{{ i.icon('download', 13) }} Download</a>
+        {% endif %}
+      </div>
+      {% if preview_token %}
+        <iframe src="/create-coi/preview/{{ preview_token }}#view=FitH" title="Generated COI preview" loading="lazy"></iframe>
+      {% else %}
+        <div style="flex:1; display:grid; place-items:center; padding:var(--s-6);">
+          {{ m.empty_state('Generate a COI to preview it here', 'Pick a saved policy, adjust the holder and policy options, then click Generate preview.', 'file-text') }}
+        </div>
+      {% endif %}
+    </aside>
+
+    <aside class="panel coi-form-pane">
+      <div class="form-section">
+        <div class="flex-between">
+          <div>
+            <h3 style="margin:0;">Policy workspace</h3>
+            <p class="muted mt-2">Search saved policies and use the selected policy as the certificate source.</p>
+          </div>
+          {% if selected_policy %}<span class="pill primary">{{ selected_policy.policy_type or 'Policy' }}</span>{% endif %}
+        </div>
+        <form method="get" class="toolbar mt-3" style="margin-bottom:0;">
+          <div class="search-wrap" style="flex:1; min-width:240px;">
+            {{ i.icon('search', 16) }}
+            <input type="search" name="q" value="{{ query }}" placeholder="Policy # or insured…" autocomplete="off">
+          </div>
+          <button type="submit">Search</button>
+        </form>
+        {% if policies %}
+          <ul class="coi-policy-list">
+            {% for policy in policies[:8] %}
+              {% set is_selected = selected_policy and selected_policy.id == policy.id %}
+              <li>
+                <a href="/create-coi?q={{ query }}&policy_id={{ policy.id }}" class="coi-policy-link flex-between{% if is_selected %} active{% endif %}">
+                  <span>
+                    <span class="mono" style="color:var(--primary-700);">{{ policy.policy_number }}</span>
+                    <span class="muted"> · </span>
+                    <span>{{ policy.insured_name }}</span>
+                  </span>
+                  {% if is_selected %}{{ i.icon('check', 16) }}{% else %}{{ i.icon('chevron-right', 16) }}{% endif %}
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+        {% elif query %}
+          <div class="mt-3">{{ m.empty_state('No policies found', 'Try a different search term.', 'file-text') }}</div>
+        {% endif %}
+      </div>
+
+      {% if form_error %}
+        <div class="toast danger mb-3" data-toast style="position:static;">
+          <div class="toast-icon">{{ i.icon('alert-circle', 14) }}</div>
+          <div class="toast-body"><div class="toast-title">Couldn't generate COI</div><div class="toast-message">{{ form_error }}</div></div>
+        </div>
+      {% endif %}
+
+      {% if not selected_policy %}
+        {{ m.empty_state('Pick a policy first', 'The right side will show policy details and certificate controls once a policy is selected.', 'file-text') }}
+      {% else %}
+        <div class="form-section">
+          <h4>Selected policy</h4>
+          <div class="coi-summary-grid">
+            <div class="coi-summary-item"><div class="coi-summary-label">Policy #</div><div class="coi-summary-value mono">{{ selected_policy.policy_number }}</div></div>
+            <div class="coi-summary-item"><div class="coi-summary-label">Insured</div><div class="coi-summary-value">{{ selected_policy.insured_name or '—' }}</div></div>
+            <div class="coi-summary-item"><div class="coi-summary-label">Carrier</div><div class="coi-summary-value">{{ selected_policy.carrier_name or '—' }}</div></div>
+            <div class="coi-summary-item"><div class="coi-summary-label">Term</div><div class="coi-summary-value">{{ selected_policy.effective_date or '—' }} → {{ selected_policy.expiration_date or '—' }}</div></div>
+            <div class="coi-summary-item"><div class="coi-summary-label">Auto limit</div><div class="coi-summary-value">{{ selected_policy.liability_limit or '—' }}</div></div>
+            <div class="coi-summary-item"><div class="coi-summary-label">Cargo</div><div class="coi-summary-value">{{ selected_policy.cargo_limit or '—' }}</div></div>
+          </div>
+        </div>
+
+        <form method="post" class="form-grid">
+          <input type="hidden" name="q" value="{{ query }}">
+          <input type="hidden" name="policy_id" value="{{ selected_policy.id }}">
+
+          <div class="form-section">
+            <h4>Certificate mode</h4>
+            <div class="form-grid cols-2">
+              <label>COI Type
+                <select name="coi_type" id="coi_type_select">
+                  {% for option in ["Additional Insured", "Certificate Holder", "Lienholder"] %}
+                    <option value="{{ option }}" {% if coi_type == option %}selected{% endif %}>{{ option }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label class="coi-check-card" style="align-self:end;">
+                <input type="checkbox" name="bulk_mode" {% if bulk_mode %}checked{% endif %}>
+                <span>Bulk mode <small>Generate selected companies into a ZIP.</small></span>
+              </label>
+            </div>
+          </div>
+
+          {% if selected_policy.vehicles %}
+            <div class="form-section" id="lienholder_vehicle_section" {% if coi_type != "Lienholder" %}hidden{% endif %}>
+              <h4>Vehicles for Lienholder</h4>
+              <div class="chip-group">
+                {% for vehicle in selected_policy.vehicles %}
+                  <label class="chip">
+                    <input type="checkbox" name="selected_vehicle_vins" value="{{ vehicle.vin }}" {% if vehicle.vin in selected_vehicle_vins %}checked{% endif %}>
+                    {{ i.icon('truck', 12) }} {{ vehicle.year }} {{ vehicle.make }} {{ vehicle.model }} · {{ vehicle.vin or 'No VIN' }}
+                  </label>
+                {% endfor %}
+              </div>
+              {% if coi_type == "Lienholder" %}<p class="muted mt-2">Select at least one unit for the loss-payee clause.</p>{% endif %}
+            </div>
+          {% endif %}
+
+          {% if companies %}
+            <div class="form-section">
+              <h4>Saved companies</h4>
+              <div class="form-grid cols-2">
+                <label>Prefill from saved
+                  <select name="selected_company" id="selected_company" data-companies='{{ companies_data|tojson }}'>
+                    <option value="">None</option>
+                    {% for company in companies %}
+                      <option value="{{ company }}" {% if selected_company == company %}selected{% endif %}>{{ company }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label>Bulk companies
+                  <select name="selected_companies" multiple size="5">
+                    {% for company in companies %}
+                      <option value="{{ company }}" {% if company in selected_companies %}selected{% endif %}>{{ company }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+              </div>
+            </div>
+          {% endif %}
+
+          <div class="form-section">
+            <h4>Certificate holder</h4>
+            <div class="form-grid cols-2">
+              <label>Holder Name<input id="holder_name" type="text" name="holder_name" value="{{ form_values.holder_name }}"></label>
+              <label>Address<input id="holder_address" type="text" name="holder_address" value="{{ form_values.holder_address }}"></label>
+              <label>City<input id="holder_city" type="text" name="holder_city" value="{{ form_values.holder_city }}"></label>
+              <label>State<input id="holder_state" type="text" name="holder_state" value="{{ form_values.holder_state }}"></label>
+              <label>ZIP<input id="holder_zip" type="text" name="holder_zip" value="{{ form_values.holder_zip }}"></label>
+              <label>Description font size
+                <input type="number" name="desc_font_size" min="4" max="12" value="{{ form_values.desc_font_size }}">
+              </label>
+            </div>
+            <label class="mt-2">Operations Description<textarea name="description" rows="6">{{ form_values.description }}</textarea></label>
+          </div>
+
+          <div class="form-section">
+            <h4>Insured details</h4>
+            <div class="form-grid cols-2">
+              <label>Insured Name<input type="text" name="insured_name" value="{{ form_values.insured_name }}"></label>
+              <label>Insurer NAIC #<input type="text" name="insured_naic" value="{{ form_values.insured_naic }}"></label>
+              <label>Insured Address<input type="text" name="insured_address" value="{{ form_values.insured_address }}"></label>
+              <label>Insured City<input type="text" name="insured_city" value="{{ form_values.insured_city }}"></label>
+              <label>Insured State<input type="text" name="insured_state" value="{{ form_values.insured_state }}"></label>
+              <label>Insured ZIP<input type="text" name="insured_zip" value="{{ form_values.insured_zip }}"></label>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h4>Coverages to include</h4>
+            <div class="form-grid cols-3">
+              <label class="coi-check-card">
+                <input id="has_general_liability" type="checkbox" name="has_general_liability" {% if form_values.has_general_liability %}checked{% endif %}>
+                <span>General Liability <small>Include GL on certificate.</small></span>
+              </label>
+              <label class="coi-check-card">
+                <input type="checkbox" name="has_auto_liability" {% if form_values.has_auto_liability %}checked{% endif %}>
+                <span>Auto Liability <small>Include auto liability.</small></span>
+              </label>
+              <label class="coi-check-card">
+                <input type="checkbox" name="has_cargo" {% if form_values.has_cargo %}checked{% endif %} {% if coi_type == "Lienholder" %}disabled{% endif %}>
+                <span>Motor Truck Cargo <small>{% if coi_type == "Lienholder" %}Disabled for lienholder COIs.{% else %}Include cargo coverage.{% endif %}</small></span>
+              </label>
+            </div>
+            <div class="mt-3" id="gl_aggregate_section" {% if not form_values.has_general_liability %}hidden{% endif %}>
+              <label>General aggregate
+                <select name="gl_general_aggregate">
+                  {% for option in ["$1,000,000", "$2,000,000"] %}
+                    <option value="{{ option }}" {% if form_values.gl_general_aggregate == option %}selected{% endif %}>{{ option }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="sticky-actions">
+            <button type="submit" class="primary lg" name="action" value="preview">{{ i.icon('eye', 15) }} Generate preview</button>
+            <button type="submit" class="lg" name="action" value="download">{{ i.icon('download', 15) }} Generate COI PDF</button>
+            {{ m.indicator('Generating…') }}
+          </div>
+        </form>
+      {% endif %}
+    </aside>
+  </section>
+
+  <script>
+    (function(){
+      var select = document.getElementById('selected_company');
+      if (!select) return;
+      var companies = {};
+      try { companies = JSON.parse(select.dataset.companies || '{}'); } catch (e) { companies = {}; }
+      var fieldMap = {
+        name: 'holder_name',
+        address: 'holder_address',
+        city: 'holder_city',
+        state: 'holder_state',
+        zip: 'holder_zip'
+      };
+      function setValue(id, value){
+        var el = document.getElementById(id);
+        if (el) el.value = value || '';
+      }
+      select.addEventListener('change', function(){
+        var company = companies[select.value] || {};
+        Object.keys(fieldMap).forEach(function(key){ setValue(fieldMap[key], company[key]); });
+      });
+    })();
+
+    (function(){
+      var coiType = document.getElementById('coi_type_select');
+      var lienholderSection = document.getElementById('lienholder_vehicle_section');
+      if (!coiType || !lienholderSection) return;
+      function syncLienholderSection(){
+        lienholderSection.hidden = coiType.value !== 'Lienholder';
+      }
+      coiType.addEventListener('change', syncLienholderSection);
+      syncLienholderSection();
+    })();
+
+    (function(){
+      var glCheckbox = document.getElementById('has_general_liability');
+      var aggregateSection = document.getElementById('gl_aggregate_section');
+      if (!glCheckbox || !aggregateSection) return;
+      function syncAggregateSection(){
+        aggregateSection.hidden = !glCheckbox.checked;
+      }
+      glCheckbox.addEventListener('change', syncAggregateSection);
+      syncAggregateSection();
+    })();
+  </script>
+{% endblock %}

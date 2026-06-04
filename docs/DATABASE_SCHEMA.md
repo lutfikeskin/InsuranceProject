@@ -68,6 +68,9 @@
 | policy_endorsements | Low-Medium | Policy amendments and effective dates |
 | additional_interests | Low-Medium | Certificate holders, loss payees, additional insureds |
 | api_usage | High | Token usage and cost tracking |
+| uploaded_documents | Medium | Durable uploaded document records for review workflow |
+| extraction_runs | Medium-High | One row per extraction attempt and response snapshot |
+| review_tasks | Medium | Pending/completed human review decisions |
 
 ---
 
@@ -335,6 +338,18 @@
 
 ---
 
+### Durable Review Workflow
+
+`uploaded_documents` stores one durable row per uploaded PDF/document. `extraction_runs`
+stores each model/cache extraction attempt for that upload, including status, usage,
+result JSON, routing metadata, and error text. `review_tasks` stores the review queue
+item created from a successful extraction, plus the broker decision (`save_new`,
+`update_existing`, `save_endorsement`, or `skip`), human edits, optional target policy,
+and timestamps.
+
+These tables are intentionally UI-agnostic so the current Streamlit review flow and a
+future HTMX/Jinja UI can share the same backend workflow state.
+
 ## Key Constraints & Indexes (Recommended for PostgreSQL)
 
 ### Primary Keys
@@ -379,6 +394,13 @@ CREATE INDEX idx_interests_policy_id ON additional_interests(policy_id);
 -- API usage (time-series)
 CREATE INDEX idx_api_usage_timestamp ON api_usage(timestamp);
 CREATE INDEX idx_api_usage_request_type ON api_usage(request_type);
+
+-- Durable review workflow
+CREATE INDEX idx_uploaded_documents_file_hash ON uploaded_documents(file_hash);
+CREATE INDEX idx_extraction_runs_upload_id ON extraction_runs(upload_id);
+CREATE INDEX idx_review_tasks_upload_id ON review_tasks(upload_id);
+CREATE INDEX idx_review_tasks_extraction_run_id ON review_tasks(extraction_run_id);
+CREATE INDEX idx_review_tasks_target_policy_id ON review_tasks(target_policy_id);
 ```
 
 ---
@@ -421,9 +443,9 @@ CREATE INDEX idx_api_usage_request_type ON api_usage(request_type);
 
 | Metric | Value |
 |--------|-------|
-| Total Tables | 11 |
-| Total Columns | ~130 |
-| Foreign Key Relationships | 18 |
+| Total Tables | 14 |
+| Total Columns | ~165 |
+| Foreign Key Relationships | 23 |
 | Self-Referencing Tables | 2 (policies, policy_relationships) |
 | Cascade Delete Relationships | 8 |
 

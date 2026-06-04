@@ -1,0 +1,70 @@
+{% import "_icons.html" as i %}
+
+{# Page header — title + subtitle + optional action slot via caller() #}
+{% macro page_header(title, subtitle="") %}
+  <header class="page-header">
+    <div class="titles">
+      <h1>{{ title }}</h1>
+      {% if subtitle %}<p>{{ subtitle }}</p>{% endif %}
+    </div>
+    {% if caller %}
+      <div class="actions">{{ caller() }}</div>
+    {% endif %}
+  </header>
+{% endmacro %}
+
+{# KPI card #}
+{% macro kpi_card(label, value, icon_name=None, tone=None, foot=None, value_class="") %}
+  <div class="kpi{% if tone %} tone-{{ tone }}{% endif %}">
+    <div class="kpi-head">
+      {% if icon_name %}{{ i.icon(icon_name, 14) }}{% endif %}
+      <span>{{ label }}</span>
+    </div>
+    <div class="kpi-value {{ value_class }}">{{ value }}</div>
+    {% if foot %}<div class="kpi-foot">{{ foot }}</div>{% endif %}
+  </div>
+{% endmacro %}
+
+{# Empty state #}
+{% macro empty_state(title, message="", icon_name="inbox-empty") %}
+  <div class="empty">
+    <div class="empty-icon">{{ i.icon(icon_name, 26) }}</div>
+    <h4>{{ title }}</h4>
+    {% if message %}<p>{{ message }}</p>{% endif %}
+    {% if caller %}<div class="actions">{{ caller() }}</div>{% endif %}
+  </div>
+{% endmacro %}
+
+{# Status badge wrapper #}
+{% macro status_badge(status) %}
+  <span class="status {{ status }}">{{ status }}</span>
+{% endmacro %}
+
+{# Toast — for inline rendering or OOB swap.
+   tone in: info | success | warn | danger
+   When out_of_band=true, it appends itself into #toast-stack. #}
+{% macro toast(title, message="", tone="info", out_of_band=false) %}
+  {% set tone_icon = {
+    'success': 'check-circle',
+    'warn':    'alert-triangle',
+    'danger':  'alert-circle',
+    'info':    'info'
+  } %}
+  <div class="toast {{ tone }}"
+       {% if out_of_band %}hx-swap-oob="beforeend:#toast-stack"{% endif %}
+       data-toast>
+    <div class="toast-icon">{{ i.icon(tone_icon[tone] or 'info', 14) }}</div>
+    <div class="toast-body">
+      <div class="toast-title">{{ title }}</div>
+      {% if message %}<div class="toast-message">{{ message }}</div>{% endif %}
+    </div>
+    <button type="button" class="toast-close" onclick="this.closest('[data-toast]').remove()" aria-label="Dismiss">
+      {{ i.icon('x', 14) }}
+    </button>
+  </div>
+{% endmacro %}
+
+{# Indicator (htmx-indicator spinner with optional label) #}
+{% macro indicator(label="Loading…") %}
+  <span class="htmx-indicator"><span class="spinner"></span>{{ label }}</span>
+{% endmacro %}

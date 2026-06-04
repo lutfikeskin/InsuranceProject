@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% block title %}Process Policies{% endblock %}
+{% block content %}
+  {% call m.page_header('Process Policies', 'Upload one or more PDFs, run extraction, and land the results in the durable review queue.') %}
+    <a class="btn ghost" href="/review-queue">{{ i.icon('inbox', 15) }} Review Queue</a>
+  {% endcall %}
+
+  <section class="panel" style="max-width: 920px;">
+    {% if form_error %}
+      <div class="toast danger mb-3" data-toast style="position:static;">
+        <div class="toast-icon">{{ i.icon('alert-circle', 14) }}</div>
+        <div class="toast-body"><div class="toast-title">Couldn't process upload</div><div class="toast-message">{{ form_error }}</div></div>
+      </div>
+    {% endif %}
+    {% if save_batch_result %}
+      <div class="toast success mb-3" data-toast style="position:static;">
+        <div class="toast-icon">{{ i.icon('check-circle', 14) }}</div>
+        <div class="toast-body">
+          <div class="toast-title">Batch saved</div>
+          <div class="toast-message">{{ save_batch_result.saved }} new · {{ save_batch_result.updated }} updated · {{ save_batch_result.review }} routed to review</div>
+        </div>
+      </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" class="form-grid">
+      <div class="form-section">
+        <h4>Documents</h4>
+        <label for="pdf_files">PDF files</label>
+        <div class="dropzone">
+          <div class="dz-icon">{{ i.icon('upload', 22) }}</div>
+          <div class="dz-title">Drop PDFs here or click to browse</div>
+          <div class="dz-sub">Select one or many — they'll all be extracted in a single batch.</div>
+          <input id="pdf_files" type="file" name="pdf_files" accept="application/pdf" multiple required>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h4>Options</h4>
+        <div class="form-grid cols-2">
+          <label>Policy Type
+            <select name="policy_type">
+              {% for value, label in policy_type_options %}
+                <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; align-self:end; padding-bottom:6px;">
+            <input type="checkbox" name="force_refresh">
+            <span>Force refresh (bypass extraction cache)</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="toolbar" style="margin-bottom:0;">
+        <button type="submit" class="primary lg">
+          {{ i.icon('sparkles', 15) }} Extract and Send to Review Queue
+        </button>
+        {{ m.indicator('Extracting…') }}
+        <span class="spacer"></span>
+        <span class="muted">Extraction runs on Gemini Flash-Lite via the shared pipeline.</span>
+      </div>
+    </form>
+  </section>
+
+  {% if batch_result %}
+    <section class="grid cards-2 mt-5">
+      <div class="panel">
+        <div class="panel-header">
+          <h3>{{ i.icon('check-circle', 16) }} Created Review Tasks</h3>
+          {% if batch_result.created_tasks %}<span class="pill success">{{ batch_result.created_tasks|length }}</span>{% endif %}
+        </div>
+        {% if batch_result.created_tasks %}
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>File</th><th>Document / Type</th><th class="right">Open</th></tr></thead>
+              <tbody>
+                {% for task in batch_result.created_tasks %}
+                  <tr>
+                    <td>
+                      <div class="flex gap-2">
+                        {{ i.icon('file-text', 14) }}
+                        <span class="truncate" style="max-width:260px;">{{ task.filename }}</span>
+                      </div>
+                      {% if not task.extractable %}<div class="mt-2"><span class="pill warn">non-extractable</span></div>{% endif %}
+                    </td>
+                    <td class="muted">{{ task.document_type or 'unknown' }} / {{ task.policy_type or 'unknown' }}</td>
+                    <td class="right">
+                      <a class="btn sm" href="/review-queue?task_id={{ task.task_id }}">{{ i.icon('chevron-right', 14) }} Review</a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <form method="post" action="/process-policies/save-batch" class="mt-4 toolbar">
+            {% for task in batch_result.created_tasks %}
+              <input type="hidden" name="task_ids" value="{{ task.task_id }}">
+            {% endfor %}
+            <button type="submit" class="primary">{{ i.icon('save', 15) }} Save All Extractable Tasks</button>
+            <span class="muted">Skips non-extractable items.</span>
+          </form>
+        {% else %}
+          {{ m.empty_state('No review tasks created', 'No documents in this batch produced an extraction.', 'inbox-empty') }}
+        {% endif %}
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h3>{{ i.icon('alert-circle', 16) }} Failed Uploads</h3>
+          {% if batch_result.failed_uploads %}<span class="pill danger">{{ batch_result.failed_uploads|length }}</span>{% endif %}
+        </div>
+        {% if batch_result.failed_uploads %}
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>File</th><th>Error</th><th class="right">Retry</th></tr></thead>
+              <tbody>
+                {% for item in batch_result.failed_uploads %}
+                  <tr>
+                    <td>
+                      <div class="flex gap-2">
+                        {{ i.icon('file-x', 14) }}
+                        <span class="truncate" style="max-width:240px;">{{ item.filename }}</span>
+                      </div>
+                    </td>
+                    <td class="muted">{{ item.error }}</td>
+                    <td class="right">
+                      <form method="post" action="/process-policies/retry/{{ item.upload_id }}" style="display:inline;">
+                        <button type="submit" class="sm">
+                          {{ i.icon('retry', 14) }} Try anyway
+                          <span class="htmx-indicator"><span class="spinner"></span></span>
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          {{ m.empty_state('No failures', 'Every file in this batch extracted cleanly.', 'check-circle') }}
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

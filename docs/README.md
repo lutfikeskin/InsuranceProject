@@ -24,6 +24,7 @@ This folder documents the current implemented system in this repository.
 - Database and migrations: [`DATABASE_AND_MIGRATIONS.md`](DATABASE_AND_MIGRATIONS.md)
 - Testing strategy and test map: [`TESTING.md`](TESTING.md)
 - Operations and troubleshooting: [`OPERATIONS_AND_TROUBLESHOOTING.md`](OPERATIONS_AND_TROUBLESHOOTING.md)
+- HTMX cutover status and remaining parity gaps: [`HTMX_CUTOVER.md`](HTMX_CUTOVER.md)
 
 ## Document Intent
 

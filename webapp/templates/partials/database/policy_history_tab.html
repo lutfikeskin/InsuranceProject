@@ -1,0 +1,28 @@
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+<section class="panel">
+  <div class="panel-header">
+    <h3>{{ i.icon('clock', 16) }} Edit History</h3>
+    <span class="pill">{{ history_rows|length }} event{{ '' if history_rows|length == 1 else 's' }}</span>
+  </div>
+
+  {% if not history_rows %}
+    {{ m.empty_state('No history yet', 'No tracked edits or re-extractions on this policy. The next save or extraction will appear here.', 'clock') }}
+  {% else %}
+    <ul class="tl-list">
+      {% for row in history_rows %}
+        {% set event = {
+          'kind': 'audit',
+          'id': row.id,
+          'timestamp': row.timestamp,
+          'source': row.source,
+          'event_type': row.event_type,
+          'version': row.policy_version,
+          'changes': row.changes,
+          'notes': none,
+        } %}
+        {% include "partials/database/_history_event.html" %}
+      {% endfor %}
+    </ul>
+  {% endif %}
+</section>

@@ -1,5 +1,9 @@
 import re
 
+from core.customer_history_service import (
+    CustomerHistoryService,
+    SOURCE_RESOLVER,
+)
 from core.database import Customer, CustomerEntity
 
 
@@ -174,26 +178,31 @@ class CustomerResolver:
         self.session.add(customer)
         self.session.flush()
 
-        self.session.add(
-            CustomerEntity(
+        primary = CustomerEntity(
+            customer_id=customer.id,
+            entity_name=full_name,
+            entity_type="personal",
+            is_primary=True,
+            source="extraction",
+        )
+        self.session.add(primary)
+
+        secondary = None
+        if entity_name and entity_name.lower() != full_name.lower():
+            secondary = CustomerEntity(
                 customer_id=customer.id,
-                entity_name=full_name,
-                entity_type="personal",
-                is_primary=True,
+                entity_name=entity_name,
+                entity_type=entity_type,
+                is_primary=False,
                 source="extraction",
             )
-        )
+            self.session.add(secondary)
 
-        if entity_name and entity_name.lower() != full_name.lower():
-            self.session.add(
-                CustomerEntity(
-                    customer_id=customer.id,
-                    entity_name=entity_name,
-                    entity_type=entity_type,
-                    is_primary=False,
-                    source="extraction",
-                )
-            )
+        history = CustomerHistoryService(self.session)
+        history.record_creation(customer, source=SOURCE_RESOLVER)
+        history.record_entity_added(customer, primary, source=SOURCE_RESOLVER)
+        if secondary is not None:
+            history.record_entity_added(customer, secondary, source=SOURCE_RESOLVER)
         return customer
 
     def add_entity(
@@ -204,36 +213,62 @@ class CustomerResolver:
         source: str = "manual",
     ):
         if not entity_name:
-            return
+            return None
         exists = self.session.query(CustomerEntity).filter_by(
             customer_id=customer.id,
             entity_name=entity_name,
         ).first()
-        if not exists:
-            self.session.add(
-                CustomerEntity(
-                    customer_id=customer.id,
-                    entity_name=entity_name,
-                    entity_type=entity_type,
-                    is_primary=False,
-                    source=source,
-                )
-            )
+        if exists:
+            return exists
+        entity = CustomerEntity(
+            customer_id=customer.id,
+            entity_name=entity_name,
+            entity_type=entity_type,
+            is_primary=False,
+            source=source,
+        )
+        self.session.add(entity)
+        # Map resolver-/extraction-originated calls to the structured source
+        # constant so the timeline doesn't surface raw "manual" / "extraction"
+        # tokens; the UI passes its own explicit source string when it calls.
+        history_source = source if source in (SOURCE_RESOLVER, "Manual_Edit") else SOURCE_RESOLVER
+        CustomerHistoryService(self.session).record_entity_added(customer, entity, source=history_source)
+        return entity
 
     def merge_customers(self, keep_id: int, merge_id: int) -> dict:
         keep = self.session.query(Customer).get(keep_id)
         merge = self.session.query(Customer).get(merge_id)
         if not keep or not merge:
             return {"success": False, "message": "Customer not found"}
+        if keep.id == merge.id:
+            return {"success": False, "message": "Cannot merge a customer into itself"}
 
-        for policy in merge.policies:
+        moved_policies = list(merge.policies)
+        moved_entities = list(merge.entities)
+        for policy in moved_policies:
             policy.customer_id = keep.id
-        for alias in merge.entities:
+        for alias in moved_entities:
             alias.customer_id = keep.id
+
+        # Log on BOTH sides before delete so the merged-side history row commits
+        # before the cascade fires on session.delete().
+        CustomerHistoryService(self.session).record_merge(
+            keep,
+            merge,
+            moved_policy_count=len(moved_policies),
+            moved_entity_count=len(moved_entities),
+        )
+        self.session.flush()
 
         self.session.delete(merge)
         self.session.commit()
-        return {"success": True, "message": f"Merged into customer {keep_id}"}
+        return {
+            "success": True,
+            "message": f"Merged customer {merge_id} into customer {keep_id}",
+            "kept_customer_id": keep.id,
+            "moved_policies": len(moved_policies),
+            "moved_entities": len(moved_entities),
+        }
 
     def _matched(self, customer, confidence, reason):
         return {

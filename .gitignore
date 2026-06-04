@@ -6,6 +6,7 @@ __pycache__/
 .cache/
 .cursor/
 .claude/skills/
+.claude/settings.local.json
 tools/education-site/
 
 # Runtime artifacts

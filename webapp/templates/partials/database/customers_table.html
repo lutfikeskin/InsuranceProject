@@ -1,0 +1,65 @@
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% if not customers %}
+  {{ m.empty_state('No customers found', 'Try a different search term, or process a policy to create one.', 'users') }}
+{% else %}
+  <div class="db-table-wrap">
+    <table class="db-policy-table db-customer-table" aria-label="Customers">
+      <thead>
+        <tr>
+          <th class="db-check"><input id="db-select-all" type="checkbox" aria-label="Select all customers"></th>
+          <th data-col="customer">Customer</th>
+          <th data-col="aliases">Aliases</th>
+          <th data-col="policies" class="center">Policies</th>
+          <th data-col="last">Last activity</th>
+          <th data-col="email" hidden>Email</th>
+          <th data-col="phone" hidden>Phone</th>
+          <th data-col="active" class="center" hidden>Active policies</th>
+          <th data-col="expiring" class="center" hidden>Expiring policies</th>
+          <th data-col="created" hidden>Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for customer in customers %}
+          {% set last_ts = customer.updated_at or customer.created_at %}
+          {% set ns = namespace(active=0, expiring=0) %}
+          {% for policy in customer.policies %}
+            {% set days_remaining = (policy.expiration_date - today).days if today and policy.expiration_date else none %}
+            {% set raw_status = (policy.policy_status or policy.status or '')|lower %}
+            {% if raw_status in ['lapsed', 'cancelled', 'canceled', 'inactive'] or (days_remaining is not none and days_remaining < 0) %}
+            {% elif days_remaining is not none and days_remaining <= 30 %}
+              {% set ns.expiring = ns.expiring + 1 %}
+            {% else %}
+              {% set ns.active = ns.active + 1 %}
+            {% endif %}
+          {% endfor %}
+          <tr onclick="if(event.target.tagName !== 'INPUT') window.location='/database/customer/{{ customer.id }}'" role="link" tabindex="0">
+            <td class="db-check"><input class="db-row-check" type="checkbox" value="{{ customer.id }}" aria-label="Select {{ customer.full_name }}" onclick="event.stopPropagation();"></td>
+            <td data-col="customer" class="db-insured">
+              <div class="flex gap-2">{{ i.icon('user', 14) }} <strong>{{ customer.full_name }}</strong></div>
+            </td>
+            <td data-col="aliases">
+              {% if customer.entities %}
+                <div class="tag-list">
+                  {% for entity in customer.entities[:3] %}
+                    <span class="pill" style="font-size:11px;">{{ entity.entity_name }}{% if entity.entity_type %} · {{ entity.entity_type }}{% endif %}</span>
+                  {% endfor %}
+                  {% if customer.entities|length > 3 %}<span class="pill" style="font-size:11px;">+{{ customer.entities|length - 3 }} more</span>{% endif %}
+                </div>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+            <td data-col="policies" class="center"><span class="pill primary">{{ customer.policies|length }}</span></td>
+            <td data-col="last" class="nowrap muted">{{ last_ts.strftime('%Y-%m-%d %H:%M') if last_ts else '—' }}</td>
+            <td data-col="email" hidden>{{ customer.primary_email or '—' }}</td>
+            <td data-col="phone" hidden>{{ customer.primary_phone or '—' }}</td>
+            <td data-col="active" class="center" hidden>{{ ns.active }}</td>
+            <td data-col="expiring" class="center" hidden>{{ ns.expiring }}</td>
+            <td data-col="created" class="nowrap" hidden>{{ customer.created_at.strftime('%Y-%m-%d') if customer.created_at else '—' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}

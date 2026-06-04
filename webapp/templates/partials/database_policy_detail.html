@@ -1,0 +1,93 @@
+{% import "_icons.html" as i %}
+{% import "_macros.html" as m %}
+{% if not policy %}
+  {{ m.empty_state('No policy selected', 'Click a policy row to inspect or edit it.', 'file-text') }}
+{% else %}
+  <div class="flex-between mb-3">
+    <div>
+      <div class="muted" style="font-size:12px; letter-spacing:0.04em; text-transform:uppercase; font-weight:600;">Record</div>
+      <h3 class="mt-2 mono">Policy {{ policy.policy_number }}</h3>
+    </div>
+    {% if status_message %}<span class="pill success">saved</span>{% endif %}
+  </div>
+
+  {% if form_error %}
+    <div class="toast danger mb-3" data-toast style="position:static;">
+      <div class="toast-icon">{{ i.icon('alert-circle', 14) }}</div>
+      <div class="toast-body"><div class="toast-title">Update failed</div><div class="toast-message">{{ form_error }}</div></div>
+    </div>
+  {% endif %}
+  {% if status_message %}<p class="muted mb-3">{{ status_message }}</p>{% endif %}
+
+  <form hx-post="/database/policy/{{ policy.id }}/save" hx-target="#policy-detail" hx-indicator="#policy-save-spinner" class="form-grid">
+    <div class="form-section">
+      <h4>Core</h4>
+      <div class="form-grid cols-2">
+        <label>Policy #<input name="policy_number" value="{{ policy.policy_number or '' }}"></label>
+        <label>Carrier<input name="carrier_name" value="{{ policy.carrier_name or '' }}"></label>
+        <label>Insured<input name="insured_name" value="{{ policy.insured_name or '' }}"></label>
+        <label>Premium<input name="premium" value="{{ policy.premium or '' }}"></label>
+        <label>Effective Date<input name="effective_date" value="{{ policy.effective_date or '' }}"></label>
+        <label>Expiration Date<input name="expiration_date" value="{{ policy.expiration_date or '' }}"></label>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h4>Vehicles</h4>
+      <label>Vehicles JSON<textarea name="vehicles_json" rows="6">[
+{% for vehicle in policy.vehicles %}
+  {{ {
+    'year': vehicle.year, 'make': vehicle.make, 'model': vehicle.model, 'vin': vehicle.vin,
+    'gvw': vehicle.gvw, 'type': vehicle.vehicle_type, 'chassis': vehicle.chassis, 'body': vehicle.body,
+  }|tojson }}{% if not loop.last %},{% endif %}
+{% endfor %}
+]</textarea></label>
+    </div>
+
+    <div class="form-section">
+      <h4>Drivers</h4>
+      <label>Drivers JSON<textarea name="drivers_json" rows="6">[
+{% for driver in policy.drivers %}
+  {{ {'full_name': driver.full_name, 'license_number': driver.license_number, 'is_excluded': driver.is_excluded}|tojson }}{% if not loop.last %},{% endif %}
+{% endfor %}
+]</textarea></label>
+    </div>
+
+    <div class="form-section">
+      <h4>Coverages</h4>
+      <label>Coverages JSON<textarea name="coverages_json" rows="8">[
+{% for coverage in policy.coverages %}
+  {{ {
+    'type': coverage.type, 'display_name': coverage.type, 'coverage_code': coverage.coverage_code,
+    'family': coverage.family, 'vehicle_vin': coverage.vehicle.vin if coverage.vehicle else none,
+    'deductible': coverage.deductible,
+    'limits': {
+      'per_person': coverage.per_person, 'per_accident': coverage.per_accident,
+      'per_occurrence': coverage.per_occurrence, 'combined_single_limit': coverage.combined_single_limit,
+      'aggregate': coverage.aggregate,
+    }
+  }|tojson }}{% if not loop.last %},{% endif %}
+{% endfor %}
+]</textarea></label>
+    </div>
+
+    <div class="form-section">
+      <h4>Additional Interests</h4>
+      <label>Additional Interests JSON<textarea name="additional_interests_json" rows="5">[
+{% for interest in policy.additional_interests %}
+  {{ {'name': interest.name, 'address': interest.address, 'interest_type': interest.interest_type}|tojson }}{% if not loop.last %},{% endif %}
+{% endfor %}
+]</textarea></label>
+    </div>
+
+    <div class="sticky-actions">
+      <button type="submit" class="primary">{{ i.icon('save', 15) }} Save Policy</button>
+      <span class="spacer"></span>
+      <span id="policy-save-spinner" class="htmx-indicator"><span class="spinner"></span> Saving…</span>
+    </div>
+  </form>
+
+  <form hx-post="/database/policy/{{ policy.id }}/delete" hx-target="#database-page" hx-confirm="Permanently delete this policy?" class="mt-4">
+    <button type="submit" class="danger">{{ i.icon('trash', 14) }} Delete Policy</button>
+  </form>
+{% endif %}

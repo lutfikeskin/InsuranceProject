@@ -15,6 +15,7 @@ from core.services import PolicyService
 from datetime import date
 from core.database import get_session, Customer
 from core.customer_resolver import CustomerResolver
+from core.review_service import ReviewWorkflowService
 from modules.extraction import process_pdf
 from modules.extraction.pipeline import POLICY_TYPE_ENUM
 from utils.naic_utils import get_naic_for_carrier
@@ -27,6 +28,14 @@ from views.ui_utils import (
     confidence_label as _confidence_label,
     gate_value,
     should_clear_field,
+)
+from views.upload_queue import (
+    failed_rows_csv_bytes,
+    queue_summary_kpis,
+    retry_hint,
+    retryable_filenames,
+    status_emoji,
+    upsert_row,
 )
 
 MAX_PARALLEL_WORKERS = 3
@@ -199,6 +208,145 @@ def _policy_type_selectbox_options() -> tuple[list[str], dict[str, str | None]]:
     return labels, label_to_value
 
 
+def _stash_failed(fname: str, content: bytes, error_msg: str) -> None:
+    """Track failed extractions in session state so the user can retry them
+    with the non-extractable fallback path. Deduplicates by filename."""
+    bucket = st.session_state.setdefault("temp_failed", [])
+    bucket[:] = [b for b in bucket if b.get("filename") != fname]
+    bucket.append({"filename": fname, "pdf_bytes": content, "error": error_msg})
+
+def _record_durable_extraction(
+    fname: str,
+    content: bytes,
+    data: dict | None,
+    usage: dict | None,
+    error_msg: str | None,
+    force_refresh: bool,
+) -> tuple[dict, str | None]:
+    """Persist upload/extraction metadata without storing PDF bytes in the DB."""
+    if "db_engine" not in st.session_state:
+        return {}, "database is not initialized"
+    session = get_session(st.session_state.db_engine)
+    try:
+        service = ReviewWorkflowService(session)
+        upload = service.create_upload(
+            filename=fname,
+            file_bytes=content,
+            content_type="application/pdf",
+        )
+        if data:
+            run = service.record_extraction_run(
+                upload_id=upload.id,
+                status="succeeded",
+                result=data,
+                usage=usage,
+                force_refresh=force_refresh,
+            )
+        else:
+            run = service.record_extraction_run(
+                upload_id=upload.id,
+                status="failed",
+                usage=usage,
+                error_message=error_msg or "Extraction failed",
+                force_refresh=force_refresh,
+            )
+        return {"upload_id": upload.id, "extraction_run_id": run.id}, None
+    except Exception as exc:
+        return {}, str(exc)
+    finally:
+        session.close()
+
+
+def _item_with_durable_metadata(item: dict, metadata: dict) -> dict:
+    if metadata:
+        item.update(metadata)
+    return item
+
+
+def _ensure_review_task(item: dict, notes: str | None = None) -> tuple[int | None, str | None]:
+    existing_id = item.get("review_task_id")
+    if existing_id:
+        return int(existing_id), None
+    if "db_engine" not in st.session_state:
+        return None, "database is not initialized"
+
+    if not item.get("upload_id") or not item.get("extraction_run_id"):
+        metadata, err = _record_durable_extraction(
+            item["filename"],
+            item["pdf_bytes"],
+            item.get("data"),
+            None,
+            None,
+            False,
+        )
+        if err:
+            return None, err
+        item.update(metadata)
+
+    session = get_session(st.session_state.db_engine)
+    try:
+        service = ReviewWorkflowService(session)
+        task = service.create_review_task(
+            upload_id=int(item["upload_id"]),
+            extraction_run_id=int(item["extraction_run_id"]),
+            extraction_result=item["data"],
+            notes=notes,
+        )
+        item["review_task_id"] = task.id
+        return task.id, None
+    except Exception as exc:
+        return None, str(exc)
+    finally:
+        session.close()
+
+
+def _record_review_decision(
+    item: dict,
+    decision: str,
+    human_edits: dict | None = None,
+    target_policy_id: int | None = None,
+    notes: str | None = None,
+) -> str | None:
+    task_id, err = _ensure_review_task(item, notes=notes)
+    if err:
+        return err
+    session = get_session(st.session_state.db_engine)
+    try:
+        service = ReviewWorkflowService(session)
+        service.record_decision(
+            task_id=int(task_id),
+            decision=decision,
+            human_edits=human_edits,
+            target_policy_id=target_policy_id,
+            notes=notes,
+        )
+        return None
+    except Exception as exc:
+        return str(exc)
+    finally:
+        session.close()
+
+def _complete_review_item_and_pop(
+    item: dict,
+    decision: str,
+    human_edits: dict | None = None,
+    target_policy_id: int | None = None,
+    notes: str | None = None,
+) -> None:
+    audit_error = _record_review_decision(
+        item,
+        decision,
+        human_edits=human_edits,
+        target_policy_id=target_policy_id,
+        notes=notes,
+    )
+    if audit_error:
+        st.toast(f"Review audit update failed: {audit_error}", icon="⚠️")
+    st.session_state["review_queue"].pop(0)
+
+
+
+
 def _process_one_pdf(
     fname: str,
     content: bytes,
@@ -218,6 +366,101 @@ def _process_one_pdf(
         return fname, data, usage, error_msg, None
     except Exception as e:
         return fname, None, None, None, str(e)
+
+
+def _retry_one_file(fname: str, api_key: str) -> tuple[bool, str]:
+    """Re-run extraction for a single previously-failed file using the bytes
+    + settings retained from the original batch. Updates last_batch_rows
+    and the temp_extracted / temp_failed session state to match the new
+    outcome. Caller is responsible for st.rerun(). Returns (ok, detail).
+
+    `retries` accumulates across attempts so the KPI strip reflects the
+    cumulative LLM cost the broker paid on this file."""
+    files_map = st.session_state.get("last_batch_files_map") or {}
+    if fname not in files_map:
+        return False, "Original file bytes are no longer in session — re-upload required."
+
+    settings = st.session_state.get("last_batch_settings") or {}
+    force_refresh = settings.get("force_refresh", False)
+    user_policy_type = settings.get("user_policy_type")
+    content = files_map[fname]
+
+    _fname, data, usage, error_msg, exc = _process_one_pdf(
+        fname, content, api_key, force_refresh, user_policy_type
+    )
+    new_retries = int((usage or {}).get("llm_retries", 0))
+    prior_row = next(
+        (r for r in st.session_state.get("last_batch_rows", []) if r.get("filename") == fname),
+        {},
+    )
+    cumulative_retries = int(prior_row.get("retries", 0)) + new_retries
+
+    def _commit(new_row: dict) -> None:
+        st.session_state["last_batch_rows"] = upsert_row(
+            st.session_state.get("last_batch_rows", []), new_row
+        )
+
+    if exc:
+        _commit({
+            "filename": fname, "status": "error", "detail": exc, "source": "",
+            "retries": cumulative_retries, "error_class": _classify_error(exc),
+        })
+        return False, _friendly_extraction_error(exc)
+
+    if data:
+        _commit({
+            "filename": fname, "status": "ok", "detail": "extracted",
+            "source": (usage or {}).get("source", ""),
+            "retries": cumulative_retries, "error_class": "",
+        })
+        already_extracted = any(
+            it["filename"] == fname for it in st.session_state.get("temp_extracted", [])
+        )
+        if not already_extracted:
+            metadata, durable_error = _record_durable_extraction(
+                fname, content, data, usage, None, force_refresh
+            )
+            item = _item_with_durable_metadata(
+                {"filename": fname, "pdf_bytes": content, "data": data},
+                metadata,
+            )
+            if durable_error:
+                item["durable_error"] = durable_error
+            st.session_state.setdefault("temp_extracted", []).append(item)
+        st.session_state["temp_failed"] = [
+            it for it in st.session_state.get("temp_failed", [])
+            if it.get("filename") != fname
+        ]
+        return True, "extracted"
+
+    _commit({
+        "filename": fname, "status": "error", "detail": error_msg or "",
+        "source": "", "retries": cumulative_retries,
+        "error_class": _classify_error(error_msg),
+    })
+    return False, _friendly_extraction_error(error_msg)
+
+
+def _classify_error(message: str | None) -> str:
+    """Classify an extraction error message into a coarse bucket the UI
+    can show as a retry hint. Mirrors the function inlined in the upload
+    click block so retries get a consistent error_class label.
+
+    Kept module-level so `_retry_one_file` can reuse it. The original
+    click handler still has its own local copy (left intact to avoid
+    touching a working code path) — same classification rules."""
+    m = (message or "").lower()
+    if any(t in m for t in ["quota", "rate limit", "429", "resource exhausted"]):
+        return "rate_limit_or_quota"
+    if "timeout" in m:
+        return "timeout"
+    if "api key" in m or ("api" in m and "key" in m):
+        return "auth"
+    if "json" in m or "parse" in m:
+        return "parse"
+    if m:
+        return "other"
+    return ""
 
 
 def render_related_policy(match, current_item, service):
@@ -272,7 +515,12 @@ def render_related_policy(match, current_item, service):
                 )
                 if success:
                     st.success("Saved as renewal")
-                    st.session_state["review_queue"].pop(0)
+                    _complete_review_item_and_pop(
+                        current_item,
+                        "save_new",
+                        target_policy_id=existing_id,
+                        notes="Saved as renewal from related-policy review action.",
+                    )
                     st.rerun()
                 else:
                     st.warning(msg or "Save failed")
@@ -284,7 +532,12 @@ def render_related_policy(match, current_item, service):
                 )
                 if success:
                     st.success("Saved as replacement, old policy marked replaced")
-                    st.session_state["review_queue"].pop(0)
+                    _complete_review_item_and_pop(
+                        current_item,
+                        "save_new",
+                        target_policy_id=existing_id,
+                        notes=f"Saved as {rel_type} from related-policy review action.",
+                    )
                     st.rerun()
                 else:
                     st.warning(msg or "Save failed")
@@ -296,7 +549,12 @@ def render_related_policy(match, current_item, service):
                 )
                 if success:
                     st.success("Saved and linked as same customer")
-                    st.session_state["review_queue"].pop(0)
+                    _complete_review_item_and_pop(
+                        current_item,
+                        "save_new",
+                        target_policy_id=existing_id,
+                        notes="Saved as same customer new policy from related-policy review action.",
+                    )
                     st.rerun()
                 else:
                     st.warning(msg or "Save failed")
@@ -314,6 +572,160 @@ def render_related_policy(match, current_item, service):
             st.rerun()
 
 
+def _render_batch_summary(api_key: str) -> None:
+    """Post-batch summary panel — KPI strip + enhanced table + CSV exports
+    + per-file retry buttons for any failed rows.
+
+    Reads from session_state so the panel survives reruns. The retry path
+    uses the bytes stashed in `last_batch_files_map` and the original
+    `last_batch_settings`, so the broker doesn't have to re-upload after
+    a transient API failure."""
+    rows = st.session_state.get("last_batch_rows") or []
+    if not rows:
+        return
+
+    st.subheader("Batch report")
+    kpis = queue_summary_kpis(rows)
+
+    # KPI strip — succeeded / failed / cached / retries. Friendly counts.
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric(
+        "Succeeded",
+        kpis["ok"],
+        help="Files that extracted cleanly. Cached hits are included.",
+    )
+    k2.metric(
+        "Failed",
+        kpis["error"],
+        help="Files that errored during extraction. Use the buttons below "
+        "to retry or download a CSV record.",
+    )
+    k3.metric(
+        "From cache",
+        kpis["from_cache"],
+        help="Files served from the local extraction cache "
+        "(no Gemini API charge).",
+    )
+    k4.metric(
+        "Total LLM retries",
+        kpis["total_retries"],
+        help="Internal LLM retries summed across all files. Rising numbers "
+        "here are an early warning that the API is degraded.",
+    )
+
+    # Error breakdown caption when there were failures.
+    if kpis["error_class_breakdown"]:
+        breakdown = ", ".join(
+            f"{label}: {count}"
+            for label, count in sorted(kpis["error_class_breakdown"].items())
+        )
+        st.caption(f"⚠️ Error breakdown — {breakdown}")
+
+    # Enhanced dataframe: leading emoji column + retry-hint column for
+    # error rows. Keeps the original columns the existing report had.
+    rep_rows = []
+    for r in rows:
+        rep_rows.append(
+            {
+                "": status_emoji(r),
+                "filename": r.get("filename", ""),
+                "status": r.get("status", ""),
+                "source": r.get("source", ""),
+                "retries": r.get("retries", 0),
+                "detail": r.get("detail", ""),
+                "next step": retry_hint(r),
+            }
+        )
+    rep = pd.DataFrame(rep_rows)
+    st.dataframe(rep, hide_index=True, width="stretch")
+
+    # Per-file retry section — one container per failed row plus a "Retry
+    # all" shortcut. Re-runs extraction with the same settings as the
+    # original batch using bytes retained in last_batch_files_map.
+    failed_names = retryable_filenames(rows)
+    if failed_names:
+        st.markdown(f"##### Retry failed files ({len(failed_names)})")
+        st.caption(
+            "Re-runs extraction with the same settings as the original "
+            "batch. Bytes are reused — no re-upload needed."
+        )
+        if st.button(
+            f"🔄 Retry all ({len(failed_names)})",
+            key="batch_retry_all",
+            help="Run each failed file again, serially.",
+        ):
+            results = [_retry_one_file(fn, api_key) for fn in failed_names]
+            n_ok = sum(1 for ok, _ in results if ok)
+            n_fail = len(results) - n_ok
+            if n_ok and not n_fail:
+                st.toast(f"Retried {n_ok} file(s) — all succeeded.", icon="✅")
+            elif n_ok and n_fail:
+                st.toast(
+                    f"Retried {len(results)}: {n_ok} ok, {n_fail} still failing.",
+                    icon="⚠️",
+                )
+            else:
+                st.toast(f"Retried {n_fail} file(s) — still failing.", icon="❌")
+            st.rerun()
+
+        for fname in failed_names:
+            row = next((r for r in rows if r.get("filename") == fname), {})
+            with st.container(border=True):
+                cl, cr = st.columns([5, 1])
+                cl.markdown(f"{status_emoji(row)} **`{fname}`**")
+                hint = retry_hint(row)
+                if hint:
+                    cl.caption(hint)
+                if cr.button(
+                    "🔄 Retry",
+                    key=f"batch_retry_one_{fname}",
+                    width="stretch",
+                ):
+                    ok, detail = _retry_one_file(fname, api_key)
+                    if ok:
+                        st.toast(f"`{fname}` re-extracted.", icon="✅")
+                    else:
+                        st.toast(f"`{fname}` still failing: {detail}", icon="❌")
+                    st.rerun()
+
+    # Two CSV downloads side by side.
+    dl_col_full, dl_col_failed, clear_col = st.columns([1, 1, 1])
+    full_csv = pd.DataFrame(rows).to_csv(index=False).encode("utf-8")
+    dl_col_full.download_button(
+        "⬇️ All rows (CSV)",
+        data=full_csv,
+        file_name="extraction_batch_report.csv",
+        mime="text/csv",
+        key="batch_report_csv_all",
+        width="stretch",
+    )
+    failed_csv = failed_rows_csv_bytes(rows)
+    dl_col_failed.download_button(
+        "⬇️ Failed only (CSV)",
+        data=failed_csv,
+        file_name="extraction_failed_rows.csv",
+        mime="text/csv",
+        key="batch_report_csv_failed",
+        width="stretch",
+        disabled=(kpis["error"] == 0),
+        help=(
+            "No failed rows to export."
+            if kpis["error"] == 0
+            else "Download the failed rows for sharing with support."
+        ),
+    )
+    if clear_col.button(
+        "🧹 Clear summary",
+        key="batch_report_clear",
+        width="stretch",
+        help="Hide this panel until you start a new batch.",
+    ):
+        st.session_state.pop("last_batch_rows", None)
+        st.session_state.pop("last_batch_files_map", None)
+        st.session_state.pop("last_batch_settings", None)
+        st.rerun()
+
+
 def page_process_policies(api_key):
     st.title("📤 Process Policies")
     st.markdown("Upload policies, review the extraction, and save to your database.")
@@ -323,6 +735,8 @@ def page_process_policies(api_key):
     
     if "temp_extracted" not in st.session_state:
         st.session_state["temp_extracted"] = []
+    if "temp_failed" not in st.session_state:
+        st.session_state["temp_failed"] = []
     if "batch_telemetry_today" not in st.session_state:
         st.session_state["batch_telemetry_today"] = {
             "day": date.today().isoformat(),
@@ -399,9 +813,15 @@ def page_process_policies(api_key):
 
                 progress_bar = st.progress(0)
                 status_text = st.empty()
-                
+
                 total_files = len(uploaded_files)
                 files_map = {f.name: f.getvalue() for f in uploaded_files}
+                uploaded_names = set(files_map.keys())
+                st.session_state["temp_failed"] = [
+                    item
+                    for item in st.session_state.get("temp_failed", [])
+                    if item.get("filename") not in uploaded_names
+                ]
                 batch_rows = []
 
                 def _record_batch(fname, ok, detail, source="", retries=0, error_class=""):
@@ -452,6 +872,9 @@ def page_process_policies(api_key):
                             done += 1
                             progress_bar.progress(done / total_files)
                             if exc:
+                                _record_durable_extraction(
+                                    fname, files_map[fname], None, usage, exc, force_refresh
+                                )
                                 st.error(f"`{fname}`: {_friendly_extraction_error(exc)}")
                                 _record_batch(
                                     fname,
@@ -466,9 +889,17 @@ def page_process_policies(api_key):
                                 rejected = len(data.get("extraction_audit", {}).get("rejected_coverages", []))
                                 if rejected:
                                     st.warning(f"`{fname}`: {rejected} coverage entries were rejected by validation rules.")
-                                st.session_state["temp_extracted"].append(
-                                    {"filename": fname, "pdf_bytes": files_map[fname], "data": data}
+                                metadata, durable_error = _record_durable_extraction(
+                                    fname, files_map[fname], data, usage, None, force_refresh
                                 )
+                                item = _item_with_durable_metadata(
+                                    {"filename": fname, "pdf_bytes": files_map[fname], "data": data},
+                                    metadata,
+                                )
+                                if durable_error:
+                                    item["durable_error"] = durable_error
+                                    st.warning(f"`{fname}`: review persistence skipped ({durable_error})")
+                                st.session_state["temp_extracted"].append(item)
                                 _record_batch(
                                     fname,
                                     True,
@@ -477,6 +908,9 @@ def page_process_policies(api_key):
                                     retries=retries_used,
                                 )
                             else:
+                                _record_durable_extraction(
+                                    fname, files_map[fname], None, usage, error_msg, force_refresh
+                                )
                                 st.error(f"`{fname}`: {_friendly_extraction_error(error_msg)}")
                                 _record_batch(
                                     fname,
@@ -527,9 +961,17 @@ def page_process_policies(api_key):
                                     rejected = len(data.get("extraction_audit", {}).get("rejected_coverages", []))
                                     if rejected:
                                         status.write(f"Validation rejected {rejected} coverage entries (see review).")
-                                    st.session_state["temp_extracted"].append(
-                                        {"filename": fname, "pdf_bytes": content, "data": data}
+                                    metadata, durable_error = _record_durable_extraction(
+                                        fname, content, data, usage, None, force_refresh
                                     )
+                                    item = _item_with_durable_metadata(
+                                        {"filename": fname, "pdf_bytes": content, "data": data},
+                                        metadata,
+                                    )
+                                    if durable_error:
+                                        item["durable_error"] = durable_error
+                                        status.write(f"Review persistence skipped: {durable_error}")
+                                    st.session_state["temp_extracted"].append(item)
                                     status.update(
                                         label=f"Processed `{fname}`.",
                                         state="complete",
@@ -543,6 +985,9 @@ def page_process_policies(api_key):
                                         retries=retries_used,
                                     )
                                 else:
+                                    _record_durable_extraction(
+                                        fname, content, None, usage, error_msg, force_refresh
+                                    )
                                     status.update(
                                         label=f"Extraction Failed for `{fname}`",
                                         state="error",
@@ -551,6 +996,7 @@ def page_process_policies(api_key):
                                     friendly = _friendly_extraction_error(error_msg)
                                     status.write(friendly)
                                     st.error(f"`{fname}`: {friendly}")
+                                    _stash_failed(fname, content, error_msg or "Extraction failed")
                                     _record_batch(
                                         fname,
                                         False,
@@ -560,6 +1006,9 @@ def page_process_policies(api_key):
                                     )
 
                             except Exception as e:
+                                _record_durable_extraction(
+                                    fname, content, None, None, str(e), force_refresh
+                                )
                                 status.update(
                                     label=f"Error processing `{fname}`",
                                     state="error",
@@ -568,6 +1017,7 @@ def page_process_policies(api_key):
                                 friendly = _friendly_extraction_error(str(e))
                                 status.write(friendly)
                                 st.error(f"`{fname}`: {friendly}")
+                                _stash_failed(fname, content, str(e))
                                 _record_batch(
                                     fname,
                                     False,
@@ -581,9 +1031,9 @@ def page_process_policies(api_key):
                     status_text.text("Extraction complete! Choose an action below.")
 
                 if batch_rows:
+                    # Update daily telemetry counter (per-batch increment;
+                    # not persisted to disk, just survives across reruns).
                     rep = pd.DataFrame(batch_rows)
-                    st.subheader("Batch report")
-                    st.dataframe(rep, hide_index=True, use_container_width=True)
                     today_key = date.today().isoformat()
                     telem = st.session_state.get("batch_telemetry_today", {})
                     if telem.get("day") != today_key:
@@ -599,30 +1049,177 @@ def page_process_policies(api_key):
                     telem["retries"] += int(rep["retries"].sum()) if "retries" in rep else 0
                     telem["errors"] += int((rep["status"] == "error").sum()) if "status" in rep else 0
                     st.session_state["batch_telemetry_today"] = telem
-                    if len(rep) > 1:
-                        cache_hits = int((rep["source"] == "cache").sum()) if "source" in rep else 0
-                        total_retries = int(rep["retries"].sum()) if "retries" in rep else 0
-                        error_total = int((rep["status"] == "error").sum()) if "status" in rep else 0
-                        st.caption(
-                            f"Batch telemetry: cache_hits={cache_hits}, total_retries={total_retries}, errors={error_total}"
-                        )
-                    if len(batch_rows) > 1:
-                        st.download_button(
-                            "Download batch report (CSV)",
-                            data=rep.to_csv(index=False).encode("utf-8"),
-                            file_name="extraction_batch_report.csv",
-                            mime="text/csv",
-                            key="batch_report_csv",
-                        )
+
+                    # Persist the batch so the post-batch summary panel
+                    # (rendered below, outside this click handler) survives
+                    # subsequent reruns and supports per-file retry.
+                    st.session_state["last_batch_rows"] = batch_rows
+                    st.session_state["last_batch_files_map"] = files_map
+                    st.session_state["last_batch_settings"] = {
+                        "force_refresh": force_refresh,
+                        "user_policy_type": user_policy_type,
+                    }
+
+        # Persistent batch summary panel. Renders whenever the previous
+        # upload-click left rows in session_state, so it survives the
+        # rerun-after-click pattern and (in the next commit) lets the
+        # broker retry failed files without re-uploading the whole batch.
+        if st.session_state.get("last_batch_rows"):
+            _render_batch_summary(api_key)
+
+        if st.session_state.get("temp_failed"):
+            st.divider()
+            st.subheader(
+                f"⚠️ Extraction Failed ({len(st.session_state['temp_failed'])} files)"
+            )
+            st.caption(
+                "These files couldn't be parsed normally. You can attempt extraction anyway "
+                "using the fallback schema — useful for applications, quotes, or unusual layouts. "
+                "Verify values carefully; coverage limits may not represent bound coverage."
+            )
+            for f_idx, fail_item in enumerate(list(st.session_state["temp_failed"])):
+                fail_fname = fail_item["filename"]
+                with st.container(border=True):
+                    st.markdown(f"**`{fail_fname}`**")
+                    st.caption(fail_item.get("error", "Unknown error"))
+                    rb_try, rb_clear = st.columns([2, 1])
+                    if rb_try.button(
+                        "🔁 Try Extraction Anyway",
+                        key=f"retry_failed_{fail_fname}",
+                        type="primary",
+                        width="stretch",
+                    ):
+                        with st.spinner(
+                            f"Re-running extraction on `{fail_fname}` with fallback schema..."
+                        ):
+                            try:
+                                data, usage, error_msg = process_pdf(
+                                    fail_item["pdf_bytes"],
+                                    api_key,
+                                    status_callback=None,
+                                    force_refresh=True,
+                                    user_policy_type=None,
+                                    allow_non_extractable=True,
+                                )
+                            except Exception as exc:
+                                data, error_msg = None, str(exc)
+                        if data:
+                            metadata, durable_error = _record_durable_extraction(
+                                fail_fname, fail_item["pdf_bytes"], data, usage, None, True
+                            )
+                            item = _item_with_durable_metadata(
+                                {
+                                    "filename": fail_fname,
+                                    "pdf_bytes": fail_item["pdf_bytes"],
+                                    "data": data,
+                                },
+                                metadata,
+                            )
+                            if durable_error:
+                                item["durable_error"] = durable_error
+                            st.session_state["temp_extracted"].append(item)
+                            st.session_state["temp_failed"].pop(f_idx)
+                            st.toast(
+                                f"Extracted `{fail_fname}` via fallback. Review carefully.",
+                                icon="✅",
+                            )
+                            st.rerun()
+                        else:
+                            st.error(
+                                f"Fallback extraction still failed: {error_msg or 'unknown error'}"
+                            )
+                    if rb_clear.button(
+                        "Dismiss",
+                        key=f"dismiss_failed_{fail_fname}",
+                        width="stretch",
+                    ):
+                        st.session_state["temp_failed"].pop(f_idx)
+                        st.rerun()
 
         if st.session_state["temp_extracted"]:
             st.divider()
             st.subheader(f"Extraction Complete ({len(st.session_state['temp_extracted'])} files)")
+
+            non_extractable_items = [
+                (idx, item)
+                for idx, item in enumerate(st.session_state["temp_extracted"])
+                if item["data"].get("extractable") is False
+            ]
+            if non_extractable_items:
+                st.warning(
+                    f"⚠️ {len(non_extractable_items)} document(s) were classified as non-extractable "
+                    "(application/quote). They often contain the same data as a declarations page — "
+                    "you can attempt extraction anyway, but verify carefully since limits may not be bound coverage."
+                )
+                for idx, item in non_extractable_items:
+                    ne_fname = item["filename"]
+                    ne_doc_type = (
+                        item["data"].get("document_type")
+                        or item["data"].get("classification", {}).get("document_type")
+                        or "unknown"
+                    )
+                    ne_msg = item["data"].get("message", "Not extractable.")
+                    with st.container(border=True):
+                        st.markdown(f"**`{ne_fname}`** — detected as `{ne_doc_type}`")
+                        st.caption(ne_msg)
+                        b_try, b_remove = st.columns([2, 1])
+                        if b_try.button(
+                            "🔁 Try Extraction Anyway",
+                            key=f"try_extract_step1_{ne_fname}",
+                            type="primary",
+                            width="stretch",
+                        ):
+                            with st.spinner(f"Re-running extraction on `{ne_fname}`..."):
+                                try:
+                                    data, usage, error_msg = process_pdf(
+                                        item["pdf_bytes"],
+                                        api_key,
+                                        status_callback=None,
+                                        force_refresh=True,
+                                        user_policy_type=None,
+                                        allow_non_extractable=True,
+                                    )
+                                except Exception as exc:
+                                    data, error_msg = None, str(exc)
+                            if data:
+                                st.session_state["temp_extracted"][idx]["data"] = data
+                                metadata, durable_error = _record_durable_extraction(
+                                    ne_fname, item["pdf_bytes"], data, usage, None, True
+                                )
+                                item.update(metadata)
+                                if durable_error:
+                                    item["durable_error"] = durable_error
+                                st.toast(
+                                    f"Extracted `{ne_fname}` as fallback. Review carefully.",
+                                    icon="✅",
+                                )
+                                st.rerun()
+                            else:
+                                st.error(
+                                    f"Fallback extraction failed for `{ne_fname}`: "
+                                    f"{error_msg or 'unknown error'}"
+                                )
+                        if b_remove.button(
+                            "Remove",
+                            key=f"remove_non_extractable_step1_{ne_fname}",
+                            width="stretch",
+                        ):
+                            st.session_state["temp_extracted"].pop(idx)
+                            st.rerun()
+                st.divider()
+
             st.info("What would you like to do with these policies?")
-            
+
             d_col1, d_col2 = st.columns(2)
             
             if d_col1.button("🔍 Review Individually (Side-by-Side)", width='stretch'):
+                for item in st.session_state["temp_extracted"]:
+                    _task_id, durable_error = _ensure_review_task(
+                        item, notes="Queued for individual review from upload screen."
+                    )
+                    if durable_error:
+                        item["durable_error"] = durable_error
+                        st.warning(f"`{item['filename']}`: review persistence skipped ({durable_error})")
                 st.session_state["review_queue"].extend(st.session_state["temp_extracted"])
                 st.session_state["temp_extracted"] = []
                 st.rerun()
@@ -637,14 +1234,25 @@ def page_process_policies(api_key):
                 try:
                     for item in st.session_state["temp_extracted"]:
                         if item["data"].get("extractable") is False:
+                            _task_id, durable_error = _ensure_review_task(
+                                item, notes="Routed to review because document was non-extractable."
+                            )
+                            if durable_error:
+                                item["durable_error"] = durable_error
+                            st.session_state["review_queue"].append(item)
                             skipped_count += 1
                             st.toast(
-                                f"Skipped {item['filename']}: {item['data'].get('message', 'document not extractable')}",
+                                f"Sent {item['filename']} to review: not extractable, choose Try-Anyway or Skip",
                                 icon="⚠️",
                             )
                             continue
                         duplicate_info = service.detect_duplicate_for_extraction(item["data"])
                         if duplicate_info.get("status") == "exact_number_carrier_conflict":
+                            _task_id, durable_error = _ensure_review_task(
+                                item, notes=duplicate_info.get("reason")
+                            )
+                            if durable_error:
+                                item["durable_error"] = durable_error
                             st.session_state["review_queue"].append(item)
                             skipped_count += 1
                             st.toast(
@@ -656,6 +1264,26 @@ def page_process_policies(api_key):
                         success, msg = service.save_policy_from_extraction(item['data'])
                         
                         if success:
+                            decision = (
+                                "update_existing"
+                                if duplicate_info.get("status") == "exact_policy_match"
+                                else "save_new"
+                            )
+                            decision_error = _record_review_decision(
+                                item,
+                                decision,
+                                target_policy_id=(
+                                    (duplicate_info.get("existing_policy") or {}).get("id")
+                                    if decision == "update_existing"
+                                    else None
+                                ),
+                                notes="Saved via bulk save without individual review.",
+                            )
+                            if decision_error:
+                                st.toast(
+                                    f"Saved `{item['filename']}`, but review audit update failed: {decision_error}",
+                                    icon="⚠️",
+                                )
                             if duplicate_info.get("status") == "exact_policy_match":
                                 updated_count += 1
                             else:
@@ -737,8 +1365,8 @@ def page_process_policies(api_key):
                     session = get_session(st.session_state.db_engine)
                     service = PolicyService(session)
                     try:
-                        from core.services import ACCOUNT_TYPE_BY_POLICY
-                        acc_type = ACCOUNT_TYPE_BY_POLICY.get(m_type, "Commercial")
+                        from core.product_registry import account_type_for_policy
+                        acc_type = account_type_for_policy(m_type)
                         
                         policy_payload = {
                             "carrier_name": m_carrier,
@@ -830,10 +1458,62 @@ def page_process_policies(api_key):
             if not is_extractable:
                 st.error(current_item['data'].get('message', "This document type is not extractable yet."))
                 st.info(f"Document type detected: `{document_type}`")
-                if st.button("Skip This Document", key=f"skip_non_extractable_{fname}", type="primary"):
-                    st.session_state["review_queue"].pop(0)
+                st.caption(
+                    "Applications and quotes often contain the same data as a declarations page. "
+                    "You can attempt extraction, but verify carefully — limits may not be bound coverage."
+                )
+                btn_try, btn_skip = st.columns(2)
+                if btn_try.button(
+                    "🔁 Try Extraction Anyway",
+                    key=f"try_extract_anyway_{fname}",
+                    type="primary",
+                    width="stretch",
+                ):
+                    with st.spinner("Re-running extraction with fallback schema..."):
+                        try:
+                            data, usage, error_msg = process_pdf(
+                                current_item["pdf_bytes"],
+                                api_key,
+                                status_callback=None,
+                                force_refresh=True,
+                                user_policy_type=None,
+                                allow_non_extractable=True,
+                            )
+                        except Exception as exc:
+                            data, error_msg = None, str(exc)
+                    if data:
+                        current_item["data"] = data
+                        metadata, durable_error = _record_durable_extraction(
+                            fname, current_item["pdf_bytes"], data, usage, None, True
+                        )
+                        current_item.update(metadata)
+                        if durable_error:
+                            current_item["durable_error"] = durable_error
+                        st.rerun()
+                    else:
+                        st.error(f"Fallback extraction failed: {error_msg or 'unknown error'}")
+                        st.stop()
+                if btn_skip.button(
+                    "Skip This Document",
+                    key=f"skip_non_extractable_{fname}",
+                    width="stretch",
+                ):
+                    _complete_review_item_and_pop(
+                        current_item,
+                        "skip",
+                        notes="Skipped non-extractable document from review screen.",
+                    )
                     st.rerun()
                 st.stop()
+
+            if current_item['data'].get('forced_extraction'):
+                source_doc = current_item['data'].get(
+                    'source_document_type', 'non-policy document'
+                )
+                st.warning(
+                    f"⚠️ Extracted from a **{source_doc}** (not a bound policy). "
+                    "Verify all values carefully before saving — coverage limits may not represent bound coverage."
+                )
 
             if document_type == "renewal_declarations":
                 st.info("Renewal declarations detected. Review effective/expiration dates carefully before saving.")
@@ -927,7 +1607,12 @@ def page_process_policies(api_key):
                             success, msg = service.save_policy_from_extraction(payload)
                             if success:
                                 st.toast("✅ Endorsement saved.")
-                                st.session_state["review_queue"].pop(0)
+                                _complete_review_item_and_pop(
+                                    current_item,
+                                    "save_endorsement",
+                                    human_edits=payload,
+                                    notes="Saved endorsement from review screen.",
+                                )
                                 st.rerun()
                             st.toast(f"⚠️ Could not save endorsement: {msg}", icon="⚠️")
                         except Exception as e:
@@ -936,7 +1621,11 @@ def page_process_policies(api_key):
                             session.close()
                     elif discard_endorsement:
                         session.close()
-                        st.session_state["review_queue"].pop(0)
+                        _complete_review_item_and_pop(
+                            current_item,
+                            "skip",
+                            notes="Discarded endorsement from review screen.",
+                        )
                         st.rerun()
                     else:
                         session.close()
@@ -1474,7 +2163,18 @@ def page_process_policies(api_key):
                         st.toast(f"✅ Saved {r_pol_num}!")
                         st.session_state.pop(confirm_key, None)
                         st.session_state.pop(owner_storage_key, None)
-                        st.session_state["review_queue"].pop(0)
+                        decision = "update_existing" if has_existing_policy else "save_new"
+                        _complete_review_item_and_pop(
+                            current_item,
+                            decision,
+                            human_edits=review_extraction_result,
+                            target_policy_id=(
+                                (duplicate_info.get("existing_policy") or {}).get("id")
+                                if decision == "update_existing"
+                                else None
+                            ),
+                            notes="Saved from individual review screen.",
+                        )
                         st.rerun()
                     else:
                         st.toast(f"⚠️ Could not save: {msg}", icon="⚠️")
@@ -1487,7 +2187,11 @@ def page_process_policies(api_key):
             if discarded:
                 st.session_state.pop(confirm_key, None)
                 st.session_state.pop(owner_storage_key, None)
-                st.session_state["review_queue"].pop(0)
+                _complete_review_item_and_pop(
+                    current_item,
+                    "skip",
+                    notes="Discarded policy from individual review screen.",
+                )
                 st.rerun()
     else:
         if "review_queue" in st.session_state and isinstance(st.session_state["review_queue"], list):

@@ -62,11 +62,15 @@ class GeminiExtractionPipeline:
         status_callback=None,
         force_refresh: bool = False,
         user_policy_type: Optional[str] = None,
+        allow_non_extractable: bool = False,
     ) -> tuple[Optional[dict], dict, Optional[str]]:
         """
         Main Entry Point.
         Returns: (data, usage, error_message)
         When user_policy_type is set, skips the classifier call and scopes the registry to that type.
+        When allow_non_extractable is True, documents classified as non-extractable (e.g. application,
+        quote) are forced through full_policy extraction as a best-effort fallback. The result is
+        tagged with forced_extraction and source_document_type so callers know to flag it.
         """
         if user_policy_type is not None and user_policy_type not in POLICY_TYPE_ENUM:
             return None, {"source": "error", "cost": 0}, "Invalid policy type"
@@ -84,7 +88,11 @@ class GeminiExtractionPipeline:
             ctx.usage_metadata["extraction_mode"] = "auto"
 
         cache_system = ExtractionCache()
-        cached_result = cache_system.get(ctx.file_hash, cache_scope)
+        cached_result = (
+            cache_system.get(ctx.file_hash, cache_scope)
+            if not allow_non_extractable
+            else None
+        )
         if cached_result and not force_refresh:
             if isinstance(cached_result, dict):
                 cached_result.setdefault("variant_status", "known")
@@ -184,19 +192,26 @@ class GeminiExtractionPipeline:
             doc_type = ctx.classification.get("document_type", "unknown")
             doc_meta = DOCUMENT_TYPES.get(doc_type, DOCUMENT_TYPES["unknown"])
             extraction_goal = doc_meta.get("extraction_goal")
+            forced_from_non_extractable = False
             if doc_meta.get("extractable") is False:
-                ctx.variant_status = self._track_variant(processor, ctx)
-                non_extractable_result = {
-                    "document_type": doc_type,
-                    "extractable": False,
-                    "message": NON_EXTRACTABLE_MESSAGES.get(
-                        doc_type,
-                        f"{doc_meta.get('display', 'This document type')} is not extractable.",
-                    ),
-                    "classification": ctx.classification,
-                    "variant_status": ctx.variant_status,
-                }
-                return non_extractable_result, ctx.usage_metadata, None
+                if not allow_non_extractable:
+                    ctx.variant_status = self._track_variant(processor, ctx)
+                    non_extractable_result = {
+                        "document_type": doc_type,
+                        "extractable": False,
+                        "message": NON_EXTRACTABLE_MESSAGES.get(
+                            doc_type,
+                            f"{doc_meta.get('display', 'This document type')} is not extractable.",
+                        ),
+                        "classification": ctx.classification,
+                        "variant_status": ctx.variant_status,
+                    }
+                    return non_extractable_result, ctx.usage_metadata, None
+                forced_from_non_extractable = True
+                extraction_goal = "full_policy"
+                logger.info(
+                    f"Forced extraction override: routing {doc_type} through full_policy"
+                )
 
             if status_callback:
                 status_callback(" PerformingExtraction (Universal One-Shot)...")
@@ -350,10 +365,16 @@ class GeminiExtractionPipeline:
             )
             final_result["variant_status"] = ctx.variant_status
 
-        try:
-            cache_system.save(ctx.file_hash, final_result, cache_scope)
-        except Exception as e:
-            logger.error(f"Failed to save cache: {e}")
+        if forced_from_non_extractable:
+            final_result["forced_extraction"] = True
+            final_result["source_document_type"] = doc_type
+            final_result["policy_data_source"] = f"{doc_type}_forced"
+
+        if not forced_from_non_extractable:
+            try:
+                cache_system.save(ctx.file_hash, final_result, cache_scope)
+            except Exception as e:
+                logger.error(f"Failed to save cache: {e}")
 
         ctx.usage_metadata["source"] = "api"
         return final_result, ctx.usage_metadata, None
@@ -649,6 +670,7 @@ def process_pdf(
     status_callback=None,
     force_refresh: bool = False,
     user_policy_type: Optional[str] = None,
+    allow_non_extractable: bool = False,
 ):
     """
     Wrapper function that instantiates the Pipeline Class.
@@ -660,4 +682,5 @@ def process_pdf(
         status_callback,
         force_refresh=force_refresh,
         user_policy_type=user_policy_type,
+        allow_non_extractable=allow_non_extractable,
     )
